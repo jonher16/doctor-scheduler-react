@@ -32,6 +32,7 @@ import {
   Save as SaveIcon,
   EventNote as EventNoteIcon
 } from '@mui/icons-material';
+import EnhancedCalendar from './EnhancedCalendar';
 
 function HolidayConfig({ holidays, setHolidays }) {
   const [localHolidays, setLocalHolidays] = useState(holidays);
@@ -75,10 +76,10 @@ function HolidayConfig({ holidays, setHolidays }) {
 
   // Handle adding a new holiday
   const markHoliday = () => {
-    if (!selectedDate || !isValidDate(selectedDate)) {
+    if (!selectedDate) {
       setSnackbar({
         open: true,
-        message: 'Please enter a valid date in YYYY-MM-DD format',
+        message: 'Please select a date',
         severity: 'error'
       });
       return;
@@ -233,15 +234,13 @@ function HolidayConfig({ holidays, setHolidays }) {
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12}>
-              <TextField
-                label="Date (YYYY-MM-DD)"
+              <Typography variant="subtitle1" gutterBottom>
+                Select Date
+              </Typography>
+              <EnhancedCalendar 
                 value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                fullWidth
-                placeholder="2025-12-25"
-                helperText="Enter date in YYYY-MM-DD format"
-                error={selectedDate && !isValidDate(selectedDate)}
-                InputLabelProps={{ shrink: true }}
+                onChange={(date) => setSelectedDate(date)}
+                minDate={new Date().toISOString().split('T')[0]} // Today as min date
               />
             </Grid>
             <Grid item xs={12}>

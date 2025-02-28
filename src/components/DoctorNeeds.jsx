@@ -25,7 +25,9 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Autocomplete
+  Autocomplete,
+  Tabs,
+  Tab
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -34,6 +36,7 @@ import {
   Event as EventIcon,
   CalendarToday as CalendarTodayIcon
 } from '@mui/icons-material';
+import EnhancedCalendar from './EnhancedCalendar';
 
 function DoctorNeeds({ doctors, setAvailability }) {
   const [constraints, setConstraints] = useState([]);
