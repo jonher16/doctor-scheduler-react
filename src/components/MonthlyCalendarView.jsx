@@ -37,42 +37,63 @@ function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate }) 
   const [selectedDoctors, setSelectedDoctors] = useState([]);
   const [availableDoctors, setAvailableDoctors] = useState([]);
   const [currentSchedule, setCurrentSchedule] = useState({});
-  
+
+  // Use a soft pastel color palette for doctor identification.
+  const doctorColors = React.useMemo(() => {
+    const softColors = [
+      "#A3C1DA", // soft blue
+      "#BFD8B8", // soft green
+      "#C8BFE7", // soft purple
+      "#F3C9A8", // soft orange
+      "#F5B7B1", // soft pink
+      "#F9E79F", // pastel yellow
+      "#A2DED0", // pastel turquoise
+      "#D7BDE2", // pastel lavender
+      "#FFDAB9", // pastel peach
+      "#C4E1C1", // pastel mint
+    ];
+    const mapping = {};
+    doctors.forEach((doc, index) => {
+      mapping[doc.name] = softColors[index % softColors.length];
+    });
+    return mapping;
+  }, [doctors]);
+
   // Initialize schedule
   useEffect(() => {
     if (schedule && Object.keys(schedule).length > 0) {
       setCurrentSchedule(JSON.parse(JSON.stringify(schedule))); // Deep copy
     }
   }, [schedule]);
-  
+
   // Generate calendar days for the selected month
   useEffect(() => {
     generateCalendarDays();
   }, [currentMonth, currentYear, currentSchedule]);
-  
+
   const generateCalendarDays = () => {
     const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
     const firstDayOfMonth = new Date(currentYear, currentMonth, 1).getDay();
-    
+
     // Create an array to hold all days for the calendar
     const days = [];
-    
+
     // Add empty cells for days before the first day of the month
     for (let i = 0; i < firstDayOfMonth; i++) {
       days.push({ day: null, isCurrentMonth: false });
     }
-    
+
     // Add days of current month
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(currentYear, currentMonth, day);
       const dateStr = formatDateToYYYYMMDD(date);
-      
+
       // Check if this date is a holiday
       const isHoliday = holidays && holidays[dateStr];
-      
+
       // Check if this date is a weekend
       const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-      
+
       days.push({
         day,
         date: dateStr,
@@ -83,16 +104,16 @@ function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate }) 
         shifts: currentSchedule[dateStr] || { Day: [], Evening: [], Night: [] }
       });
     }
-    
+
     // Add empty cells for days after the last day of the month to complete the grid
     const totalCells = Math.ceil(days.length / 7) * 7;
     for (let i = days.length; i < totalCells; i++) {
       days.push({ day: null, isCurrentMonth: false });
     }
-    
+
     setCalendarDays(days);
   };
-  
+
   // Helper function to format date to YYYY-MM-DD
   const formatDateToYYYYMMDD = (date) => {
     const year = date.getFullYear();
@@ -100,7 +121,7 @@ function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate }) 
     const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   };
-  
+
   // Handle month navigation
   const handlePreviousMonth = () => {
     if (currentMonth === 0) {
@@ -110,7 +131,7 @@ function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate }) 
       setCurrentMonth(currentMonth - 1);
     }
   };
-  
+
   const handleNextMonth = () => {
     if (currentMonth === 11) {
       setCurrentMonth(0);
@@ -119,7 +140,7 @@ function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate }) 
       setCurrentMonth(currentMonth + 1);
     }
   };
-  
+
   // Get month name
   const getMonthName = (month) => {
     const monthNames = [
@@ -128,29 +149,29 @@ function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate }) 
     ];
     return monthNames[month];
   };
-  
+
   // Open edit dialog
   const handleOpenEditDialog = (date, shift) => {
     setSelectedDate(date);
     setSelectedShift(shift);
-    
+
     // Get current doctors for this shift and date
-    const currentDoctorsForShift = currentSchedule[date] && 
+    const currentDoctorsForShift = currentSchedule[date] &&
                                   currentSchedule[date][shift] || [];
-    
+
     setSelectedDoctors([...currentDoctorsForShift]);
-    
+
     // Set available doctors (all doctors from the props)
     setAvailableDoctors(doctors.map(doc => doc.name));
-    
+
     setEditDialogOpen(true);
   };
-  
+
   // Handle doctor selection
   const handleDoctorToggle = (doctorName) => {
     const currentIndex = selectedDoctors.indexOf(doctorName);
     const newSelectedDoctors = [...selectedDoctors];
-    
+
     if (currentIndex === -1) {
       // Add the doctor
       newSelectedDoctors.push(doctorName);
@@ -158,15 +179,15 @@ function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate }) 
       // Remove the doctor
       newSelectedDoctors.splice(currentIndex, 1);
     }
-    
+
     setSelectedDoctors(newSelectedDoctors);
   };
-  
+
   // Handle save changes
   const handleSaveChanges = () => {
     // Create a copy of the schedule
     const updatedSchedule = JSON.parse(JSON.stringify(currentSchedule));
-    
+
     // Make sure the date exists in the schedule
     if (!updatedSchedule[selectedDate]) {
       updatedSchedule[selectedDate] = {
@@ -175,22 +196,22 @@ function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate }) 
         Night: []
       };
     }
-    
+
     // Update the specified shift with the selected doctors
     updatedSchedule[selectedDate][selectedShift] = [...selectedDoctors];
-    
+
     // Update the local state
     setCurrentSchedule(updatedSchedule);
-    
+
     // Close the dialog
     setEditDialogOpen(false);
-    
+
     // Notify parent component about the update
     if (onScheduleUpdate) {
       onScheduleUpdate(updatedSchedule);
     }
   };
-  
+
   // Get shift cell color
   const getShiftCellColor = (shift) => {
     switch (shift) {
@@ -204,7 +225,7 @@ function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate }) 
         return '#ffffff'; // White
     }
   };
-  
+
   // Get day cell background color
   const getDayCellBackground = (dayInfo) => {
     if (!dayInfo.isCurrentMonth) return '#f5f5f5'; // Gray for days outside current month
@@ -212,7 +233,7 @@ function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate }) 
     if (dayInfo.isWeekend) return '#fafafa'; // Light gray for weekends
     return '#ffffff'; // White for regular days
   };
-  
+
   return (
     <Box sx={{ minHeight: '400px', mb: 4 }}>
       <Card>
@@ -230,9 +251,9 @@ function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate }) 
               </IconButton>
             </Box>
           </Box>
-          
+
           <Divider sx={{ mb: 2 }} />
-          
+
           {/* Calendar grid */}
           <Grid container spacing={1}>
             {/* Day header row */}
@@ -248,7 +269,7 @@ function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate }) 
                 </Box>
               </Grid>
             ))}
-            
+
             {/* Calendar days */}
             {calendarDays.map((dayInfo, index) => (
               <Grid item xs={12/7} key={`day-${index}`}>
@@ -283,11 +304,11 @@ function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate }) 
                           />
                         )}
                       </Box>
-                      
+
                       {/* Shifts with consistent layout */}
                       <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', p: 0.5 }}>
                         {['Day', 'Evening', 'Night'].map(shift => {
-                          const doctors = dayInfo.shifts[shift] || [];
+                          const doctorsInShift = dayInfo.shifts[shift] || [];
                           
                           return (
                             <Box 
@@ -302,7 +323,7 @@ function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate }) 
                                 flexDirection: 'column',
                                 position: 'relative',
                                 overflow: 'hidden',
-                                minHeight: '50px', // Ensure minimum height even when empty
+                                minHeight: '50px',
                               }}
                             >
                               {/* Header with shift name and edit button */}
@@ -328,8 +349,8 @@ function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate }) 
                                 </Tooltip>
                               </Box>
                               
-                            {/* Doctor grid - uniform layout */}
-                                <Box sx={{ 
+                              {/* Doctor grid - uniform layout */}
+                              <Box sx={{ 
                                 display: 'grid', 
                                 gridTemplateColumns: 'repeat(2, 1fr)', 
                                 gap: 0.5,
@@ -337,12 +358,13 @@ function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate }) 
                                 flex: 1,
                                 maxHeight: '40px'
                               }}>
-                                {doctors.length > 0 ? (
-                                  doctors.map((doctor, idx) => (
+                                {doctorsInShift.length > 0 ? (
+                                  doctorsInShift.map((doctor, idx) => (
                                     <Box
                                       key={idx}
                                       sx={{
-                                        bgcolor: 'background.paper',
+                                        bgcolor: doctorColors[doctor] || 'background.paper',
+                                        color: "#333",
                                         border: '1px solid rgba(0,0,0,0.1)',
                                         borderRadius: '4px',
                                         p: 0.5,
@@ -351,7 +373,6 @@ function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate }) 
                                         textOverflow: 'ellipsis',
                                         whiteSpace: 'nowrap',
                                         fontSize: '0.7rem',
-                                        height: 'px',
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center'
@@ -378,8 +399,8 @@ function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate }) 
           </Grid>
         </CardContent>
       </Card>
-      
-      {/* Edit Dialog - Improved */}
+
+      {/* Edit Dialog */}
       <Dialog 
         open={editDialogOpen} 
         onClose={() => setEditDialogOpen(false)}
@@ -398,7 +419,6 @@ function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate }) 
             <List dense>
               {availableDoctors.map((doctor) => {
                 const isSelected = selectedDoctors.includes(doctor);
-                
                 // Find the doctor's seniority
                 const doctorInfo = doctors.find(d => d.name === doctor);
                 const seniority = doctorInfo ? doctorInfo.seniority : '';
@@ -445,7 +465,7 @@ function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate }) 
                     key={index}
                     label={doctor}
                     onDelete={() => handleDoctorToggle(doctor)}
-                    color="primary"
+                    sx={{ bgcolor: doctorColors[doctor] || 'primary.main', color: '#333' }}
                   />
                 ))
               ) : (
