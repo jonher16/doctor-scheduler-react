@@ -236,9 +236,17 @@ function App() {
             p: 3,
             mt: 8, // To account for AppBar height
             backgroundColor: theme.palette.background.default,
+            display: 'flex',
+            justifyContent: 'center',
+            width: '100%'
           }}
         >
-          <Container maxWidth="lg">
+          <Container 
+            maxWidth="lg" 
+            sx={{ 
+              mx: 'auto'  // Center horizontally
+            }}
+          >
             <Paper 
               elevation={2}
               sx={{ 
