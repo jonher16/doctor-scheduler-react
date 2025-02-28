@@ -15,7 +15,8 @@ import {
   Divider,
   Tooltip,
   Avatar,
-  LinearProgress
+  LinearProgress,
+  Alert
 } from '@mui/material';
 import { Bar } from 'react-chartjs-2';
 import {
@@ -40,9 +41,37 @@ function MonthlyHours({ doctors, schedule, selectedMonth }) {
   if (!schedule || Object.keys(schedule).length === 0 || !doctors || doctors.length === 0) {
     return (
       <Box sx={{ minHeight: '400px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-        <Typography variant="h6" color="text.secondary">
-          No schedule data available
-        </Typography>
+        <Alert severity="info" sx={{ width: '100%', maxWidth: 600 }}>
+          <Typography variant="body1">
+            No schedule data available
+          </Typography>
+        </Alert>
+      </Box>
+    );
+  }
+
+  // Create a set of all doctors that appear in the schedule
+  const doctorsInSchedule = new Set();
+  Object.values(schedule).forEach(daySchedule => {
+    if (!daySchedule || typeof daySchedule !== 'object') return;
+    ["Day", "Evening", "Night"].forEach(shift => {
+      const shiftArr = Array.isArray(daySchedule[shift]) ? daySchedule[shift] : [];
+      shiftArr.forEach(name => doctorsInSchedule.add(name));
+    });
+  });
+  
+  // Get the intersection of doctors from props and doctors in schedule
+  const validDoctors = doctors.filter(doc => doctorsInSchedule.has(doc.name));
+  
+  // If there are no valid doctors, show an error message
+  if (validDoctors.length === 0) {
+    return (
+      <Box sx={{ minHeight: '400px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <Alert severity="warning" sx={{ width: '100%', maxWidth: 600 }}>
+          <Typography variant="body1">
+            Cannot display data: doctors in schedule don't match current doctors configuration
+          </Typography>
+        </Alert>
       </Box>
     );
   }
@@ -52,7 +81,7 @@ function MonthlyHours({ doctors, schedule, selectedMonth }) {
   const doctorShifts = {};
   const shiftTypeCounts = { Day: 0, Evening: 0, Night: 0 };
   
-  doctors.forEach(doc => {
+  validDoctors.forEach(doc => {
     monthlyHours[doc.name] = 0;
     doctorShifts[doc.name] = { Day: 0, Evening: 0, Night: 0 };
   });
@@ -66,12 +95,15 @@ function MonthlyHours({ doctors, schedule, selectedMonth }) {
       ["Day", "Evening", "Night"].forEach(shift => {
         const shiftArr = Array.isArray(daySchedule[shift]) ? daySchedule[shift] : [];
         shiftArr.forEach(name => {
-          // Add 8 hours per shift
-          monthlyHours[name] = (monthlyHours[name] || 0) + 8;
-          // Count shifts by type
-          doctorShifts[name][shift] = (doctorShifts[name][shift] || 0) + 1;
-          // Total shift types
-          shiftTypeCounts[shift] += 1;
+          // Only process if this doctor exists in our validDoctors list
+          if (monthlyHours.hasOwnProperty(name)) {
+            // Add 8 hours per shift
+            monthlyHours[name] = (monthlyHours[name] || 0) + 8;
+            // Count shifts by type
+            doctorShifts[name][shift] = (doctorShifts[name][shift] || 0) + 1;
+            // Total shift types
+            shiftTypeCounts[shift] += 1;
+          }
         });
       });
     }
@@ -86,13 +118,19 @@ function MonthlyHours({ doctors, schedule, selectedMonth }) {
 
   // Calculate statistics
   const totalHours = Object.values(monthlyHours).reduce((a, b) => a + b, 0);
-  const averageHours = totalHours / doctors.length;
-  const maxHours = Math.max(...Object.values(monthlyHours));
-  const minHours = Math.min(...Object.values(monthlyHours).filter(h => h > 0)); // Exclude zeros
+  const validDoctorCount = Object.keys(monthlyHours).length || 1; // Prevent division by zero
+  const averageHours = totalHours / validDoctorCount;
+  
+  // Handle edge cases
+  const valuesGreaterThanZero = Object.values(monthlyHours).filter(h => h > 0);
+  const maxHours = Math.max(...Object.values(monthlyHours), 0); // Default to 0 if empty
+  const minHours = valuesGreaterThanZero.length > 0 ? 
+                   Math.min(...valuesGreaterThanZero) : 
+                   0; // Handle empty array
   
   // Get doctor with max and min hours
-  const maxHoursDoctor = Object.keys(monthlyHours).find(doc => monthlyHours[doc] === maxHours);
-  const minHoursDoctor = Object.keys(monthlyHours).find(doc => monthlyHours[doc] === minHours);
+  const maxHoursDoctor = Object.keys(monthlyHours).find(doc => monthlyHours[doc] === maxHours) || "N/A";
+  const minHoursDoctor = Object.keys(monthlyHours).find(doc => monthlyHours[doc] === minHours) || "N/A";
 
   // Get month name
   const getMonthName = (monthNum) => {
@@ -132,6 +170,7 @@ function MonthlyHours({ doctors, schedule, selectedMonth }) {
           afterLabel: function(context) {
             const doctorName = context.label;
             const shifts = doctorShifts[doctorName];
+            if (!shifts) return [];
             return [
               `Day shifts: ${shifts.Day}`,
               `Evening shifts: ${shifts.Evening}`,
@@ -159,6 +198,21 @@ function MonthlyHours({ doctors, schedule, selectedMonth }) {
       }
     }
   };
+
+  // Check if we have any data to display
+  const hasData = totalHours > 0;
+  
+  if (!hasData) {
+    return (
+      <Box sx={{ minHeight: '400px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <Alert severity="info" sx={{ width: '100%', maxWidth: 600 }}>
+          <Typography variant="body1">
+            No data available for {getMonthName(month)}
+          </Typography>
+        </Alert>
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ minHeight: '400px' }}>
@@ -207,38 +261,24 @@ function MonthlyHours({ doctors, schedule, selectedMonth }) {
               </Box>
               <Divider sx={{ mb: 2 }} />
               
-              <Box sx={{ mb: 1 }}>
-                <Typography variant="body2" gutterBottom>Day Shifts</Typography>
-                <LinearProgress 
-                  variant="determinate" 
-                  value={(shiftTypeCounts.Day / Object.values(shiftTypeCounts).reduce((a, b) => a + b, 0)) * 100} 
-                  color="success"
-                  sx={{ height: 10, borderRadius: 5, mb: 1 }}
-                />
-                <Typography variant="body2" align="right">{shiftTypeCounts.Day} shifts</Typography>
-              </Box>
-              
-              <Box sx={{ mb: 1 }}>
-                <Typography variant="body2" gutterBottom>Evening Shifts</Typography>
-                <LinearProgress 
-                  variant="determinate" 
-                  value={(shiftTypeCounts.Evening / Object.values(shiftTypeCounts).reduce((a, b) => a + b, 0)) * 100} 
-                  color="primary"
-                  sx={{ height: 10, borderRadius: 5, mb: 1 }}
-                />
-                <Typography variant="body2" align="right">{shiftTypeCounts.Evening} shifts</Typography>
-              </Box>
-              
-              <Box sx={{ mb: 1 }}>
-                <Typography variant="body2" gutterBottom>Night Shifts</Typography>
-                <LinearProgress 
-                  variant="determinate" 
-                  value={(shiftTypeCounts.Night / Object.values(shiftTypeCounts).reduce((a, b) => a + b, 0)) * 100} 
-                  color="secondary"
-                  sx={{ height: 10, borderRadius: 5, mb: 1 }}
-                />
-                <Typography variant="body2" align="right">{shiftTypeCounts.Night} shifts</Typography>
-              </Box>
+              {Object.entries(shiftTypeCounts).map(([shift, count]) => {
+                const total = Object.values(shiftTypeCounts).reduce((a, b) => a + b, 0);
+                const percentage = total > 0 ? (count / total) * 100 : 0;
+                const color = shift === 'Day' ? 'success' : (shift === 'Evening' ? 'primary' : 'secondary');
+                
+                return (
+                  <Box sx={{ mb: 1 }} key={shift}>
+                    <Typography variant="body2" gutterBottom>{shift} Shifts</Typography>
+                    <LinearProgress 
+                      variant="determinate" 
+                      value={percentage} 
+                      color={color}
+                      sx={{ height: 10, borderRadius: 5, mb: 1 }}
+                    />
+                    <Typography variant="body2" align="right">{count} shifts</Typography>
+                  </Box>
+                );
+              })}
             </CardContent>
           </Card>
         </Grid>

@@ -31,17 +31,39 @@ function ScheduleStatistics({ doctors, schedule }) {
     );
   }
   
+  // Create a set of all doctors that appear in the schedule
+  const doctorsInSchedule = new Set();
+  Object.values(schedule).forEach(daySchedule => {
+    if (!daySchedule || typeof daySchedule !== 'object') return;
+    ["Day", "Evening", "Night"].forEach(shift => {
+      const shiftArr = Array.isArray(daySchedule[shift]) ? daySchedule[shift] : [];
+      shiftArr.forEach(name => doctorsInSchedule.add(name));
+    });
+  });
+  
+  // Get the intersection of doctors from props and doctors in schedule
+  const validDoctors = doctors.filter(doc => doctorsInSchedule.has(doc.name));
+  
+  // If there are no valid doctors, show an error message
+  if (validDoctors.length === 0) {
+    return (
+      <Box sx={{ minHeight: '400px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <Alert severity="warning" sx={{ width: '100%', maxWidth: 600 }}>
+          <Typography variant="body1">
+            Cannot display data: doctors in schedule don't match current doctors configuration
+          </Typography>
+        </Alert>
+      </Box>
+    );
+  }
+  
   // Initialize monthly hours for each doctor
   const monthlyHours = {};
   
   // Safely initialize the doctors
-  if (doctors && Array.isArray(doctors)) {
-    doctors.forEach(doc => {
-      if (doc && doc.name) {
-        monthlyHours[doc.name] = Array(12).fill(0);
-      }
-    });
-  }
+  validDoctors.forEach(doc => {
+    monthlyHours[doc.name] = Array(12).fill(0);
+  });
   
   // Process schedule
   Object.keys(schedule).forEach(dateStr => {
@@ -54,6 +76,7 @@ function ScheduleStatistics({ doctors, schedule }) {
     ["Day", "Evening", "Night"].forEach(shift => {
       const shiftArr = Array.isArray(daySchedule[shift]) ? daySchedule[shift] : [];
       shiftArr.forEach(name => {
+        // Only count hours for doctors that exist in our monthlyHours object
         if (name in monthlyHours) {
           monthlyHours[name][month] += 8; // 8 hours per shift
         }
@@ -75,6 +98,37 @@ function ScheduleStatistics({ doctors, schedule }) {
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'
   ];
+  
+  // Calculate total hours across all doctors
+  const grandTotalHours = Object.values(totalHours).reduce((sum, hours) => sum + hours, 0);
+  
+  // Calculate average hours per doctor
+  const averageHours = grandTotalHours / (validDoctors.length || 1); // Avoid division by zero
+  
+  // Calculate total hours per month across all doctors
+  const monthlyTotals = Array(12).fill(0);
+  Object.values(monthlyHours).forEach(doctorMonths => {
+    doctorMonths.forEach((hours, monthIndex) => {
+      monthlyTotals[monthIndex] += hours;
+    });
+  });
+  
+  // Find the busiest month
+  const busiestMonthIndex = monthlyTotals.indexOf(Math.max(...monthlyTotals));
+  const busiestMonth = monthNames[busiestMonthIndex];
+  
+  // Check if we have any hours to display
+  if (grandTotalHours === 0) {
+    return (
+      <Box sx={{ minHeight: '400px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <Alert severity="info" sx={{ width: '100%', maxWidth: 600 }}>
+          <Typography variant="body1">
+            No hours recorded in the schedule.
+          </Typography>
+        </Alert>
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ minHeight: '400px' }}>
@@ -121,6 +175,21 @@ function ScheduleStatistics({ doctors, schedule }) {
                         ))}
                       </TableRow>
                     ))}
+                    <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
+                      <TableCell sx={{ fontWeight: 'bold' }}>Monthly Totals</TableCell>
+                      <TableCell align="center" sx={{ fontWeight: 'bold' }}>
+                        <Chip 
+                          label={grandTotalHours} 
+                          color="secondary" 
+                          size="small"
+                        />
+                      </TableCell>
+                      {monthlyTotals.map((total, index) => (
+                        <TableCell key={index} align="center" sx={{ fontWeight: 'bold' }}>
+                          {total > 0 ? total : '-'}
+                        </TableCell>
+                      ))}
+                    </TableRow>
                   </TableBody>
                 </Table>
               </TableContainer>
@@ -136,7 +205,7 @@ function ScheduleStatistics({ doctors, schedule }) {
                         Total Yearly Hours
                       </Typography>
                       <Typography variant="h5" color="primary.main">
-                        {Object.values(totalHours).reduce((a, b) => a + b, 0)}
+                        {grandTotalHours}
                       </Typography>
                     </Box>
                   </Grid>
@@ -146,7 +215,7 @@ function ScheduleStatistics({ doctors, schedule }) {
                         Average Hours per Doctor
                       </Typography>
                       <Typography variant="h5" color="primary.main">
-                        {(Object.values(totalHours).reduce((a, b) => a + b, 0) / Object.keys(totalHours).length).toFixed(1)}
+                        {averageHours.toFixed(1)}
                       </Typography>
                     </Box>
                   </Grid>
@@ -156,19 +225,7 @@ function ScheduleStatistics({ doctors, schedule }) {
                         Busiest Month
                       </Typography>
                       <Typography variant="h5" color="primary.main">
-                        {(() => {
-                          // Calculate total hours per month across all doctors
-                          const monthlyTotals = Array(12).fill(0);
-                          Object.values(monthlyHours).forEach(doctorMonths => {
-                            doctorMonths.forEach((hours, monthIndex) => {
-                              monthlyTotals[monthIndex] += hours;
-                            });
-                          });
-                          
-                          // Find the busiest month
-                          const busiestMonthIndex = monthlyTotals.indexOf(Math.max(...monthlyTotals));
-                          return monthNames[busiestMonthIndex];
-                        })()}
+                        {busiestMonth}
                       </Typography>
                     </Box>
                   </Grid>

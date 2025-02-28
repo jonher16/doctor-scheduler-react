@@ -1,4 +1,4 @@
-// Modified App.jsx - Key changes are in the useEffect and in the setters
+// Modified App.jsx with dashboard stability improvements
 
 import React, { useState, useEffect } from 'react';
 import { 
@@ -18,7 +18,9 @@ import {
   ListItemText,
   Divider,
   ThemeProvider,
-  createTheme
+  createTheme,
+  Snackbar,
+  Alert
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -99,6 +101,13 @@ function App() {
   const [schedule, setScheduleState] = useState({});
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeComponent, setActiveComponent] = useState('doctors');
+  
+  // For notifications
+  const [notification, setNotification] = useState({
+    open: false,
+    message: '',
+    severity: 'info'
+  });
 
   // Custom setter functions that also update localStorage
   const setDoctors = (newDoctors) => {
@@ -117,8 +126,29 @@ function App() {
   };
 
   const setSchedule = (newSchedule) => {
-    localStorage.setItem('schedule', JSON.stringify(newSchedule));
+    // When a schedule is generated, save it with the current configuration state
+    const scheduleData = {
+      schedule: newSchedule,
+      metadata: {
+        doctors: JSON.parse(JSON.stringify(doctors)), // Deep copy
+        holidays: JSON.parse(JSON.stringify(holidays)), // Deep copy
+        generatedAt: new Date().toISOString()
+      }
+    };
+    
+    localStorage.setItem('scheduleData', JSON.stringify(scheduleData));
     setScheduleState(newSchedule);
+    
+    if (newSchedule && Object.keys(newSchedule).length > 0) {
+      setNotification({
+        open: true,
+        message: 'Schedule generated successfully!',
+        severity: 'success'
+      });
+      
+      // Navigate to dashboard after generating schedule
+      setActiveComponent('dashboard');
+    }
   };
 
   // Load data on mount
@@ -168,11 +198,12 @@ function App() {
       }
     }
 
-    // Load schedule
-    const localSchedule = localStorage.getItem('schedule');
-    if (localSchedule) {
+    // Load schedule with its metadata
+    const scheduleData = localStorage.getItem('scheduleData');
+    if (scheduleData) {
       try {
-        setScheduleState(JSON.parse(localSchedule));
+        const parsedData = JSON.parse(scheduleData);
+        setScheduleState(parsedData.schedule || {});
         console.log("Loaded schedule from localStorage");
       } catch (err) {
         console.error('Error parsing schedule from localStorage', err);
@@ -216,6 +247,10 @@ function App() {
     setActiveComponent(component);
     setDrawerOpen(false);
   };
+  
+  const handleCloseNotification = () => {
+    setNotification({...notification, open: false});
+  };
 
   // Drawer content
   const drawerContent = (
@@ -257,6 +292,29 @@ function App() {
     </Box>
   );
 
+  // Get schedule metadata from localStorage for dashboard
+  const getScheduleData = () => {
+    try {
+      const scheduleData = localStorage.getItem('scheduleData');
+      if (scheduleData) {
+        const { schedule: savedSchedule, metadata } = JSON.parse(scheduleData);
+        // If there's valid schedule data with metadata, return it
+        if (savedSchedule && Object.keys(savedSchedule).length > 0 && metadata) {
+          return {
+            schedule: savedSchedule,
+            doctors: metadata.doctors || doctors, // Fall back to current doctors if needed
+            holidays: metadata.holidays || holidays // Fall back to current holidays if needed
+          };
+        }
+      }
+    } catch (error) {
+      console.error("Error loading schedule data:", error);
+    }
+    
+    // If there's no valid saved schedule data with metadata, use current state
+    return { schedule, doctors, holidays };
+  };
+
   // Render the active component
   const renderComponent = () => {
     switch (activeComponent) {
@@ -275,8 +333,15 @@ function App() {
             setSchedule={setSchedule}
           />
         );
-      case 'dashboard':
-        return <Dashboard doctors={doctors} schedule={schedule} holidays={holidays} />;
+      case 'dashboard': {
+        // Get the schedule data with its snapshot of doctors/holidays
+        const { schedule: dashboardSchedule, doctors: dashboardDoctors, holidays: dashboardHolidays } = getScheduleData();
+        return <Dashboard 
+          doctors={dashboardDoctors} 
+          schedule={dashboardSchedule} 
+          holidays={dashboardHolidays} 
+        />;
+      }
       default:
         return <DoctorConfig doctors={doctors} setDoctors={setDoctors} />;
     }
@@ -344,6 +409,22 @@ function App() {
             </Paper>
           </Container>
         </Box>
+        
+        {/* Notification */}
+        <Snackbar 
+          open={notification.open} 
+          autoHideDuration={6000} 
+          onClose={handleCloseNotification}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        >
+          <Alert 
+            onClose={handleCloseNotification} 
+            severity={notification.severity} 
+            sx={{ width: '100%' }}
+          >
+            {notification.message}
+          </Alert>
+        </Snackbar>
       </Box>
     </ThemeProvider>
   );

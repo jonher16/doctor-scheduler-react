@@ -1,6 +1,5 @@
-// Modified Dashboard.jsx - Adding holidays prop to WeekendHolidayBalance
-
-import React, { useState } from 'react';
+// Improved Dashboard.jsx with robust data handling
+import React, { useState, useEffect } from 'react';
 import {
   Typography,
   Box,
@@ -35,9 +34,40 @@ import ScheduleStatistics from './ScheduleStatistics';
 function Dashboard({ doctors, schedule, holidays }) {
   const [tabValue, setTabValue] = useState(0);
   const [month, setMonth] = useState(new Date().getMonth() + 1); // Current month (1-12)
-
-  // Check if schedule exists
-  const hasSchedule = schedule && Object.keys(schedule).length > 0 && doctors && doctors.length > 0;
+  
+  // Create local copies of the data to prevent issues when props change
+  const [localDoctors, setLocalDoctors] = useState([]);
+  const [localSchedule, setLocalSchedule] = useState({});
+  const [localHolidays, setLocalHolidays] = useState({});
+  const [hasSchedule, setHasSchedule] = useState(false);
+  const [quickStats, setQuickStats] = useState(null);
+  
+  // Update local data when schedule is generated but not when doctors/holidays change
+  useEffect(() => {
+    // Only update local state when a new schedule is generated (not when doctors change)
+    if (schedule && Object.keys(schedule).length > 0) {
+      setLocalSchedule(schedule);
+      
+      // If we have a schedule, also take a snapshot of the doctors and holidays
+      // that were used to generate it
+      if (doctors && doctors.length > 0) {
+        setLocalDoctors(JSON.parse(JSON.stringify(doctors)));
+      }
+      
+      if (holidays && Object.keys(holidays).length > 0) {
+        setLocalHolidays(JSON.parse(JSON.stringify(holidays)));
+      }
+      
+      setHasSchedule(true);
+    }
+  }, [schedule]);
+  
+  // Recalculate quick stats when local data changes
+  useEffect(() => {
+    if (hasSchedule) {
+      setQuickStats(getQuickStats());
+    }
+  }, [localSchedule, localDoctors, hasSchedule]);
 
   // Handle tab change
   const handleTabChange = (event, newValue) => {
@@ -46,17 +76,20 @@ function Dashboard({ doctors, schedule, holidays }) {
 
   // Quick statistics
   const getQuickStats = () => {
-    if (!hasSchedule) return null;
+    if (!hasSchedule || !localSchedule || Object.keys(localSchedule).length === 0 || 
+        !localDoctors || localDoctors.length === 0) {
+      return null;
+    }
     
     // Total shifts
     let totalShifts = 0;
     // Shifts per doctor
     const doctorShifts = {};
-    doctors.forEach(doc => { doctorShifts[doc.name] = 0 });
+    localDoctors.forEach(doc => { doctorShifts[doc.name] = 0 });
     
     // Calculate statistics
-    Object.keys(schedule).forEach(date => {
-      const daySchedule = schedule[date];
+    Object.keys(localSchedule).forEach(date => {
+      const daySchedule = localSchedule[date];
       if (!daySchedule || typeof daySchedule !== 'object') return;
       
       ["Day", "Evening", "Night"].forEach(shift => {
@@ -64,7 +97,10 @@ function Dashboard({ doctors, schedule, holidays }) {
         totalShifts += shiftArr.length;
         
         shiftArr.forEach(name => {
-          doctorShifts[name] = (doctorShifts[name] || 0) + 1;
+          // Make sure the doctor still exists in our local copy
+          if (doctorShifts.hasOwnProperty(name)) {
+            doctorShifts[name] = (doctorShifts[name] || 0) + 1;
+          }
         });
       });
     });
@@ -76,7 +112,7 @@ function Dashboard({ doctors, schedule, holidays }) {
     let maxDoctor = "";
     
     Object.entries(doctorShifts).forEach(([doctor, shifts]) => {
-      if (shifts < minShifts) {
+      if (shifts < minShifts && shifts > 0) {
         minShifts = shifts;
         minDoctor = doctor;
       }
@@ -86,8 +122,11 @@ function Dashboard({ doctors, schedule, holidays }) {
       }
     });
     
+    // Handle edge case of no shifts assigned
+    if (minShifts === Infinity) minShifts = 0;
+    
     // Average shifts per doctor
-    const avgShifts = totalShifts / doctors.length;
+    const avgShifts = totalShifts / (Object.keys(doctorShifts).length || 1);
     
     return {
       totalShifts,
@@ -98,8 +137,6 @@ function Dashboard({ doctors, schedule, holidays }) {
       maxShifts
     };
   };
-
-  const quickStats = hasSchedule ? getQuickStats() : null;
 
   return (
     <Box>
@@ -135,17 +172,17 @@ function Dashboard({ doctors, schedule, holidays }) {
                   
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                     <Typography variant="body2">Total Shifts:</Typography>
-                    <Typography variant="body1" fontWeight="bold">{quickStats.totalShifts}</Typography>
+                    <Typography variant="body1" fontWeight="bold">{quickStats?.totalShifts || 0}</Typography>
                   </Box>
                   
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                     <Typography variant="body2">Avg. Shifts per Doctor:</Typography>
-                    <Typography variant="body1" fontWeight="bold">{quickStats.avgShifts}</Typography>
+                    <Typography variant="body1" fontWeight="bold">{quickStats?.avgShifts || '0.0'}</Typography>
                   </Box>
                   
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                     <Typography variant="body2">Doctors Scheduled:</Typography>
-                    <Typography variant="body1" fontWeight="bold">{doctors.length}</Typography>
+                    <Typography variant="body1" fontWeight="bold">{localDoctors.length}</Typography>
                   </Box>
                 </CardContent>
               </Card>
@@ -167,11 +204,11 @@ function Dashboard({ doctors, schedule, holidays }) {
                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
                       <Chip 
                         size="small" 
-                        label={quickStats.maxShifts + " shifts"} 
+                        label={`${quickStats?.maxShifts || 0} shifts`} 
                         color="primary"
                         sx={{ mr: 1 }}
                       />
-                      <Typography variant="body2">{quickStats.maxDoctor}</Typography>
+                      <Typography variant="body2">{quickStats?.maxDoctor || 'N/A'}</Typography>
                     </Box>
                   </Box>
                   
@@ -180,18 +217,18 @@ function Dashboard({ doctors, schedule, holidays }) {
                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
                       <Chip 
                         size="small" 
-                        label={quickStats.minShifts + " shifts"} 
+                        label={`${quickStats?.minShifts || 0} shifts`} 
                         color="secondary"
                         sx={{ mr: 1 }}
                       />
-                      <Typography variant="body2">{quickStats.minDoctor}</Typography>
+                      <Typography variant="body2">{quickStats?.minDoctor || 'N/A'}</Typography>
                     </Box>
                   </Box>
                   
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                     <Typography variant="body2">Variance:</Typography>
                     <Typography variant="body1" fontWeight="bold">
-                      {quickStats.maxShifts - quickStats.minShifts} shifts
+                      {quickStats ? (quickStats.maxShifts - quickStats.minShifts) : 0} shifts
                     </Typography>
                   </Box>
                 </CardContent>
@@ -296,16 +333,16 @@ function Dashboard({ doctors, schedule, holidays }) {
             
             <Box sx={{ p: 3 }}>
               {tabValue === 0 && (
-                <MonthlyHours doctors={doctors} schedule={schedule} selectedMonth={month} />
+                <MonthlyHours doctors={localDoctors} schedule={localSchedule} selectedMonth={month} />
               )}
               {tabValue === 1 && (
-                <WeekendHolidayBalance doctors={doctors} schedule={schedule} holidays={holidays} />
+                <WeekendHolidayBalance doctors={localDoctors} schedule={localSchedule} holidays={localHolidays} />
               )}
               {tabValue === 2 && (
-                <YearlySchedule doctors={doctors} schedule={schedule} />
+                <YearlySchedule doctors={localDoctors} schedule={localSchedule} />
               )}
               {tabValue === 3 && (
-                <ScheduleStatistics doctors={doctors} schedule={schedule} />
+                <ScheduleStatistics doctors={localDoctors} schedule={localSchedule} />
               )}
             </Box>
           </Paper>

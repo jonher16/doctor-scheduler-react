@@ -38,19 +38,44 @@ function WeekendHolidayBalance({ doctors, schedule, holidays }) {
     );
   }
   
+  // Create a set of all doctors that appear in the schedule
+  const doctorsInSchedule = new Set();
+  Object.values(schedule).forEach(daySchedule => {
+    if (!daySchedule || typeof daySchedule !== 'object') return;
+    ["Day", "Evening", "Night"].forEach(shift => {
+      const shiftArr = Array.isArray(daySchedule[shift]) ? daySchedule[shift] : [];
+      shiftArr.forEach(name => doctorsInSchedule.add(name));
+    });
+  });
+  
+  // Get the intersection of doctors from props and doctors in schedule
+  const validDoctors = doctors.filter(doc => doctorsInSchedule.has(doc.name));
+  
+  // If there are no valid doctors, show an error message
+  if (validDoctors.length === 0) {
+    return (
+      <Box sx={{ minHeight: '400px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <Alert severity="warning" sx={{ width: '100%', maxWidth: 600 }}>
+          <Typography variant="body1">
+            Cannot display data: doctors in schedule don't match current doctors configuration
+          </Typography>
+        </Alert>
+      </Box>
+    );
+  }
+  
   // Initialize counters
   const weekendShifts = {};
   const holidayShifts = {};
   
   // Safely initialize the doctors
-  if (doctors && Array.isArray(doctors)) {
-    doctors.forEach(doc => {
-      if (doc && doc.name) {
-        weekendShifts[doc.name] = 0;
-        holidayShifts[doc.name] = 0;
-      }
-    });
-  }
+  validDoctors.forEach(doc => {
+    weekendShifts[doc.name] = 0;
+    holidayShifts[doc.name] = 0;
+  });
+
+  // Make sure holidays is an object before using it
+  const safeHolidays = holidays && typeof holidays === 'object' ? holidays : {};
 
   // Process schedule
   Object.keys(schedule).forEach(dateStr => {
@@ -59,16 +84,19 @@ function WeekendHolidayBalance({ doctors, schedule, holidays }) {
     
     const date = new Date(dateStr);
     const isWeekend = (date.getDay() === 6 || date.getDay() === 0); // Saturday or Sunday
-    const isHoliday = holidays && typeof holidays === 'object' && dateStr in holidays; // Check if date is in holidays
+    const isHoliday = dateStr in safeHolidays; // Check if date is in holidays
     
     ["Day", "Evening", "Night"].forEach(shift => {
       if (!daySchedule[shift] || !Array.isArray(daySchedule[shift])) return;
       
       daySchedule[shift].forEach(name => {
-        if (isHoliday && weekendShifts.hasOwnProperty(name)) {
-          holidayShifts[name] += 1;
-        } else if (isWeekend && weekendShifts.hasOwnProperty(name)) {
-          weekendShifts[name] += 1;
+        // Only count for doctors that exist in our valid list
+        if (weekendShifts.hasOwnProperty(name)) {
+          if (isHoliday) {
+            holidayShifts[name] += 1;
+          } else if (isWeekend) {
+            weekendShifts[name] += 1;
+          }
         }
       });
     });
@@ -76,6 +104,23 @@ function WeekendHolidayBalance({ doctors, schedule, holidays }) {
 
   // Prepare chart data
   const labels = Object.keys(weekendShifts);
+  
+  // Check if we have any data to show
+  const totalWeekendShifts = Object.values(weekendShifts).reduce((a, b) => a + b, 0);
+  const totalHolidayShifts = Object.values(holidayShifts).reduce((a, b) => a + b, 0);
+  
+  if (totalWeekendShifts === 0 && totalHolidayShifts === 0) {
+    return (
+      <Box sx={{ minHeight: '400px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <Alert severity="info" sx={{ width: '100%', maxWidth: 600 }}>
+          <Typography variant="body1">
+            No weekend or holiday shifts found in the schedule.
+          </Typography>
+        </Alert>
+      </Box>
+    );
+  }
+  
   const data = {
     labels,
     datasets: [
@@ -125,8 +170,8 @@ function WeekendHolidayBalance({ doctors, schedule, holidays }) {
   // Find the doctor with most weekend and holiday shifts
   let maxWeekendShifts = 0;
   let maxHolidayShifts = 0;
-  let maxWeekendDoctor = '';
-  let maxHolidayDoctor = '';
+  let maxWeekendDoctor = 'N/A';
+  let maxHolidayDoctor = 'N/A';
   
   Object.entries(weekendShifts).forEach(([doctor, shifts]) => {
     if (shifts > maxWeekendShifts) {
@@ -168,7 +213,7 @@ function WeekendHolidayBalance({ doctors, schedule, holidays }) {
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                   <Typography variant="body2">Total weekend shifts:</Typography>
                   <Typography variant="body1" fontWeight="bold">
-                    {Object.values(weekendShifts).reduce((a, b) => a + b, 0)}
+                    {totalWeekendShifts}
                   </Typography>
                 </Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
@@ -192,7 +237,7 @@ function WeekendHolidayBalance({ doctors, schedule, holidays }) {
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                   <Typography variant="body2">Total holiday shifts:</Typography>
                   <Typography variant="body1" fontWeight="bold">
-                    {Object.values(holidayShifts).reduce((a, b) => a + b, 0)}
+                    {totalHolidayShifts}
                   </Typography>
                 </Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
