@@ -253,7 +253,7 @@ function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate }) 
             {calendarDays.map((dayInfo, index) => (
               <Grid item xs={12/7} key={`day-${index}`}>
                 <Box sx={{ 
-                  height: '210px', // Fixed height for consistency
+                  height: '290px', // Fixed height for consistency
                   border: '1px solid #e0e0e0',
                   borderRadius: 1,
                   overflow: 'hidden',
@@ -328,15 +328,14 @@ function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate }) 
                                 </Tooltip>
                               </Box>
                               
-                              {/* Doctor grid - uniform layout */}
-                              <Box sx={{ 
+                            {/* Doctor grid - uniform layout */}
+                                <Box sx={{ 
                                 display: 'grid', 
                                 gridTemplateColumns: 'repeat(2, 1fr)', 
                                 gap: 0.5,
-                                overflow: 'auto',
+                                overflow: 'visible',
                                 flex: 1,
-                                
-                                
+                                maxHeight: '40px'
                               }}>
                                 {doctors.length > 0 ? (
                                   doctors.map((doctor, idx) => (
@@ -352,7 +351,10 @@ function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate }) 
                                         textOverflow: 'ellipsis',
                                         whiteSpace: 'nowrap',
                                         fontSize: '0.7rem',
-                                        
+                                        height: 'px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
                                       }}
                                     >
                                       {doctor}
