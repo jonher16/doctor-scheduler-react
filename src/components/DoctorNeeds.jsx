@@ -27,7 +27,9 @@ import {
   DialogActions,
   Autocomplete,
   Tabs,
-  Tab
+  Tab,
+  FormControlLabel,
+  Switch
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -39,6 +41,7 @@ import {
 import EnhancedCalendar from './EnhancedCalendar';
 
 function DoctorNeeds({ doctors, setAvailability }) {
+  // Store constraints with support for date ranges
   const [constraints, setConstraints] = useState([]);
   const [openDialog, setOpenDialog] = useState(false);
   const [newConstraint, setNewConstraint] = useState({
@@ -47,12 +50,15 @@ function DoctorNeeds({ doctors, setAvailability }) {
     avail: 'Available'
   });
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  
+  // Add state for range mode toggle
+  const [isRangeMode, setIsRangeMode] = useState(false);
 
   // Handle opening the add constraint dialog
   const handleOpenDialog = () => {
     setNewConstraint({
       doctor: '',
-      date: '',
+      date: isRangeMode ? [null, null] : '',
       avail: 'Available'
     });
     setOpenDialog(true);
@@ -61,6 +67,25 @@ function DoctorNeeds({ doctors, setAvailability }) {
   // Handle closing the dialog
   const handleCloseDialog = () => {
     setOpenDialog(false);
+  };
+
+  // Handle toggling range mode
+  const handleRangeModeToggle = (event) => {
+    const rangeEnabled = event.target.checked;
+    setIsRangeMode(rangeEnabled);
+    // Reset selected date when switching modes
+    setNewConstraint(prev => ({
+      ...prev,
+      date: rangeEnabled ? [null, null] : ''
+    }));
+  };
+
+  // Handle date selection change
+  const handleDateChange = (date) => {
+    setNewConstraint({
+      ...newConstraint,
+      date: date
+    });
   };
 
   // Validate date format (YYYY-MM-DD)
@@ -90,46 +115,115 @@ function DoctorNeeds({ doctors, setAvailability }) {
       return;
     }
 
-    if (!newConstraint.date || !isValidDate(newConstraint.date)) {
-      setSnackbar({
-        open: true,
-        message: 'Please enter a valid date in YYYY-MM-DD format',
-        severity: 'error'
-      });
-      return;
-    }
-    
-    // Check if constraint already exists
-    const existingIndex = constraints.findIndex(
-      c => c.doctor === newConstraint.doctor && c.date === newConstraint.date
-    );
-
-    if (existingIndex !== -1) {
-      // Update existing constraint
+    if (isRangeMode) {
+      // Range mode validation
+      if (!newConstraint.date || !Array.isArray(newConstraint.date) || 
+          !newConstraint.date[0] || !newConstraint.date[1]) {
+        setSnackbar({
+          open: true,
+          message: 'Please select both start and end dates',
+          severity: 'error'
+        });
+        return;
+      }
+      
+      // Extract start and end dates from the range
+      const [startDate, endDate] = newConstraint.date;
+      
+      // Add constraints for each date in the range
       const newConstraints = [...constraints];
-      newConstraints[existingIndex] = {
-        ...newConstraints[existingIndex],
-        avail: newConstraint.avail
-      };
+      
+      // Convert dates to Date objects for comparison
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      
+      // Create a new date to iterate through the range
+      const current = new Date(start);
+      
+      // Count new constraints added
+      let addedCount = 0;
+      let updatedCount = 0;
+      
+      // Loop through each date in the range
+      while (current <= end) {
+        const dateStr = current.toISOString().split('T')[0];
+        
+        // Check if constraint already exists for this doctor and date
+        const existingIndex = newConstraints.findIndex(
+          c => c.doctor === newConstraint.doctor && c.date === dateStr
+        );
+        
+        if (existingIndex !== -1) {
+          // Update existing constraint
+          newConstraints[existingIndex] = {
+            ...newConstraints[existingIndex],
+            avail: newConstraint.avail
+          };
+          updatedCount++;
+        } else {
+          // Add new constraint
+          newConstraints.push({
+            doctor: newConstraint.doctor,
+            date: dateStr,
+            avail: newConstraint.avail
+          });
+          addedCount++;
+        }
+        
+        // Move to next day
+        current.setDate(current.getDate() + 1);
+      }
+      
       setConstraints(newConstraints);
       setSnackbar({
         open: true,
-        message: `Updated availability for Dr. ${newConstraint.doctor} on ${newConstraint.date}`,
-        severity: 'info'
-      });
-    } else {
-      // Add new constraint
-      const constraintToAdd = {
-        doctor: newConstraint.doctor,
-        date: newConstraint.date,
-        avail: newConstraint.avail
-      };
-      setConstraints([...constraints, constraintToAdd]);
-      setSnackbar({
-        open: true,
-        message: `Added availability for Dr. ${newConstraint.doctor} on ${newConstraint.date}`,
+        message: `Updated availability for Dr. ${newConstraint.doctor}: ${addedCount} new entries, ${updatedCount} updated entries`,
         severity: 'success'
       });
+      
+    } else {
+      // Single date validation
+      if (!newConstraint.date || !isValidDate(newConstraint.date)) {
+        setSnackbar({
+          open: true,
+          message: 'Please enter a valid date in YYYY-MM-DD format',
+          severity: 'error'
+        });
+        return;
+      }
+      
+      // Check if constraint already exists
+      const existingIndex = constraints.findIndex(
+        c => c.doctor === newConstraint.doctor && c.date === newConstraint.date
+      );
+
+      if (existingIndex !== -1) {
+        // Update existing constraint
+        const newConstraints = [...constraints];
+        newConstraints[existingIndex] = {
+          ...newConstraints[existingIndex],
+          avail: newConstraint.avail
+        };
+        setConstraints(newConstraints);
+        setSnackbar({
+          open: true,
+          message: `Updated availability for Dr. ${newConstraint.doctor} on ${newConstraint.date}`,
+          severity: 'info'
+        });
+      } else {
+        // Add new constraint
+        const constraintToAdd = {
+          doctor: newConstraint.doctor,
+          date: newConstraint.date,
+          avail: newConstraint.avail
+        };
+        setConstraints([...constraints, constraintToAdd]);
+        setSnackbar({
+          open: true,
+          message: `Added availability for Dr. ${newConstraint.doctor} on ${newConstraint.date}`,
+          severity: 'success'
+        });
+      }
     }
     
     setOpenDialog(false);
@@ -280,7 +374,9 @@ function DoctorNeeds({ doctors, setAvailability }) {
 
       {/* Add Availability Dialog */}
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>Add Doctor Availability</DialogTitle>
+        <DialogTitle>
+          {isRangeMode ? 'Add Availability Range' : 'Add Doctor Availability'}
+        </DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12}>
@@ -301,16 +397,26 @@ function DoctorNeeds({ doctors, setAvailability }) {
               />
             </Grid>
             <Grid item xs={12}>
-              <TextField
-                label="Date (YYYY-MM-DD)"
+              <FormControlLabel
+                control={
+                  <Switch 
+                    checked={isRangeMode}
+                    onChange={handleRangeModeToggle}
+                    color="primary"
+                  />
+                }
+                label="Select Date Range"
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <Typography variant="subtitle1" gutterBottom>
+                {isRangeMode ? 'Select Date Range' : 'Select Date'}
+              </Typography>
+              <EnhancedCalendar 
                 value={newConstraint.date}
-                onChange={(e) => setNewConstraint({...newConstraint, date: e.target.value})}
-                fullWidth
-                required
-                placeholder="2025-01-15"
-                helperText="Enter date in YYYY-MM-DD format"
-                error={newConstraint.date && !isValidDate(newConstraint.date)}
-                InputLabelProps={{ shrink: true }}
+                onChange={handleDateChange}
+                minDate={new Date().toISOString().split('T')[0]} // Today as min date
+                isRangeMode={isRangeMode}
               />
             </Grid>
             <Grid item xs={12}>
@@ -335,7 +441,7 @@ function DoctorNeeds({ doctors, setAvailability }) {
         <DialogActions>
           <Button onClick={handleCloseDialog}>Cancel</Button>
           <Button onClick={addConstraint} variant="contained">
-            Add
+            {isRangeMode ? 'Add Range' : 'Add'}
           </Button>
         </DialogActions>
       </Dialog>

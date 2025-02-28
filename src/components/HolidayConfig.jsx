@@ -24,7 +24,9 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions
+  DialogActions,
+  Switch,
+  FormControlLabel
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -36,10 +38,15 @@ import EnhancedCalendar from './EnhancedCalendar';
 
 function HolidayConfig({ holidays, setHolidays }) {
   const [localHolidays, setLocalHolidays] = useState(holidays);
+  
+  // Changed selectedDate to store either a string (single date) or an array (date range)
   const [selectedDate, setSelectedDate] = useState('');
   const [holidayType, setHolidayType] = useState('Short');
   const [openDialog, setOpenDialog] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  
+  // Add state for range mode toggle
+  const [isRangeMode, setIsRangeMode] = useState(false);
 
   // Update local state when holidays prop changes
   useEffect(() => {
@@ -48,7 +55,8 @@ function HolidayConfig({ holidays, setHolidays }) {
 
   // Handle opening the add holiday dialog
   const handleOpenDialog = () => {
-    setSelectedDate('');
+    // Reset selected date when opening dialog
+    setSelectedDate(isRangeMode ? [null, null] : '');
     setHolidayType('Short');
     setOpenDialog(true);
   };
@@ -58,50 +66,103 @@ function HolidayConfig({ holidays, setHolidays }) {
     setOpenDialog(false);
   };
 
-  // Validate date format (YYYY-MM-DD)
-  const isValidDate = (dateString) => {
-    const regex = /^\d{4}-\d{2}-\d{2}$/;
-    if (!regex.test(dateString)) return false;
-    
-    const parts = dateString.split('-');
-    const year = parseInt(parts[0], 10);
-    const month = parseInt(parts[1], 10) - 1;
-    const day = parseInt(parts[2], 10);
-    
-    const date = new Date(year, month, day);
-    return date.getFullYear() === year && 
-           date.getMonth() === month && 
-           date.getDate() === day;
+  // Handle date selection from calendar
+  const handleDateChange = (date) => {
+    setSelectedDate(date);
+  };
+
+  // Handle toggling range mode
+  const handleRangeModeToggle = (event) => {
+    const rangeEnabled = event.target.checked;
+    setIsRangeMode(rangeEnabled);
+    // Reset selected date when switching modes
+    setSelectedDate(rangeEnabled ? [null, null] : '');
+    // Default to "Long" holiday type when in range mode
+    if (rangeEnabled) {
+      setHolidayType('Long');
+    }
   };
 
   // Handle adding a new holiday
   const markHoliday = () => {
-    if (!selectedDate) {
+    if (isRangeMode) {
+      // Range mode validation
+      if (!selectedDate || !Array.isArray(selectedDate) || !selectedDate[0] || !selectedDate[1]) {
+        setSnackbar({
+          open: true,
+          message: 'Please select both start and end dates',
+          severity: 'error'
+        });
+        return;
+      }
+      
+      // Extract start and end dates from the range
+      const [startDate, endDate] = selectedDate;
+      
+      // Process date range
+      const newHolidays = { ...localHolidays };
+      
+      // Convert dates to Date objects for comparison
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      
+      // Create a new date to iterate through the range
+      const current = new Date(start);
+      
+      // Loop through each date in the range
+      while (current <= end) {
+        const dateStr = current.toISOString().split('T')[0];
+        
+        // Check if this date already exists as a holiday
+        if (newHolidays[dateStr]) {
+          // Skip this date or update it if you prefer
+          current.setDate(current.getDate() + 1);
+          continue;
+        }
+        
+        // Add the date to holidays
+        newHolidays[dateStr] = holidayType;
+        
+        // Move to next day
+        current.setDate(current.getDate() + 1);
+      }
+      
+      setLocalHolidays(newHolidays);
       setSnackbar({
         open: true,
-        message: 'Please select a date',
-        severity: 'error'
+        message: `Added ${holidayType} holidays from ${startDate} to ${endDate}`,
+        severity: 'success'
       });
-      return;
+    } else {
+      // Single date mode
+      if (!selectedDate) {
+        setSnackbar({
+          open: true,
+          message: 'Please select a date',
+          severity: 'error'
+        });
+        return;
+      }
+      
+      // Check if date already exists
+      if (localHolidays[selectedDate]) {
+        setSnackbar({
+          open: true,
+          message: `${selectedDate} is already marked as a holiday`,
+          severity: 'warning'
+        });
+        return;
+      }
+
+      const newHolidays = { ...localHolidays, [selectedDate]: holidayType };
+      setLocalHolidays(newHolidays);
+      setSnackbar({
+        open: true,
+        message: `Added ${holidayType} holiday on ${selectedDate}`,
+        severity: 'success'
+      });
     }
     
-    // Check if date already exists
-    if (localHolidays[selectedDate]) {
-      setSnackbar({
-        open: true,
-        message: `${selectedDate} is already marked as a holiday`,
-        severity: 'warning'
-      });
-      return;
-    }
-
-    const newHolidays = { ...localHolidays, [selectedDate]: holidayType };
-    setLocalHolidays(newHolidays);
-    setSnackbar({
-      open: true,
-      message: `Added ${holidayType} holiday on ${selectedDate}`,
-      severity: 'success'
-    });
     setOpenDialog(false);
   };
 
@@ -230,17 +291,32 @@ function HolidayConfig({ holidays, setHolidays }) {
 
       {/* Add Holiday Dialog */}
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>Add New Holiday</DialogTitle>
+        <DialogTitle>
+          {isRangeMode ? 'Add Holiday Range' : 'Add New Holiday'}
+        </DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12}>
+              <FormControlLabel
+                control={
+                  <Switch 
+                    checked={isRangeMode}
+                    onChange={handleRangeModeToggle}
+                    color="primary"
+                  />
+                }
+                label="Select Date Range"
+              />
+            </Grid>
+            <Grid item xs={12}>
               <Typography variant="subtitle1" gutterBottom>
-                Select Date
+                {isRangeMode ? 'Select Date Range' : 'Select Date'}
               </Typography>
               <EnhancedCalendar 
                 value={selectedDate}
-                onChange={(date) => setSelectedDate(date)}
+                onChange={handleDateChange}
                 minDate={new Date().toISOString().split('T')[0]} // Today as min date
+                isRangeMode={isRangeMode}
               />
             </Grid>
             <Grid item xs={12}>
@@ -248,6 +324,7 @@ function HolidayConfig({ holidays, setHolidays }) {
                 <InputLabel id="holiday-type-label">Holiday Type</InputLabel>
                 <Select
                   labelId="holiday-type-label"
+                  name="holidayType"
                   value={holidayType}
                   label="Holiday Type"
                   onChange={(e) => setHolidayType(e.target.value)}
@@ -262,7 +339,7 @@ function HolidayConfig({ holidays, setHolidays }) {
         <DialogActions>
           <Button onClick={handleCloseDialog}>Cancel</Button>
           <Button onClick={markHoliday} variant="contained">
-            Add Holiday
+            Add Holiday{isRangeMode ? 's' : ''}
           </Button>
         </DialogActions>
       </Dialog>
