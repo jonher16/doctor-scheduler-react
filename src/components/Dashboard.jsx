@@ -1,3 +1,5 @@
+// Modified Dashboard.jsx - Adding holidays prop to WeekendHolidayBalance
+
 import React, { useState } from 'react';
 import {
   Typography,
@@ -297,7 +299,7 @@ function Dashboard({ doctors, schedule, holidays }) {
                 <MonthlyHours doctors={doctors} schedule={schedule} selectedMonth={month} />
               )}
               {tabValue === 1 && (
-                <WeekendHolidayBalance doctors={doctors} schedule={schedule} />
+                <WeekendHolidayBalance doctors={doctors} schedule={schedule} holidays={holidays} />
               )}
               {tabValue === 2 && (
                 <YearlySchedule doctors={doctors} schedule={schedule} />

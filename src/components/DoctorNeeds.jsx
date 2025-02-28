@@ -40,7 +40,7 @@ import {
 } from '@mui/icons-material';
 import EnhancedCalendar from './EnhancedCalendar';
 
-function DoctorNeeds({ doctors, setAvailability }) {
+function DoctorNeeds({ doctors, setAvailability, availability }) {
   // Store constraints with support for date ranges
   const [constraints, setConstraints] = useState([]);
   const [openDialog, setOpenDialog] = useState(false);
@@ -53,6 +53,30 @@ function DoctorNeeds({ doctors, setAvailability }) {
   
   // Add state for range mode toggle
   const [isRangeMode, setIsRangeMode] = useState(false);
+
+  // Load existing constraints when component mounts or availability changes
+  useEffect(() => {
+    // Convert availability object to array format for display
+    if (availability && typeof availability === 'object') {
+      const constraintsArray = [];
+      
+      // Iterate through each doctor in availability
+      Object.keys(availability).forEach(doctor => {
+        const doctorAvailability = availability[doctor];
+        
+        // Iterate through each date for this doctor
+        Object.keys(doctorAvailability).forEach(date => {
+          constraintsArray.push({
+            doctor: doctor,
+            date: date,
+            avail: doctorAvailability[date]
+          });
+        });
+      });
+      
+      setConstraints(constraintsArray);
+    }
+  }, [availability]);
 
   // Handle opening the add constraint dialog
   const handleOpenDialog = () => {

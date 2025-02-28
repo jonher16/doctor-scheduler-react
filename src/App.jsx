@@ -1,3 +1,5 @@
+// Modified App.jsx - Key changes are in the useEffect and in the setters
+
 import React, { useState, useEffect } from 'react';
 import { 
   AppBar, 
@@ -91,31 +93,114 @@ const menuItems = [
 ];
 
 function App() {
-  const [doctors, setDoctors] = useState([]);
-  const [holidays, setHolidays] = useState({});
-  const [availability, setAvailability] = useState({});
-  const [schedule, setSchedule] = useState({});
+  const [doctors, setDoctorsState] = useState([]);
+  const [holidays, setHolidaysState] = useState({});
+  const [availability, setAvailabilityState] = useState({});
+  const [schedule, setScheduleState] = useState({});
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeComponent, setActiveComponent] = useState('doctors');
 
+  // Custom setter functions that also update localStorage
+  const setDoctors = (newDoctors) => {
+    localStorage.setItem('doctors', JSON.stringify(newDoctors));
+    setDoctorsState(newDoctors);
+  };
+
+  const setHolidays = (newHolidays) => {
+    localStorage.setItem('holidays', JSON.stringify(newHolidays));
+    setHolidaysState(newHolidays);
+  };
+
+  const setAvailability = (newAvailability) => {
+    localStorage.setItem('availability', JSON.stringify(newAvailability));
+    setAvailabilityState(newAvailability);
+  };
+
+  const setSchedule = (newSchedule) => {
+    localStorage.setItem('schedule', JSON.stringify(newSchedule));
+    setScheduleState(newSchedule);
+  };
+
   // Load data on mount
   useEffect(() => {
+    // Try to load from localStorage first, then fall back to JSON files
+    
+    // Load doctors
+    const localDoctors = localStorage.getItem('doctors');
+    if (localDoctors) {
+      try {
+        setDoctorsState(JSON.parse(localDoctors));
+        console.log("Loaded doctors from localStorage");
+      } catch (err) {
+        console.error('Error parsing doctors from localStorage', err);
+        // Fall back to JSON file
+        loadDoctorsFromFile();
+      }
+    } else {
+      loadDoctorsFromFile();
+    }
+
+    // Load holidays
+    const localHolidays = localStorage.getItem('holidays');
+    if (localHolidays) {
+      try {
+        setHolidaysState(JSON.parse(localHolidays));
+        console.log("Loaded holidays from localStorage");
+      } catch (err) {
+        console.error('Error parsing holidays from localStorage', err);
+        // Fall back to JSON file
+        loadHolidaysFromFile();
+      }
+    } else {
+      loadHolidaysFromFile();
+    }
+
+    // Load availability
+    const localAvailability = localStorage.getItem('availability');
+    if (localAvailability) {
+      try {
+        setAvailabilityState(JSON.parse(localAvailability));
+        console.log("Loaded availability from localStorage");
+      } catch (err) {
+        console.error('Error parsing availability from localStorage', err);
+        // Initialize as empty object
+        setAvailabilityState({});
+      }
+    }
+
+    // Load schedule
+    const localSchedule = localStorage.getItem('schedule');
+    if (localSchedule) {
+      try {
+        setScheduleState(JSON.parse(localSchedule));
+        console.log("Loaded schedule from localStorage");
+      } catch (err) {
+        console.error('Error parsing schedule from localStorage', err);
+        // Initialize as empty object
+        setScheduleState({});
+      }
+    }
+  }, []);
+
+  const loadDoctorsFromFile = () => {
     fetch('/doctors.json')
       .then(res => res.json())
       .then(data => {
-        setDoctors(data);
-        console.log("Loaded doctors:", data);
+        setDoctorsState(data);
+        console.log("Loaded doctors from file:", data);
       })
       .catch(err => console.error('Error loading doctors.json', err));
+  };
 
+  const loadHolidaysFromFile = () => {
     fetch('/holidays.json')
       .then(res => res.json())
       .then(data => {
-        setHolidays(data);
-        console.log("Loaded holidays:", data);
+        setHolidaysState(data);
+        console.log("Loaded holidays from file:", data);
       })
       .catch(err => console.error('Error loading holidays.json', err));
-  }, []);
+  };
 
   const toggleDrawer = (open) => (event) => {
     if (
@@ -180,7 +265,7 @@ function App() {
       case 'holidays':
         return <HolidayConfig holidays={holidays} setHolidays={setHolidays} />;
       case 'availability':
-        return <DoctorNeeds doctors={doctors} setAvailability={setAvailability} />;
+        return <DoctorNeeds doctors={doctors} setAvailability={setAvailability} availability={availability} />;
       case 'generate':
         return (
           <GenerateSchedule
