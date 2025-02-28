@@ -1,4 +1,4 @@
-// Modified App.jsx with dashboard stability improvements
+// Updated App.jsx with support for schedule editing
 
 import React, { useState, useEffect } from 'react';
 import { 
@@ -37,6 +37,7 @@ import HolidayConfig from './components/HolidayConfig';
 import DoctorNeeds from './components/DoctorNeeds';
 import GenerateSchedule from './components/GenerateSchedule';
 import Dashboard from './components/Dashboard';
+import MonthlyCalendarView from './components/MonthlyCalendarView';
 
 // Create a custom theme
 const theme = createTheme({
@@ -149,6 +150,42 @@ function App() {
       // Navigate to dashboard after generating schedule
       setActiveComponent('dashboard');
     }
+  };
+  
+  // Handle schedule updates from the dashboard
+  const handleScheduleUpdate = (updatedSchedule) => {
+    if (!updatedSchedule) return;
+    
+    // Update the schedule in state
+    setScheduleState(updatedSchedule);
+    
+    // Get the current schedule data with metadata
+    let scheduleData;
+    try {
+      const storedData = localStorage.getItem('scheduleData');
+      scheduleData = storedData ? JSON.parse(storedData) : { metadata: {} };
+    } catch (error) {
+      console.error("Error parsing schedule data:", error);
+      scheduleData = { metadata: {} };
+    }
+    
+    // Update the schedule while keeping the metadata
+    const updatedData = {
+      schedule: updatedSchedule,
+      metadata: {
+        ...scheduleData.metadata,
+        lastModified: new Date().toISOString()
+      }
+    };
+    
+    // Save to localStorage
+    localStorage.setItem('scheduleData', JSON.stringify(updatedData));
+    
+    setNotification({
+      open: true,
+      message: 'Schedule updated successfully!',
+      severity: 'success'
+    });
   };
 
   // Load data on mount
@@ -339,7 +376,8 @@ function App() {
         return <Dashboard 
           doctors={dashboardDoctors} 
           schedule={dashboardSchedule} 
-          holidays={dashboardHolidays} 
+          holidays={dashboardHolidays}
+          onScheduleUpdate={handleScheduleUpdate}
         />;
       }
       default:

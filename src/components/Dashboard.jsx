@@ -1,4 +1,4 @@
-// Improved Dashboard.jsx with robust data handling
+// Updated Dashboard.jsx with Monthly Calendar View
 import React, { useState, useEffect } from 'react';
 import {
   Typography,
@@ -17,21 +17,24 @@ import {
   Avatar,
   TextField,
   InputAdornment,
-  MenuItem
+  MenuItem,
+  Snackbar
 } from '@mui/material';
 import {
   BarChart as BarChartIcon,
   Timeline as TimelineIcon,
   CalendarMonth as CalendarMonthIcon,
   Analytics as AnalyticsIcon,
-  Search as SearchIcon
+  Search as SearchIcon,
+  CalendarViewMonth as CalendarViewMonthIcon
 } from '@mui/icons-material';
 import MonthlyHours from './MonthlyHours';
 import WeekendHolidayBalance from './WeekendHolidayBalance';
 import YearlySchedule from './YearlySchedule';
 import ScheduleStatistics from './ScheduleStatistics';
+import MonthlyCalendarView from './MonthlyCalendarView';
 
-function Dashboard({ doctors, schedule, holidays }) {
+function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
   const [tabValue, setTabValue] = useState(0);
   const [month, setMonth] = useState(new Date().getMonth() + 1); // Current month (1-12)
   
@@ -41,6 +44,11 @@ function Dashboard({ doctors, schedule, holidays }) {
   const [localHolidays, setLocalHolidays] = useState({});
   const [hasSchedule, setHasSchedule] = useState(false);
   const [quickStats, setQuickStats] = useState(null);
+  const [notification, setNotification] = useState({
+    open: false,
+    message: '',
+    severity: 'success'
+  });
   
   // Update local data when schedule is generated but not when doctors/holidays change
   useEffect(() => {
@@ -60,7 +68,7 @@ function Dashboard({ doctors, schedule, holidays }) {
       
       setHasSchedule(true);
     }
-  }, [schedule]);
+  }, [schedule, doctors, holidays]);
   
   // Recalculate quick stats when local data changes
   useEffect(() => {
@@ -72,6 +80,27 @@ function Dashboard({ doctors, schedule, holidays }) {
   // Handle tab change
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
+  };
+  
+  // Handle schedule updates from the calendar view
+  const handleScheduleUpdate = (updatedSchedule) => {
+    setLocalSchedule(updatedSchedule);
+    
+    // Notify parent component if provided
+    if (onScheduleUpdate) {
+      onScheduleUpdate(updatedSchedule);
+    }
+    
+    // Show notification
+    setNotification({
+      open: true,
+      message: 'Schedule updated successfully',
+      severity: 'success'
+    });
+  };
+  
+  const handleCloseNotification = () => {
+    setNotification({...notification, open: false});
   };
 
   // Quick statistics
@@ -310,6 +339,11 @@ function Dashboard({ doctors, schedule, holidays }) {
               }}
             >
               <Tab 
+                icon={<CalendarViewMonthIcon />} 
+                label="Monthly Calendar" 
+                iconPosition="start" 
+              />
+              <Tab 
                 icon={<BarChartIcon />} 
                 label="Monthly Hours" 
                 iconPosition="start" 
@@ -333,19 +367,43 @@ function Dashboard({ doctors, schedule, holidays }) {
             
             <Box sx={{ p: 3 }}>
               {tabValue === 0 && (
-                <MonthlyHours doctors={localDoctors} schedule={localSchedule} selectedMonth={month} />
+                <MonthlyCalendarView
+                  doctors={localDoctors}
+                  schedule={localSchedule}
+                  holidays={localHolidays}
+                  onScheduleUpdate={handleScheduleUpdate}
+                />
               )}
               {tabValue === 1 && (
-                <WeekendHolidayBalance doctors={localDoctors} schedule={localSchedule} holidays={localHolidays} />
+                <MonthlyHours doctors={localDoctors} schedule={localSchedule} selectedMonth={month} />
               )}
               {tabValue === 2 && (
-                <YearlySchedule doctors={localDoctors} schedule={localSchedule} />
+                <WeekendHolidayBalance doctors={localDoctors} schedule={localSchedule} holidays={localHolidays} />
               )}
               {tabValue === 3 && (
+                <YearlySchedule doctors={localDoctors} schedule={localSchedule} />
+              )}
+              {tabValue === 4 && (
                 <ScheduleStatistics doctors={localDoctors} schedule={localSchedule} />
               )}
             </Box>
           </Paper>
+          
+          {/* Notification */}
+          <Snackbar 
+            open={notification.open} 
+            autoHideDuration={6000} 
+            onClose={handleCloseNotification}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+          >
+            <Alert 
+              onClose={handleCloseNotification} 
+              severity={notification.severity} 
+              sx={{ width: '100%' }}
+            >
+              {notification.message}
+            </Alert>
+          </Snackbar>
         </>
       )}
     </Box>
