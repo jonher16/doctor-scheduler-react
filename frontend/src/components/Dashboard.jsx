@@ -33,6 +33,7 @@ import WeekendHolidayBalance from './WeekendHolidayBalance';
 import YearlySchedule from './YearlySchedule';
 import ScheduleStatistics from './ScheduleStatistics';
 import MonthlyCalendarView from './MonthlyCalendarView';
+import ExcelExportButton from './ExcelExportButton';
 
 function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
   const [tabValue, setTabValue] = useState(0);
@@ -173,11 +174,16 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
         Schedule Dashboard
       </Typography>
       
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="body1" color="text.secondary" paragraph>
-          View and analyze the generated schedule with different visualizations and statistics.
-        </Typography>
-      </Box>
+      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <Typography variant="body1" color="text.secondary">
+        View and analyze the generated schedule with different visualizations and statistics.
+      </Typography>
+      
+      {/* Excel Export Button */}
+      {hasSchedule && (
+        <ExcelExportButton schedule={localSchedule} doctors={localDoctors} />
+      )}
+    </Box>
 
       {!hasSchedule ? (
         <Alert severity="info" sx={{ mb: 3 }}>
