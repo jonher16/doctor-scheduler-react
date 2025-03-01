@@ -22,19 +22,17 @@ import {
 } from '@mui/material';
 import {
   PlayArrow as PlayArrowIcon,
-  Settings as SettingsIcon,
-  ExpandMore as ExpandMoreIcon,
-  CheckCircle as CheckCircleIcon,
+  Dashboard as DashboardIcon,
   Error as ErrorIcon,
   Info as InfoIcon,
-  Dashboard as DashboardIcon,
+  ExpandMore as ExpandMoreIcon,
   Psychology as PsychologyIcon
 } from '@mui/icons-material';
 
-// API URL (configurable based on environment)
 const API_BASE_URL = 'http://localhost:5000/api';
 
 function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
+  // States to store progress and status messages
   const [status, setStatus] = useState("");
   const [progress, setProgress] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -42,182 +40,85 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
   const [generationStats, setGenerationStats] = useState(null);
   const [useOptimizedAlgorithm, setUseOptimizedAlgorithm] = useState(true);
   const [serverAvailable, setServerAvailable] = useState(false);
-  const [optimizationResult, setOptimizationResult] = useState(null); // Store the optimization result
+  const [optimizationResult, setOptimizationResult] = useState(null);
 
   // Check server availability on mount
   useEffect(() => {
     checkServerStatus().then(isAvailable => {
       setServerAvailable(isAvailable);
-      // If server is not available, default to simple algorithm
       if (!isAvailable) {
         setUseOptimizedAlgorithm(false);
       }
     });
   }, []);
 
-  // Update progress simulation for simple algorithm
-  const updateProgress = (current, total) => {
-    const progressValue = Math.min(100, Math.round((current / total) * 100));
-    setProgress(progressValue);
-  };
+  // useEffect to poll the /optimize/progress endpoint every second while optimization is running.
+  // This hook updates the progress and status in real time.
+  useEffect(() => {
+    // Only poll when an optimization is in progress.
+    if (!isGenerating) return;
 
-  // Simple schedule generation (original algorithm)
-  const generateSimpleSchedule = () => {
-    // Create a schedule with a null prototype to avoid any hidden keys like __proto__
-    const schedule = Object.create(null);
-
-    const daysInYear = 365;
-    const startDate = new Date("2025-01-01");
-    const shifts = ["Day", "Evening", "Night"];
-    const shiftCoverage = { "Day": 2, "Evening": 1, "Night": 2 };
-
-    setStatus("Assigning doctors to shifts...");
-
-    let doctorIndex = 0;
-    for (let d = 0; d < daysInYear; d++) {
-      updateProgress(d, daysInYear);
-      
-      const currentDate = new Date(startDate);
-      currentDate.setDate(startDate.getDate() + d);
-      const dateStr = currentDate.toISOString().split('T')[0];
-
-      // Always create the structure for each date
-      schedule[dateStr] = { "Day": [], "Evening": [], "Night": [] };
-
-      // For each shift, assign required number of doctors (round-robin)
-      shifts.forEach(shift => {
-        for (let i = 0; i < shiftCoverage[shift]; i++) {
-          // If there's a "Long" holiday, skip the next doctor if they're senior, etc.
-          if (holidays[dateStr] === "Long") {
-            // Prefer junior doctors for holidays
-            while (doctorIndex < doctors.length && 
-                  doctors[doctorIndex].seniority === "Senior") {
-              doctorIndex = (doctorIndex + 1) % doctors.length;
-            }
+    // Set up an interval timer to poll progress every 1 second.
+    const interval = setInterval(async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/optimize/progress`);
+        if (response.ok) {
+          const data = await response.json();
+          // Update local state with current progress and status message.
+          setProgress(data.current);
+          setStatus(data.message || "Optimizing schedule...");
+          // If the optimization status is completed or an error occurred, stop polling.
+          if (data.status === "completed" || data.status === "error") {
+            setIsGenerating(false);
+            clearInterval(interval);
           }
-          
-          // Check doctor availability
-          const currentDoctor = doctors[doctorIndex].name;
-          const doctorAvail = availability[currentDoctor] && 
-                            availability[currentDoctor][dateStr];
-          
-          // Skip if doctor is not available or has specific shift constraints
-          if (doctorAvail === "Not Available" ||
-              (doctorAvail === "Day Only" && shift !== "Day") ||
-              (doctorAvail === "Evening Only" && shift !== "Evening") ||
-              (doctorAvail === "Night Only" && shift !== "Night")) {
-            // Find next available doctor
-            let nextIndex = (doctorIndex + 1) % doctors.length;
-            let attempts = 0;
-            
-            while (attempts < doctors.length) {
-              const nextDoctor = doctors[nextIndex].name;
-              const nextAvail = availability[nextDoctor] && 
-                              availability[nextDoctor][dateStr];
-              
-              if (nextAvail !== "Not Available" &&
-                  !(nextAvail === "Day Only" && shift !== "Day") &&
-                  !(nextAvail === "Evening Only" && shift !== "Evening") &&
-                  !(nextAvail === "Night Only" && shift !== "Night")) {
-                break;
-              }
-              
-              nextIndex = (nextIndex + 1) % doctors.length;
-              attempts++;
-            }
-            
-            doctorIndex = nextIndex;
-          }
-          
-          schedule[dateStr][shift].push(doctors[doctorIndex].name);
-          doctorIndex = (doctorIndex + 1) % doctors.length;
+        } else {
+          // If the endpoint fails, you can choose to log or display an error.
+          console.warn("Progress endpoint returned an error.");
         }
-      });
+      } catch (err) {
+        console.error("Error polling progress:", err);
+      }
+    }, 1000);
+
+    // Clear the interval when the component unmounts or when isGenerating changes.
+    return () => clearInterval(interval);
+  }, [isGenerating]);
+
+  // Function to check if the server is available.
+  async function checkServerStatus() {
+    try {
+      const response = await fetch(`${API_BASE_URL}/status`);
+      return response.ok;
+    } catch (error) {
+      console.error("Server status check failed:", error);
+      return false;
     }
+  }
 
-    return schedule;
-  };
-
-  // Optimized schedule generation using the Python API
+  // Optimized schedule generation using the Python API.
   const generateOptimizedSchedule = async () => {
     try {
-      // Set up progress tracking
       setStatus("Connecting to optimization server...");
-      updateProgress(5, 100);
-      
-      // Prepare input data for the optimizer
-      const inputData = {
-        doctors: doctors,
-        holidays: holidays,
-        availability: availability
-      };
-      
-      // Start the optimization request
+      setProgress(5);
+      // Prepare input data for the optimizer.
+      const inputData = { doctors, holidays, availability };
+
+      // Start the optimization by calling the /optimize endpoint.
       const optimizationResponse = await fetch(`${API_BASE_URL}/optimize`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(inputData),
       });
       
-      // Check for HTTP errors
       if (!optimizationResponse.ok) {
         const errorText = await optimizationResponse.text();
         throw new Error(`API request failed: ${errorText}`);
       }
       
-      // Parse the response to get the result
+      // Parse the final optimization result.
       const responseData = await optimizationResponse.json();
       setOptimizationResult(responseData);
-      
-      // Start polling for progress updates
-      let isCompleted = false;
-      const startTime = Date.now();
-      
-      while (!isCompleted) {
-        // Check if we've been polling for too long (5 minutes max)
-        if (Date.now() - startTime > 5 * 60 * 1000) {
-          throw new Error("Optimization timed out after 5 minutes");
-        }
-        
-        try {
-          // Get progress update
-          const progressResponse = await fetch(`${API_BASE_URL}/optimize/progress`);
-          
-          if (progressResponse.ok) {
-            const progressData = await progressResponse.json();
-            
-            // Update the UI with progress
-            setProgress(progressData.current);
-            setStatus(progressData.message || "Optimizing schedule...");
-            
-            // Check if completed or error
-            if (progressData.status === "completed") {
-              isCompleted = true;
-            } else if (progressData.status === "error") {
-              throw new Error(progressData.message || "Optimization failed");
-            } else {
-              // Wait before polling again
-              await new Promise(resolve => setTimeout(resolve, 1000));
-            }
-          } else {
-            // If progress endpoint fails, wait and try again
-            await new Promise(resolve => setTimeout(resolve, 2000));
-          }
-        } catch (progressError) {
-          console.warn("Error checking progress:", progressError);
-          // If progress check fails, wait and try again
-          await new Promise(resolve => setTimeout(resolve, 2000));
-        }
-      }
-      
-      // Check if we have a valid optimization result
-      if (!responseData || !responseData.schedule || !responseData.statistics) {
-        throw new Error("Invalid optimization result");
-      }
-      
-      // Return the schedule and statistics
       return { 
         schedule: responseData.schedule, 
         optimizationStats: responseData.statistics 
@@ -228,13 +129,14 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
     }
   };
 
-  // Generate schedule - main function
+  // Main function to generate schedule
   const generate = async () => {
     if (doctors.length === 0) {
       setError("No doctors configured! Please add doctors before generating a schedule.");
       return;
     }
 
+    // Reset all relevant states.
     setIsGenerating(true);
     setStatus("Initializing schedule generation...");
     setProgress(0);
@@ -243,45 +145,39 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
 
     try {
       let schedule;
-      let stats = {
-        totalShifts: 0,
-        doctorShifts: {},
-        seniorCoverage: 0,
-        holidayCoverage: 0
-      };
-      
-      // Initialize doctor shifts count
-      doctors.forEach(doc => {
-        stats.doctorShifts[doc.name] = 0;
-      });
-      
+      let stats = {};
+
       if (useOptimizedAlgorithm && serverAvailable) {
-        // Use the MILP optimization
+        // Start the optimization request.
+        // The useEffect above will handle progress updates while isGenerating is true.
         const result = await generateOptimizedSchedule();
         schedule = result.schedule;
-        
-        // Add optimizer-specific stats
         stats.optimized = true;
         stats.optimizationMetrics = result.optimizationStats;
       } else {
-        // Use the simple algorithm
+        // Fallback to simple algorithm if optimization server is not available.
         schedule = generateSimpleSchedule();
         stats.optimized = false;
       }
       
-      // Count shifts for statistics
+      // (Optional) Calculate additional statistics here if needed.
+      // For example, count total shifts and shifts per doctor.
+      let totalShifts = 0;
+      const doctorShifts = {};
+      doctors.forEach(doc => { doctorShifts[doc.name] = 0; });
       Object.keys(schedule).forEach(date => {
-        const shiftsForDay = schedule[date];
-        Object.keys(shiftsForDay).forEach(shift => {
-          const doctors = shiftsForDay[shift];
-          stats.totalShifts += doctors.length;
-          
-          doctors.forEach(doctorName => {
-            stats.doctorShifts[doctorName] = (stats.doctorShifts[doctorName] || 0) + 1;
+        Object.keys(schedule[date]).forEach(shift => {
+          const assignedDoctors = schedule[date][shift];
+          totalShifts += assignedDoctors.length;
+          assignedDoctors.forEach(name => {
+            doctorShifts[name] += 1;
           });
         });
       });
+      stats.totalShifts = totalShifts;
+      stats.doctorShifts = doctorShifts;
       
+      // Update state with final schedule and stats.
       setGenerationStats(stats);
       setSchedule(schedule);
       setStatus("Schedule generated successfully!");
@@ -294,16 +190,31 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
     }
   };
 
-  // Check server status
-  async function checkServerStatus() {
-    try {
-      const response = await fetch(`${API_BASE_URL}/status`);
-      return response.ok;
-    } catch (error) {
-      console.error("Server status check failed:", error);
-      return false;
+  // Simple schedule generation (fallback algorithm)
+  const generateSimpleSchedule = () => {
+    const schedule = {};
+    const daysInYear = 365;
+    const startDate = new Date("2025-01-01");
+    const shifts = ["Day", "Evening", "Night"];
+    const shiftCoverage = { "Day": 2, "Evening": 1, "Night": 2 };
+
+    let doctorIndex = 0;
+    for (let d = 0; d < daysInYear; d++) {
+      const currentDate = new Date(startDate);
+      currentDate.setDate(startDate.getDate() + d);
+      const dateStr = currentDate.toISOString().split('T')[0];
+      schedule[dateStr] = { "Day": [], "Evening": [], "Night": [] };
+
+      shifts.forEach(shift => {
+        for (let i = 0; i < shiftCoverage[shift]; i++) {
+          // Round-robin assignment (simple logic for demonstration)
+          schedule[dateStr][shift].push(doctors[doctorIndex].name);
+          doctorIndex = (doctorIndex + 1) % doctors.length;
+        }
+      });
     }
-  }
+    return schedule;
+  };
 
   return (
     <Box>
@@ -313,21 +224,14 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
       
       <Box sx={{ mb: 3 }}>
         <Typography variant="body1" color="text.secondary" paragraph>
-          Generate an optimized yearly schedule for all doctors based on your configurations, availability constraints, and hospital requirements.
+          Generate an optimized yearly schedule for all doctors based on your configurations.
         </Typography>
       </Box>
 
       {error && (
-        <Alert 
-          severity="error" 
-          sx={{ mb: 3 }}
+        <Alert severity="error" sx={{ mb: 3 }}
           action={
-            <IconButton
-              aria-label="close"
-              color="inherit"
-              size="small"
-              onClick={() => setError("")}
-            >
+            <IconButton aria-label="close" color="inherit" size="small" onClick={() => setError("")}>
               <ErrorIcon fontSize="inherit" />
             </IconButton>
           }
@@ -341,7 +245,6 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
         <Alert severity="warning" sx={{ mb: 3 }}>
           <AlertTitle>Optimization Server Unavailable</AlertTitle>
           The optimization server is not responding. The application will use the simple scheduling algorithm instead.
-          You can try restarting the server by running the <code>run.sh</code> script.
         </Alert>
       )}
 
@@ -356,23 +259,17 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
               
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                 <Typography variant="body1">Doctors configured:</Typography>
-                <Typography variant="body1" fontWeight="bold">
-                  {doctors.length}
-                </Typography>
+                <Typography variant="body1" fontWeight="bold">{doctors.length}</Typography>
               </Box>
               
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                 <Typography variant="body1">Holidays configured:</Typography>
-                <Typography variant="body1" fontWeight="bold">
-                  {Object.keys(holidays).length}
-                </Typography>
+                <Typography variant="body1" fontWeight="bold">{Object.keys(holidays).length}</Typography>
               </Box>
               
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                 <Typography variant="body1">Availability constraints:</Typography>
-                <Typography variant="body1" fontWeight="bold">
-                  {Object.keys(availability).length}
-                </Typography>
+                <Typography variant="body1" fontWeight="bold">{Object.keys(availability).length}</Typography>
               </Box>
               
               <Divider sx={{ my: 2 }} />
@@ -391,8 +288,7 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
               </Box>
               
               <Tooltip title={useOptimizedAlgorithm ? 
-                "Using Mixed-Integer Linear Programming (MILP) optimization algorithm based on the technical report" : 
-                "Using simple round-robin scheduling algorithm"}>
+                "Using MILP optimization algorithm" : "Using simple scheduling algorithm"}>
                 <Alert severity={useOptimizedAlgorithm && serverAvailable ? "info" : "warning"} sx={{ mb: 2 }}>
                   {useOptimizedAlgorithm && serverAvailable
                     ? "MILP optimization will be used to generate an optimal schedule" 
@@ -445,9 +341,8 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
                 <Box>
                   <Alert severity="success" sx={{ mb: 2 }}>
                     <AlertTitle>Success</AlertTitle>
-                    Schedule generated successfully! You can now view it in the Dashboard.
+                    Schedule generated successfully!
                   </Alert>
-                  
                   {generationStats && (
                     <Accordion sx={{ mt: 2 }}>
                       <AccordionSummary
@@ -515,7 +410,7 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
                 <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 4 }}>
                   <InfoIcon color="primary" sx={{ fontSize: 48, mb: 2 }} />
                   <Typography variant="body1" align="center">
-                    Click the "Generate Schedule" button to create a new schedule based on your configurations.
+                    Click the "Generate Schedule" button to create a new schedule.
                   </Typography>
                 </Box>
               )}
