@@ -1,0 +1,4772 @@
+{
+  "schedule": {
+    "2025-01-01": {
+      "Day": [
+        "Doctor1",
+        "Doctor5"
+      ],
+      "Evening": [
+        "Doctor12"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor4"
+      ]
+    },
+    "2025-01-02": {
+      "Day": [
+        "Doctor2",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor5"
+      ],
+      "Night": [
+        "Doctor8",
+        "Doctor9"
+      ]
+    },
+    "2025-01-03": {
+      "Day": [
+        "Doctor2",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor1"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor8"
+      ]
+    },
+    "2025-01-04": {
+      "Day": [
+        "Doctor1",
+        "Doctor5"
+      ],
+      "Evening": [
+        "Doctor13"
+      ],
+      "Night": [
+        "Doctor4",
+        "Doctor10"
+      ]
+    },
+    "2025-01-05": {
+      "Day": [
+        "Doctor6",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor13"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor5"
+      ]
+    },
+    "2025-01-06": {
+      "Day": [
+        "Doctor2",
+        "Doctor7"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor12"
+      ]
+    },
+    "2025-01-07": {
+      "Day": [
+        "Doctor8",
+        "Doctor9"
+      ],
+      "Evening": [
+        "Doctor13"
+      ],
+      "Night": [
+        "Doctor7",
+        "Doctor10"
+      ]
+    },
+    "2025-01-08": {
+      "Day": [
+        "Doctor3",
+        "Doctor6"
+      ],
+      "Evening": [
+        "Doctor9"
+      ],
+      "Night": [
+        "Doctor12",
+        "Doctor13"
+      ]
+    },
+    "2025-01-09": {
+      "Day": [
+        "Doctor8",
+        "Doctor9"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor12",
+        "Doctor13"
+      ]
+    },
+    "2025-01-10": {
+      "Day": [
+        "Doctor1",
+        "Doctor5"
+      ],
+      "Evening": [
+        "Doctor11"
+      ],
+      "Night": [
+        "Doctor4",
+        "Doctor9"
+      ]
+    },
+    "2025-01-11": {
+      "Day": [
+        "Doctor5",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor12"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor2"
+      ]
+    },
+    "2025-01-12": {
+      "Day": [
+        "Doctor6",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor3"
+      ],
+      "Night": [
+        "Doctor10",
+        "Doctor12"
+      ]
+    },
+    "2025-01-13": {
+      "Day": [
+        "Doctor7",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor6"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor12"
+      ]
+    },
+    "2025-01-14": {
+      "Day": [
+        "Doctor7",
+        "Doctor10"
+      ],
+      "Evening": [
+        "Doctor8"
+      ],
+      "Night": [
+        "Doctor11",
+        "Doctor13"
+      ]
+    },
+    "2025-01-15": {
+      "Day": [
+        "Doctor7",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor4"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor11"
+      ]
+    },
+    "2025-01-16": {
+      "Day": [
+        "Doctor4",
+        "Doctor9"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor13"
+      ]
+    },
+    "2025-01-17": {
+      "Day": [
+        "Doctor11",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor8"
+      ],
+      "Night": [
+        "Doctor7",
+        "Doctor10"
+      ]
+    },
+    "2025-01-18": {
+      "Day": [
+        "Doctor1",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor11"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor9"
+      ]
+    },
+    "2025-01-19": {
+      "Day": [
+        "Doctor2",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor4"
+      ],
+      "Night": [
+        "Doctor9",
+        "Doctor13"
+      ]
+    },
+    "2025-01-20": {
+      "Day": [
+        "Doctor2",
+        "Doctor4"
+      ],
+      "Evening": [
+        "Doctor7"
+      ],
+      "Night": [
+        "Doctor10",
+        "Doctor13"
+      ]
+    },
+    "2025-01-21": {
+      "Day": [
+        "Doctor2",
+        "Doctor9"
+      ],
+      "Evening": [
+        "Doctor7"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor8"
+      ]
+    },
+    "2025-01-22": {
+      "Day": [
+        "Doctor3",
+        "Doctor7"
+      ],
+      "Evening": [
+        "Doctor13"
+      ],
+      "Night": [
+        "Doctor4",
+        "Doctor8"
+      ]
+    },
+    "2025-01-23": {
+      "Day": [
+        "Doctor9",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor8",
+        "Doctor11"
+      ]
+    },
+    "2025-01-24": {
+      "Day": [
+        "Doctor3",
+        "Doctor7"
+      ],
+      "Evening": [
+        "Doctor6"
+      ],
+      "Night": [
+        "Doctor8",
+        "Doctor12"
+      ]
+    },
+    "2025-01-25": {
+      "Day": [
+        "Doctor4",
+        "Doctor5"
+      ],
+      "Evening": [
+        "Doctor1"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor11"
+      ]
+    },
+    "2025-01-26": {
+      "Day": [
+        "Doctor1",
+        "Doctor5"
+      ],
+      "Evening": [
+        "Doctor3"
+      ],
+      "Night": [
+        "Doctor9",
+        "Doctor11"
+      ]
+    },
+    "2025-01-27": {
+      "Day": [
+        "Doctor1",
+        "Doctor3"
+      ],
+      "Evening": [
+        "Doctor5"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor4"
+      ]
+    },
+    "2025-01-28": {
+      "Day": [
+        "Doctor6",
+        "Doctor10"
+      ],
+      "Evening": [
+        "Doctor5"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor4"
+      ]
+    },
+    "2025-01-29": {
+      "Day": [
+        "Doctor5",
+        "Doctor6"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor9"
+      ]
+    },
+    "2025-01-30": {
+      "Day": [
+        "Doctor5",
+        "Doctor7"
+      ],
+      "Evening": [
+        "Doctor1"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor6"
+      ]
+    },
+    "2025-01-31": {
+      "Day": [
+        "Doctor3",
+        "Doctor7"
+      ],
+      "Evening": [
+        "Doctor4"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor12"
+      ]
+    },
+    "2025-02-01": {
+      "Day": [
+        "Doctor9",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor3"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor13"
+      ]
+    },
+    "2025-02-02": {
+      "Day": [
+        "Doctor3",
+        "Doctor5"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor9",
+        "Doctor11"
+      ]
+    },
+    "2025-02-03": {
+      "Day": [
+        "Doctor5",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor13"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor12"
+      ]
+    },
+    "2025-02-04": {
+      "Day": [
+        "Doctor4",
+        "Doctor10"
+      ],
+      "Evening": [
+        "Doctor8"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor5"
+      ]
+    },
+    "2025-02-05": {
+      "Day": [
+        "Doctor1",
+        "Doctor7"
+      ],
+      "Evening": [
+        "Doctor13"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor8"
+      ]
+    },
+    "2025-02-06": {
+      "Day": [
+        "Doctor7",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor11"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor6"
+      ]
+    },
+    "2025-02-07": {
+      "Day": [
+        "Doctor1",
+        "Doctor2"
+      ],
+      "Evening": [
+        "Doctor9"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor12"
+      ]
+    },
+    "2025-02-08": {
+      "Day": [
+        "Doctor1",
+        "Doctor3"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor11",
+        "Doctor12"
+      ]
+    },
+    "2025-02-09": {
+      "Day": [
+        "Doctor1",
+        "Doctor6"
+      ],
+      "Evening": [
+        "Doctor9"
+      ],
+      "Night": [
+        "Doctor5",
+        "Doctor11"
+      ]
+    },
+    "2025-02-10": {
+      "Day": [
+        "Doctor4",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor2"
+      ],
+      "Night": [
+        "Doctor7",
+        "Doctor9"
+      ]
+    },
+    "2025-02-11": {
+      "Day": [
+        "Doctor5",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor2"
+      ],
+      "Night": [
+        "Doctor4",
+        "Doctor13"
+      ]
+    },
+    "2025-02-12": {
+      "Day": [
+        "Doctor7",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor1"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor11"
+      ]
+    },
+    "2025-02-13": {
+      "Day": [
+        "Doctor9",
+        "Doctor10"
+      ],
+      "Evening": [
+        "Doctor4"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor12"
+      ]
+    },
+    "2025-02-14": {
+      "Day": [
+        "Doctor7",
+        "Doctor10"
+      ],
+      "Evening": [
+        "Doctor8"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor12"
+      ]
+    },
+    "2025-02-15": {
+      "Day": [
+        "Doctor1",
+        "Doctor5"
+      ],
+      "Evening": [
+        "Doctor3"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor11"
+      ]
+    },
+    "2025-02-16": {
+      "Day": [
+        "Doctor1",
+        "Doctor9"
+      ],
+      "Evening": [
+        "Doctor3"
+      ],
+      "Night": [
+        "Doctor11",
+        "Doctor13"
+      ]
+    },
+    "2025-02-17": {
+      "Day": [
+        "Doctor3",
+        "Doctor6"
+      ],
+      "Evening": [
+        "Doctor2"
+      ],
+      "Night": [
+        "Doctor8",
+        "Doctor10"
+      ]
+    },
+    "2025-02-18": {
+      "Day": [
+        "Doctor6",
+        "Doctor7"
+      ],
+      "Evening": [
+        "Doctor4"
+      ],
+      "Night": [
+        "Doctor9",
+        "Doctor13"
+      ]
+    },
+    "2025-02-19": {
+      "Day": [
+        "Doctor8",
+        "Doctor10"
+      ],
+      "Evening": [
+        "Doctor7"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor2"
+      ]
+    },
+    "2025-02-20": {
+      "Day": [
+        "Doctor4",
+        "Doctor7"
+      ],
+      "Evening": [
+        "Doctor5"
+      ],
+      "Night": [
+        "Doctor8",
+        "Doctor12"
+      ]
+    },
+    "2025-02-21": {
+      "Day": [
+        "Doctor7",
+        "Doctor10"
+      ],
+      "Evening": [
+        "Doctor13"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor8"
+      ]
+    },
+    "2025-02-22": {
+      "Day": [
+        "Doctor2",
+        "Doctor4"
+      ],
+      "Evening": [
+        "Doctor5"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor12"
+      ]
+    },
+    "2025-02-23": {
+      "Day": [
+        "Doctor5",
+        "Doctor10"
+      ],
+      "Evening": [
+        "Doctor4"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor12"
+      ]
+    },
+    "2025-02-24": {
+      "Day": [
+        "Doctor4",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor2"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor8"
+      ]
+    },
+    "2025-02-25": {
+      "Day": [
+        "Doctor9",
+        "Doctor10"
+      ],
+      "Evening": [
+        "Doctor7"
+      ],
+      "Night": [
+        "Doctor5",
+        "Doctor13"
+      ]
+    },
+    "2025-02-26": {
+      "Day": [
+        "Doctor1",
+        "Doctor6"
+      ],
+      "Evening": [
+        "Doctor2"
+      ],
+      "Night": [
+        "Doctor4",
+        "Doctor12"
+      ]
+    },
+    "2025-02-27": {
+      "Day": [
+        "Doctor10",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor7"
+      ],
+      "Night": [
+        "Doctor5",
+        "Doctor9"
+      ]
+    },
+    "2025-02-28": {
+      "Day": [
+        "Doctor6",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor3"
+      ],
+      "Night": [
+        "Doctor11",
+        "Doctor12"
+      ]
+    },
+    "2025-03-01": {
+      "Day": [
+        "Doctor3",
+        "Doctor5"
+      ],
+      "Evening": [
+        "Doctor4"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor11"
+      ]
+    },
+    "2025-03-02": {
+      "Day": [
+        "Doctor2",
+        "Doctor3"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor9",
+        "Doctor13"
+      ]
+    },
+    "2025-03-03": {
+      "Day": [
+        "Doctor10",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor3"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor2"
+      ]
+    },
+    "2025-03-04": {
+      "Day": [
+        "Doctor4",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor9"
+      ],
+      "Night": [
+        "Doctor12",
+        "Doctor13"
+      ]
+    },
+    "2025-03-05": {
+      "Day": [
+        "Doctor4",
+        "Doctor6"
+      ],
+      "Evening": [
+        "Doctor5"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor12"
+      ]
+    },
+    "2025-03-06": {
+      "Day": [
+        "Doctor1",
+        "Doctor10"
+      ],
+      "Evening": [
+        "Doctor9"
+      ],
+      "Night": [
+        "Doctor7",
+        "Doctor8"
+      ]
+    },
+    "2025-03-07": {
+      "Day": [
+        "Doctor2",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor4"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor3"
+      ]
+    },
+    "2025-03-08": {
+      "Day": [
+        "Doctor2",
+        "Doctor10"
+      ],
+      "Evening": [
+        "Doctor5"
+      ],
+      "Night": [
+        "Doctor7",
+        "Doctor11"
+      ]
+    },
+    "2025-03-09": {
+      "Day": [
+        "Doctor3",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor4"
+      ],
+      "Night": [
+        "Doctor11",
+        "Doctor13"
+      ]
+    },
+    "2025-03-10": {
+      "Day": [
+        "Doctor1",
+        "Doctor3"
+      ],
+      "Evening": [
+        "Doctor9"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor6"
+      ]
+    },
+    "2025-03-11": {
+      "Day": [
+        "Doctor5",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor9"
+      ],
+      "Night": [
+        "Doctor4",
+        "Doctor13"
+      ]
+    },
+    "2025-03-12": {
+      "Day": [
+        "Doctor1",
+        "Doctor7"
+      ],
+      "Evening": [
+        "Doctor12"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor10"
+      ]
+    },
+    "2025-03-13": {
+      "Day": [
+        "Doctor1",
+        "Doctor7"
+      ],
+      "Evening": [
+        "Doctor4"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor6"
+      ]
+    },
+    "2025-03-14": {
+      "Day": [
+        "Doctor7",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor1"
+      ],
+      "Night": [
+        "Doctor12",
+        "Doctor13"
+      ]
+    },
+    "2025-03-15": {
+      "Day": [
+        "Doctor5",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor13"
+      ]
+    },
+    "2025-03-16": {
+      "Day": [
+        "Doctor6",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor5",
+        "Doctor11"
+      ]
+    },
+    "2025-03-17": {
+      "Day": [
+        "Doctor12",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor9"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor5"
+      ]
+    },
+    "2025-03-18": {
+      "Day": [
+        "Doctor8",
+        "Doctor10"
+      ],
+      "Evening": [
+        "Doctor7"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor4"
+      ]
+    },
+    "2025-03-19": {
+      "Day": [
+        "Doctor7",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor8"
+      ],
+      "Night": [
+        "Doctor5",
+        "Doctor9"
+      ]
+    },
+    "2025-03-20": {
+      "Day": [
+        "Doctor7",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor12"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor5"
+      ]
+    },
+    "2025-03-21": {
+      "Day": [
+        "Doctor1",
+        "Doctor4"
+      ],
+      "Evening": [
+        "Doctor2"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor8"
+      ]
+    },
+    "2025-03-22": {
+      "Day": [
+        "Doctor5",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor3"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor11"
+      ]
+    },
+    "2025-03-23": {
+      "Day": [
+        "Doctor4",
+        "Doctor6"
+      ],
+      "Evening": [
+        "Doctor9"
+      ],
+      "Night": [
+        "Doctor11",
+        "Doctor12"
+      ]
+    },
+    "2025-03-24": {
+      "Day": [
+        "Doctor4",
+        "Doctor10"
+      ],
+      "Evening": [
+        "Doctor13"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor12"
+      ]
+    },
+    "2025-03-25": {
+      "Day": [
+        "Doctor1",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor9"
+      ],
+      "Night": [
+        "Doctor7",
+        "Doctor11"
+      ]
+    },
+    "2025-03-26": {
+      "Day": [
+        "Doctor4",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor9"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor7"
+      ]
+    },
+    "2025-03-27": {
+      "Day": [
+        "Doctor8",
+        "Doctor9"
+      ],
+      "Evening": [
+        "Doctor11"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor7"
+      ]
+    },
+    "2025-03-28": {
+      "Day": [
+        "Doctor8",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor5"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor10"
+      ]
+    },
+    "2025-03-29": {
+      "Day": [
+        "Doctor5",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor3"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor6"
+      ]
+    },
+    "2025-03-30": {
+      "Day": [
+        "Doctor3",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor13"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor10"
+      ]
+    },
+    "2025-03-31": {
+      "Day": [
+        "Doctor8",
+        "Doctor9"
+      ],
+      "Evening": [
+        "Doctor7"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor6"
+      ]
+    },
+    "2025-04-01": {
+      "Day": [
+        "Doctor4",
+        "Doctor10"
+      ],
+      "Evening": [
+        "Doctor7"
+      ],
+      "Night": [
+        "Doctor5",
+        "Doctor8"
+      ]
+    },
+    "2025-04-02": {
+      "Day": [
+        "Doctor3",
+        "Doctor6"
+      ],
+      "Evening": [
+        "Doctor4"
+      ],
+      "Night": [
+        "Doctor8",
+        "Doctor12"
+      ]
+    },
+    "2025-04-03": {
+      "Day": [
+        "Doctor6",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor2"
+      ],
+      "Night": [
+        "Doctor7",
+        "Doctor9"
+      ]
+    },
+    "2025-04-04": {
+      "Day": [
+        "Doctor3",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor6"
+      ],
+      "Night": [
+        "Doctor10",
+        "Doctor11"
+      ]
+    },
+    "2025-04-05": {
+      "Day": [
+        "Doctor3",
+        "Doctor4"
+      ],
+      "Evening": [
+        "Doctor5"
+      ],
+      "Night": [
+        "Doctor11",
+        "Doctor13"
+      ]
+    },
+    "2025-04-06": {
+      "Day": [
+        "Doctor3",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor5"
+      ],
+      "Night": [
+        "Doctor10",
+        "Doctor11"
+      ]
+    },
+    "2025-04-07": {
+      "Day": [
+        "Doctor8",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor12"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor9"
+      ]
+    },
+    "2025-04-08": {
+      "Day": [
+        "Doctor2",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor3"
+      ],
+      "Night": [
+        "Doctor11",
+        "Doctor12"
+      ]
+    },
+    "2025-04-09": {
+      "Day": [
+        "Doctor6",
+        "Doctor9"
+      ],
+      "Evening": [
+        "Doctor3"
+      ],
+      "Night": [
+        "Doctor5",
+        "Doctor7"
+      ]
+    },
+    "2025-04-10": {
+      "Day": [
+        "Doctor8",
+        "Doctor10"
+      ],
+      "Evening": [
+        "Doctor13"
+      ],
+      "Night": [
+        "Doctor9",
+        "Doctor12"
+      ]
+    },
+    "2025-04-11": {
+      "Day": [
+        "Doctor6",
+        "Doctor7"
+      ],
+      "Evening": [
+        "Doctor3"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor10"
+      ]
+    },
+    "2025-04-12": {
+      "Day": [
+        "Doctor4",
+        "Doctor9"
+      ],
+      "Evening": [
+        "Doctor6"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor13"
+      ]
+    },
+    "2025-04-13": {
+      "Day": [
+        "Doctor3",
+        "Doctor6"
+      ],
+      "Evening": [
+        "Doctor4"
+      ],
+      "Night": [
+        "Doctor5",
+        "Doctor11"
+      ]
+    },
+    "2025-04-14": {
+      "Day": [
+        "Doctor1",
+        "Doctor9"
+      ],
+      "Evening": [
+        "Doctor7"
+      ],
+      "Night": [
+        "Doctor5",
+        "Doctor11"
+      ]
+    },
+    "2025-04-15": {
+      "Day": [
+        "Doctor1",
+        "Doctor7"
+      ],
+      "Evening": [
+        "Doctor8"
+      ],
+      "Night": [
+        "Doctor10",
+        "Doctor12"
+      ]
+    },
+    "2025-04-16": {
+      "Day": [
+        "Doctor2",
+        "Doctor7"
+      ],
+      "Evening": [
+        "Doctor13"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor8"
+      ]
+    },
+    "2025-04-17": {
+      "Day": [
+        "Doctor3",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor2"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor10"
+      ]
+    },
+    "2025-04-18": {
+      "Day": [
+        "Doctor1",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor2"
+      ],
+      "Night": [
+        "Doctor5",
+        "Doctor6"
+      ]
+    },
+    "2025-04-19": {
+      "Day": [
+        "Doctor7",
+        "Doctor10"
+      ],
+      "Evening": [
+        "Doctor4"
+      ],
+      "Night": [
+        "Doctor5",
+        "Doctor9"
+      ]
+    },
+    "2025-04-20": {
+      "Day": [
+        "Doctor1",
+        "Doctor3"
+      ],
+      "Evening": [
+        "Doctor11"
+      ],
+      "Night": [
+        "Doctor4",
+        "Doctor10"
+      ]
+    },
+    "2025-04-21": {
+      "Day": [
+        "Doctor7",
+        "Doctor9"
+      ],
+      "Evening": [
+        "Doctor1"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor5"
+      ]
+    },
+    "2025-04-22": {
+      "Day": [
+        "Doctor6",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor7"
+      ],
+      "Night": [
+        "Doctor5",
+        "Doctor9"
+      ]
+    },
+    "2025-04-23": {
+      "Day": [
+        "Doctor4",
+        "Doctor10"
+      ],
+      "Evening": [
+        "Doctor2"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor13"
+      ]
+    },
+    "2025-04-24": {
+      "Day": [
+        "Doctor8",
+        "Doctor10"
+      ],
+      "Evening": [
+        "Doctor6"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor13"
+      ]
+    },
+    "2025-04-25": {
+      "Day": [
+        "Doctor1",
+        "Doctor4"
+      ],
+      "Evening": [
+        "Doctor12"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor8"
+      ]
+    },
+    "2025-04-26": {
+      "Day": [
+        "Doctor12",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor11"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor4"
+      ]
+    },
+    "2025-04-27": {
+      "Day": [
+        "Doctor11",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor9"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor8"
+      ]
+    },
+    "2025-04-28": {
+      "Day": [
+        "Doctor5",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor13"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor9"
+      ]
+    },
+    "2025-04-29": {
+      "Day": [
+        "Doctor2",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor7"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor12"
+      ]
+    },
+    "2025-04-30": {
+      "Day": [
+        "Doctor9",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor4"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor12"
+      ]
+    },
+    "2025-05-01": {
+      "Day": [
+        "Doctor8",
+        "Doctor9"
+      ],
+      "Evening": [
+        "Doctor7"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor12"
+      ]
+    },
+    "2025-05-02": {
+      "Day": [
+        "Doctor7",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor5"
+      ],
+      "Night": [
+        "Doctor4",
+        "Doctor10"
+      ]
+    },
+    "2025-05-03": {
+      "Day": [
+        "Doctor6",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor5"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor13"
+      ]
+    },
+    "2025-05-04": {
+      "Day": [
+        "Doctor4",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor11"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor5"
+      ]
+    },
+    "2025-05-05": {
+      "Day": [
+        "Doctor1",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor4"
+      ],
+      "Night": [
+        "Doctor10",
+        "Doctor12"
+      ]
+    },
+    "2025-05-06": {
+      "Day": [
+        "Doctor6",
+        "Doctor9"
+      ],
+      "Evening": [
+        "Doctor11"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor10"
+      ]
+    },
+    "2025-05-07": {
+      "Day": [
+        "Doctor9",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor6"
+      ],
+      "Night": [
+        "Doctor7",
+        "Doctor10"
+      ]
+    },
+    "2025-05-08": {
+      "Day": [
+        "Doctor6",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor4"
+      ],
+      "Night": [
+        "Doctor8",
+        "Doctor11"
+      ]
+    },
+    "2025-05-09": {
+      "Day": [
+        "Doctor7",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor12"
+      ],
+      "Night": [
+        "Doctor5",
+        "Doctor10"
+      ]
+    },
+    "2025-05-10": {
+      "Day": [
+        "Doctor3",
+        "Doctor9"
+      ],
+      "Evening": [
+        "Doctor11"
+      ],
+      "Night": [
+        "Doctor5",
+        "Doctor13"
+      ]
+    },
+    "2025-05-11": {
+      "Day": [
+        "Doctor9",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor8"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor4"
+      ]
+    },
+    "2025-05-12": {
+      "Day": [
+        "Doctor7",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor5"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor13"
+      ]
+    },
+    "2025-05-13": {
+      "Day": [
+        "Doctor9",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor1"
+      ],
+      "Night": [
+        "Doctor8",
+        "Doctor13"
+      ]
+    },
+    "2025-05-14": {
+      "Day": [
+        "Doctor1",
+        "Doctor2"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor8"
+      ]
+    },
+    "2025-05-15": {
+      "Day": [
+        "Doctor4",
+        "Doctor7"
+      ],
+      "Evening": [
+        "Doctor2"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor10"
+      ]
+    },
+    "2025-05-16": {
+      "Day": [
+        "Doctor4",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor2"
+      ],
+      "Night": [
+        "Doctor12",
+        "Doctor13"
+      ]
+    },
+    "2025-05-17": {
+      "Day": [
+        "Doctor5",
+        "Doctor10"
+      ],
+      "Evening": [
+        "Doctor11"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor4"
+      ]
+    },
+    "2025-05-18": {
+      "Day": [
+        "Doctor1",
+        "Doctor5"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor6"
+      ]
+    },
+    "2025-05-19": {
+      "Day": [
+        "Doctor1",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor12"
+      ],
+      "Night": [
+        "Doctor4",
+        "Doctor7"
+      ]
+    },
+    "2025-05-20": {
+      "Day": [
+        "Doctor11",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor2"
+      ],
+      "Night": [
+        "Doctor8",
+        "Doctor13"
+      ]
+    },
+    "2025-05-21": {
+      "Day": [
+        "Doctor1",
+        "Doctor2"
+      ],
+      "Evening": [
+        "Doctor6"
+      ],
+      "Night": [
+        "Doctor7",
+        "Doctor9"
+      ]
+    },
+    "2025-05-22": {
+      "Day": [
+        "Doctor4",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor1"
+      ],
+      "Night": [
+        "Doctor8",
+        "Doctor12"
+      ]
+    },
+    "2025-05-23": {
+      "Day": [
+        "Doctor6",
+        "Doctor7"
+      ],
+      "Evening": [
+        "Doctor3"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor8"
+      ]
+    },
+    "2025-05-24": {
+      "Day": [
+        "Doctor11",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor9"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor6"
+      ]
+    },
+    "2025-05-25": {
+      "Day": [
+        "Doctor4",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor3"
+      ],
+      "Night": [
+        "Doctor9",
+        "Doctor11"
+      ]
+    },
+    "2025-05-26": {
+      "Day": [
+        "Doctor7",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor8"
+      ]
+    },
+    "2025-05-27": {
+      "Day": [
+        "Doctor1",
+        "Doctor5"
+      ],
+      "Evening": [
+        "Doctor7"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor10"
+      ]
+    },
+    "2025-05-28": {
+      "Day": [
+        "Doctor1",
+        "Doctor2"
+      ],
+      "Evening": [
+        "Doctor5"
+      ],
+      "Night": [
+        "Doctor7",
+        "Doctor11"
+      ]
+    },
+    "2025-05-29": {
+      "Day": [
+        "Doctor3",
+        "Doctor9"
+      ],
+      "Evening": [
+        "Doctor1"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor5"
+      ]
+    },
+    "2025-05-30": {
+      "Day": [
+        "Doctor3",
+        "Doctor6"
+      ],
+      "Evening": [
+        "Doctor9"
+      ],
+      "Night": [
+        "Doctor4",
+        "Doctor10"
+      ]
+    },
+    "2025-05-31": {
+      "Day": [
+        "Doctor3",
+        "Doctor5"
+      ],
+      "Evening": [
+        "Doctor2"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor9"
+      ]
+    },
+    "2025-06-01": {
+      "Day": [
+        "Doctor5",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor9",
+        "Doctor12"
+      ]
+    },
+    "2025-06-02": {
+      "Day": [
+        "Doctor5",
+        "Doctor7"
+      ],
+      "Evening": [
+        "Doctor11"
+      ],
+      "Night": [
+        "Doctor8",
+        "Doctor10"
+      ]
+    },
+    "2025-06-03": {
+      "Day": [
+        "Doctor7",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor11"
+      ],
+      "Night": [
+        "Doctor4",
+        "Doctor8"
+      ]
+    },
+    "2025-06-04": {
+      "Day": [
+        "Doctor2",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor7"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor9"
+      ]
+    },
+    "2025-06-05": {
+      "Day": [
+        "Doctor2",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor5"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor7"
+      ]
+    },
+    "2025-06-06": {
+      "Day": [
+        "Doctor5",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor3"
+      ],
+      "Night": [
+        "Doctor9",
+        "Doctor12"
+      ]
+    },
+    "2025-06-07": {
+      "Day": [
+        "Doctor6",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor2"
+      ]
+    },
+    "2025-06-08": {
+      "Day": [
+        "Doctor3",
+        "Doctor6"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor4",
+        "Doctor9"
+      ]
+    },
+    "2025-06-09": {
+      "Day": [
+        "Doctor6",
+        "Doctor7"
+      ],
+      "Evening": [
+        "Doctor13"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor9"
+      ]
+    },
+    "2025-06-10": {
+      "Day": [
+        "Doctor1",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor8"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor9"
+      ]
+    },
+    "2025-06-11": {
+      "Day": [
+        "Doctor2",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor6"
+      ],
+      "Night": [
+        "Doctor4",
+        "Doctor9"
+      ]
+    },
+    "2025-06-12": {
+      "Day": [
+        "Doctor1",
+        "Doctor6"
+      ],
+      "Evening": [
+        "Doctor5"
+      ],
+      "Night": [
+        "Doctor8",
+        "Doctor11"
+      ]
+    },
+    "2025-06-13": {
+      "Day": [
+        "Doctor1",
+        "Doctor9"
+      ],
+      "Evening": [
+        "Doctor7"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor8"
+      ]
+    },
+    "2025-06-14": {
+      "Day": [
+        "Doctor2",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor4"
+      ],
+      "Night": [
+        "Doctor10",
+        "Doctor12"
+      ]
+    },
+    "2025-06-15": {
+      "Day": [
+        "Doctor2",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor9"
+      ],
+      "Night": [
+        "Doctor10",
+        "Doctor12"
+      ]
+    },
+    "2025-06-16": {
+      "Day": [
+        "Doctor8",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor7"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor3"
+      ]
+    },
+    "2025-06-17": {
+      "Day": [
+        "Doctor2",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor12"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor4"
+      ]
+    },
+    "2025-06-18": {
+      "Day": [
+        "Doctor5",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor12"
+      ],
+      "Night": [
+        "Doctor7",
+        "Doctor9"
+      ]
+    },
+    "2025-06-19": {
+      "Day": [
+        "Doctor1",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor8"
+      ],
+      "Night": [
+        "Doctor4",
+        "Doctor5"
+      ]
+    },
+    "2025-06-20": {
+      "Day": [
+        "Doctor7",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor13"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor8"
+      ]
+    },
+    "2025-06-21": {
+      "Day": [
+        "Doctor1",
+        "Doctor10"
+      ],
+      "Evening": [
+        "Doctor5"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor12"
+      ]
+    },
+    "2025-06-22": {
+      "Day": [
+        "Doctor1",
+        "Doctor6"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor12"
+      ]
+    },
+    "2025-06-23": {
+      "Day": [
+        "Doctor9",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor11"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor7"
+      ]
+    },
+    "2025-06-24": {
+      "Day": [
+        "Doctor2",
+        "Doctor6"
+      ],
+      "Evening": [
+        "Doctor4"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor5"
+      ]
+    },
+    "2025-06-25": {
+      "Day": [
+        "Doctor1",
+        "Doctor7"
+      ],
+      "Evening": [
+        "Doctor11"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor4"
+      ]
+    },
+    "2025-06-26": {
+      "Day": [
+        "Doctor5",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor11"
+      ],
+      "Night": [
+        "Doctor4",
+        "Doctor10"
+      ]
+    },
+    "2025-06-27": {
+      "Day": [
+        "Doctor1",
+        "Doctor7"
+      ],
+      "Evening": [
+        "Doctor13"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor4"
+      ]
+    },
+    "2025-06-28": {
+      "Day": [
+        "Doctor2",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor3"
+      ]
+    },
+    "2025-06-29": {
+      "Day": [
+        "Doctor11",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor4",
+        "Doctor9"
+      ]
+    },
+    "2025-06-30": {
+      "Day": [
+        "Doctor5",
+        "Doctor10"
+      ],
+      "Evening": [
+        "Doctor11"
+      ],
+      "Night": [
+        "Doctor4",
+        "Doctor6"
+      ]
+    },
+    "2025-07-01": {
+      "Day": [
+        "Doctor11",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor8"
+      ]
+    },
+    "2025-07-02": {
+      "Day": [
+        "Doctor6",
+        "Doctor10"
+      ],
+      "Evening": [
+        "Doctor9"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor11"
+      ]
+    },
+    "2025-07-03": {
+      "Day": [
+        "Doctor8",
+        "Doctor10"
+      ],
+      "Evening": [
+        "Doctor4"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor12"
+      ]
+    },
+    "2025-07-04": {
+      "Day": [
+        "Doctor3",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor13"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor12"
+      ]
+    },
+    "2025-07-05": {
+      "Day": [
+        "Doctor3",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor4"
+      ]
+    },
+    "2025-07-06": {
+      "Day": [
+        "Doctor1",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor3"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor9"
+      ]
+    },
+    "2025-07-07": {
+      "Day": [
+        "Doctor1",
+        "Doctor7"
+      ],
+      "Evening": [
+        "Doctor6"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor4"
+      ]
+    },
+    "2025-07-08": {
+      "Day": [
+        "Doctor1",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor5",
+        "Doctor11"
+      ]
+    },
+    "2025-07-09": {
+      "Day": [
+        "Doctor3",
+        "Doctor4"
+      ],
+      "Evening": [
+        "Doctor2"
+      ],
+      "Night": [
+        "Doctor5",
+        "Doctor7"
+      ]
+    },
+    "2025-07-10": {
+      "Day": [
+        "Doctor3",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor4"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor8"
+      ]
+    },
+    "2025-07-11": {
+      "Day": [
+        "Doctor1",
+        "Doctor2"
+      ],
+      "Evening": [
+        "Doctor7"
+      ],
+      "Night": [
+        "Doctor5",
+        "Doctor12"
+      ]
+    },
+    "2025-07-12": {
+      "Day": [
+        "Doctor2",
+        "Doctor4"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor9"
+      ]
+    },
+    "2025-07-13": {
+      "Day": [
+        "Doctor4",
+        "Doctor7"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor5"
+      ]
+    },
+    "2025-07-14": {
+      "Day": [
+        "Doctor12",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor9"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor6"
+      ]
+    },
+    "2025-07-15": {
+      "Day": [
+        "Doctor2",
+        "Doctor10"
+      ],
+      "Evening": [
+        "Doctor5"
+      ],
+      "Night": [
+        "Doctor8",
+        "Doctor11"
+      ]
+    },
+    "2025-07-16": {
+      "Day": [
+        "Doctor10",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor2"
+      ],
+      "Night": [
+        "Doctor7",
+        "Doctor9"
+      ]
+    },
+    "2025-07-17": {
+      "Day": [
+        "Doctor6",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor1"
+      ],
+      "Night": [
+        "Doctor5",
+        "Doctor13"
+      ]
+    },
+    "2025-07-18": {
+      "Day": [
+        "Doctor6",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor1"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor7"
+      ]
+    },
+    "2025-07-19": {
+      "Day": [
+        "Doctor9",
+        "Doctor10"
+      ],
+      "Evening": [
+        "Doctor5"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor13"
+      ]
+    },
+    "2025-07-20": {
+      "Day": [
+        "Doctor2",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor5"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor11"
+      ]
+    },
+    "2025-07-21": {
+      "Day": [
+        "Doctor4",
+        "Doctor7"
+      ],
+      "Evening": [
+        "Doctor6"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor12"
+      ]
+    },
+    "2025-07-22": {
+      "Day": [
+        "Doctor8",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor7"
+      ],
+      "Night": [
+        "Doctor4",
+        "Doctor9"
+      ]
+    },
+    "2025-07-23": {
+      "Day": [
+        "Doctor8",
+        "Doctor10"
+      ],
+      "Evening": [
+        "Doctor5"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor9"
+      ]
+    },
+    "2025-07-24": {
+      "Day": [
+        "Doctor7",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor5"
+      ],
+      "Night": [
+        "Doctor11",
+        "Doctor13"
+      ]
+    },
+    "2025-07-25": {
+      "Day": [
+        "Doctor1",
+        "Doctor7"
+      ],
+      "Evening": [
+        "Doctor4"
+      ],
+      "Night": [
+        "Doctor9",
+        "Doctor12"
+      ]
+    },
+    "2025-07-26": {
+      "Day": [
+        "Doctor1",
+        "Doctor4"
+      ],
+      "Evening": [
+        "Doctor11"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor10"
+      ]
+    },
+    "2025-07-27": {
+      "Day": [
+        "Doctor5",
+        "Doctor9"
+      ],
+      "Evening": [
+        "Doctor1"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor6"
+      ]
+    },
+    "2025-07-28": {
+      "Day": [
+        "Doctor8",
+        "Doctor9"
+      ],
+      "Evening": [
+        "Doctor4"
+      ],
+      "Night": [
+        "Doctor12",
+        "Doctor13"
+      ]
+    },
+    "2025-07-29": {
+      "Day": [
+        "Doctor3",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor7"
+      ],
+      "Night": [
+        "Doctor5",
+        "Doctor9"
+      ]
+    },
+    "2025-07-30": {
+      "Day": [
+        "Doctor8",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor11"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor12"
+      ]
+    },
+    "2025-07-31": {
+      "Day": [
+        "Doctor6",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor11"
+      ],
+      "Night": [
+        "Doctor12",
+        "Doctor13"
+      ]
+    },
+    "2025-08-01": {
+      "Day": [
+        "Doctor5",
+        "Doctor9"
+      ],
+      "Evening": [
+        "Doctor8"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor2"
+      ]
+    },
+    "2025-08-02": {
+      "Day": [
+        "Doctor4",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor12",
+        "Doctor13"
+      ]
+    },
+    "2025-08-03": {
+      "Day": [
+        "Doctor4",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor7"
+      ]
+    },
+    "2025-08-04": {
+      "Day": [
+        "Doctor8",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor4"
+      ],
+      "Night": [
+        "Doctor5",
+        "Doctor6"
+      ]
+    },
+    "2025-08-05": {
+      "Day": [
+        "Doctor3",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor7"
+      ],
+      "Night": [
+        "Doctor8",
+        "Doctor9"
+      ]
+    },
+    "2025-08-06": {
+      "Day": [
+        "Doctor7",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor3"
+      ],
+      "Night": [
+        "Doctor4",
+        "Doctor5"
+      ]
+    },
+    "2025-08-07": {
+      "Day": [
+        "Doctor2",
+        "Doctor6"
+      ],
+      "Evening": [
+        "Doctor1"
+      ],
+      "Night": [
+        "Doctor7",
+        "Doctor11"
+      ]
+    },
+    "2025-08-08": {
+      "Day": [
+        "Doctor2",
+        "Doctor5"
+      ],
+      "Evening": [
+        "Doctor13"
+      ],
+      "Night": [
+        "Doctor8",
+        "Doctor12"
+      ]
+    },
+    "2025-08-09": {
+      "Day": [
+        "Doctor2",
+        "Doctor4"
+      ],
+      "Evening": [
+        "Doctor5"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor11"
+      ]
+    },
+    "2025-08-10": {
+      "Day": [
+        "Doctor2",
+        "Doctor3"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor11"
+      ]
+    },
+    "2025-08-11": {
+      "Day": [
+        "Doctor8",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor5"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor9"
+      ]
+    },
+    "2025-08-12": {
+      "Day": [
+        "Doctor8",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor3"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor10"
+      ]
+    },
+    "2025-08-13": {
+      "Day": [
+        "Doctor5",
+        "Doctor7"
+      ],
+      "Evening": [
+        "Doctor3"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor12"
+      ]
+    },
+    "2025-08-14": {
+      "Day": [
+        "Doctor7",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor9"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor12"
+      ]
+    },
+    "2025-08-15": {
+      "Day": [
+        "Doctor8",
+        "Doctor9"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor11"
+      ]
+    },
+    "2025-08-16": {
+      "Day": [
+        "Doctor6",
+        "Doctor10"
+      ],
+      "Evening": [
+        "Doctor13"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor3"
+      ]
+    },
+    "2025-08-17": {
+      "Day": [
+        "Doctor10",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor5"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor3"
+      ]
+    },
+    "2025-08-18": {
+      "Day": [
+        "Doctor6",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor9"
+      ],
+      "Night": [
+        "Doctor7",
+        "Doctor13"
+      ]
+    },
+    "2025-08-19": {
+      "Day": [
+        "Doctor6",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor2"
+      ],
+      "Night": [
+        "Doctor4",
+        "Doctor9"
+      ]
+    },
+    "2025-08-20": {
+      "Day": [
+        "Doctor3",
+        "Doctor5"
+      ],
+      "Evening": [
+        "Doctor8"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor6"
+      ]
+    },
+    "2025-08-21": {
+      "Day": [
+        "Doctor4",
+        "Doctor9"
+      ],
+      "Evening": [
+        "Doctor8"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor13"
+      ]
+    },
+    "2025-08-22": {
+      "Day": [
+        "Doctor9",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor4"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor5"
+      ]
+    },
+    "2025-08-23": {
+      "Day": [
+        "Doctor11",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor3"
+      ],
+      "Night": [
+        "Doctor7",
+        "Doctor10"
+      ]
+    },
+    "2025-08-24": {
+      "Day": [
+        "Doctor5",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor13"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor6"
+      ]
+    },
+    "2025-08-25": {
+      "Day": [
+        "Doctor7",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor9"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor12"
+      ]
+    },
+    "2025-08-26": {
+      "Day": [
+        "Doctor3",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor7"
+      ],
+      "Night": [
+        "Doctor5",
+        "Doctor12"
+      ]
+    },
+    "2025-08-27": {
+      "Day": [
+        "Doctor3",
+        "Doctor7"
+      ],
+      "Evening": [
+        "Doctor4"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor11"
+      ]
+    },
+    "2025-08-28": {
+      "Day": [
+        "Doctor10",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor4"
+      ],
+      "Night": [
+        "Doctor7",
+        "Doctor9"
+      ]
+    },
+    "2025-08-29": {
+      "Day": [
+        "Doctor4",
+        "Doctor10"
+      ],
+      "Evening": [
+        "Doctor6"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor12"
+      ]
+    },
+    "2025-08-30": {
+      "Day": [
+        "Doctor9",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor13"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor6"
+      ]
+    },
+    "2025-08-31": {
+      "Day": [
+        "Doctor3",
+        "Doctor4"
+      ],
+      "Evening": [
+        "Doctor11"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor10"
+      ]
+    },
+    "2025-09-01": {
+      "Day": [
+        "Doctor4",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor9"
+      ],
+      "Night": [
+        "Doctor5",
+        "Doctor6"
+      ]
+    },
+    "2025-09-02": {
+      "Day": [
+        "Doctor8",
+        "Doctor10"
+      ],
+      "Evening": [
+        "Doctor4"
+      ],
+      "Night": [
+        "Doctor5",
+        "Doctor6"
+      ]
+    },
+    "2025-09-03": {
+      "Day": [
+        "Doctor3",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor8"
+      ]
+    },
+    "2025-09-04": {
+      "Day": [
+        "Doctor5",
+        "Doctor7"
+      ],
+      "Evening": [
+        "Doctor4"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor2"
+      ]
+    },
+    "2025-09-05": {
+      "Day": [
+        "Doctor4",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor7"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor5"
+      ]
+    },
+    "2025-09-06": {
+      "Day": [
+        "Doctor6",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor7"
+      ],
+      "Night": [
+        "Doctor11",
+        "Doctor13"
+      ]
+    },
+    "2025-09-07": {
+      "Day": [
+        "Doctor1",
+        "Doctor6"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor11"
+      ]
+    },
+    "2025-09-08": {
+      "Day": [
+        "Doctor2",
+        "Doctor7"
+      ],
+      "Evening": [
+        "Doctor1"
+      ],
+      "Night": [
+        "Doctor9",
+        "Doctor13"
+      ]
+    },
+    "2025-09-09": {
+      "Day": [
+        "Doctor8",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor5"
+      ]
+    },
+    "2025-09-10": {
+      "Day": [
+        "Doctor3",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor6"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor9"
+      ]
+    },
+    "2025-09-11": {
+      "Day": [
+        "Doctor4",
+        "Doctor7"
+      ],
+      "Evening": [
+        "Doctor3"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor12"
+      ]
+    },
+    "2025-09-12": {
+      "Day": [
+        "Doctor6",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor4",
+        "Doctor12"
+      ]
+    },
+    "2025-09-13": {
+      "Day": [
+        "Doctor3",
+        "Doctor6"
+      ],
+      "Evening": [
+        "Doctor2"
+      ],
+      "Night": [
+        "Doctor11",
+        "Doctor13"
+      ]
+    },
+    "2025-09-14": {
+      "Day": [
+        "Doctor4",
+        "Doctor5"
+      ],
+      "Evening": [
+        "Doctor3"
+      ],
+      "Night": [
+        "Doctor11",
+        "Doctor13"
+      ]
+    },
+    "2025-09-15": {
+      "Day": [
+        "Doctor1",
+        "Doctor9"
+      ],
+      "Evening": [
+        "Doctor5"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor7"
+      ]
+    },
+    "2025-09-16": {
+      "Day": [
+        "Doctor1",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor12"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor4"
+      ]
+    },
+    "2025-09-17": {
+      "Day": [
+        "Doctor1",
+        "Doctor6"
+      ],
+      "Evening": [
+        "Doctor12"
+      ],
+      "Night": [
+        "Doctor8",
+        "Doctor9"
+      ]
+    },
+    "2025-09-18": {
+      "Day": [
+        "Doctor10",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor12"
+      ],
+      "Night": [
+        "Doctor8",
+        "Doctor11"
+      ]
+    },
+    "2025-09-19": {
+      "Day": [
+        "Doctor7",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor9"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor4"
+      ]
+    },
+    "2025-09-20": {
+      "Day": [
+        "Doctor3",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor11"
+      ],
+      "Night": [
+        "Doctor5",
+        "Doctor10"
+      ]
+    },
+    "2025-09-21": {
+      "Day": [
+        "Doctor1",
+        "Doctor2"
+      ],
+      "Evening": [
+        "Doctor9"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor10"
+      ]
+    },
+    "2025-09-22": {
+      "Day": [
+        "Doctor2",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor7"
+      ],
+      "Night": [
+        "Doctor4",
+        "Doctor13"
+      ]
+    },
+    "2025-09-23": {
+      "Day": [
+        "Doctor2",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor5"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor7"
+      ]
+    },
+    "2025-09-24": {
+      "Day": [
+        "Doctor2",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor12"
+      ],
+      "Night": [
+        "Doctor8",
+        "Doctor13"
+      ]
+    },
+    "2025-09-25": {
+      "Day": [
+        "Doctor2",
+        "Doctor3"
+      ],
+      "Evening": [
+        "Doctor7"
+      ],
+      "Night": [
+        "Doctor5",
+        "Doctor10"
+      ]
+    },
+    "2025-09-26": {
+      "Day": [
+        "Doctor2",
+        "Doctor4"
+      ],
+      "Evening": [
+        "Doctor1"
+      ],
+      "Night": [
+        "Doctor7",
+        "Doctor8"
+      ]
+    },
+    "2025-09-27": {
+      "Day": [
+        "Doctor10",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor9"
+      ],
+      "Night": [
+        "Doctor5",
+        "Doctor11"
+      ]
+    },
+    "2025-09-28": {
+      "Day": [
+        "Doctor3",
+        "Doctor6"
+      ],
+      "Evening": [
+        "Doctor1"
+      ],
+      "Night": [
+        "Doctor4",
+        "Doctor9"
+      ]
+    },
+    "2025-09-29": {
+      "Day": [
+        "Doctor10",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor5"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor9"
+      ]
+    },
+    "2025-09-30": {
+      "Day": [
+        "Doctor7",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor12"
+      ],
+      "Night": [
+        "Doctor9",
+        "Doctor11"
+      ]
+    },
+    "2025-10-01": {
+      "Day": [
+        "Doctor6",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor7",
+        "Doctor8"
+      ]
+    },
+    "2025-10-02": {
+      "Day": [
+        "Doctor5",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor4"
+      ],
+      "Night": [
+        "Doctor10",
+        "Doctor12"
+      ]
+    },
+    "2025-10-03": {
+      "Day": [
+        "Doctor4",
+        "Doctor5"
+      ],
+      "Evening": [
+        "Doctor3"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor12"
+      ]
+    },
+    "2025-10-04": {
+      "Day": [
+        "Doctor4",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor5"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor3"
+      ]
+    },
+    "2025-10-05": {
+      "Day": [
+        "Doctor1",
+        "Doctor5"
+      ],
+      "Evening": [
+        "Doctor9"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor6"
+      ]
+    },
+    "2025-10-06": {
+      "Day": [
+        "Doctor4",
+        "Doctor5"
+      ],
+      "Evening": [
+        "Doctor3"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor9"
+      ]
+    },
+    "2025-10-07": {
+      "Day": [
+        "Doctor2",
+        "Doctor5"
+      ],
+      "Evening": [
+        "Doctor3"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor6"
+      ]
+    },
+    "2025-10-08": {
+      "Day": [
+        "Doctor2",
+        "Doctor9"
+      ],
+      "Evening": [
+        "Doctor3"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor6"
+      ]
+    },
+    "2025-10-09": {
+      "Day": [
+        "Doctor3",
+        "Doctor9"
+      ],
+      "Evening": [
+        "Doctor11"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor2"
+      ]
+    },
+    "2025-10-10": {
+      "Day": [
+        "Doctor8",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor4"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor3"
+      ]
+    },
+    "2025-10-11": {
+      "Day": [
+        "Doctor4",
+        "Doctor5"
+      ],
+      "Evening": [
+        "Doctor13"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor9"
+      ]
+    },
+    "2025-10-12": {
+      "Day": [
+        "Doctor1",
+        "Doctor4"
+      ],
+      "Evening": [
+        "Doctor12"
+      ],
+      "Night": [
+        "Doctor5",
+        "Doctor11"
+      ]
+    },
+    "2025-10-13": {
+      "Day": [
+        "Doctor4",
+        "Doctor7"
+      ],
+      "Evening": [
+        "Doctor12"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor10"
+      ]
+    },
+    "2025-10-14": {
+      "Day": [
+        "Doctor4",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor1"
+      ],
+      "Night": [
+        "Doctor7",
+        "Doctor11"
+      ]
+    },
+    "2025-10-15": {
+      "Day": [
+        "Doctor9",
+        "Doctor10"
+      ],
+      "Evening": [
+        "Doctor8"
+      ],
+      "Night": [
+        "Doctor11",
+        "Doctor13"
+      ]
+    },
+    "2025-10-16": {
+      "Day": [
+        "Doctor10",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor6"
+      ],
+      "Night": [
+        "Doctor7",
+        "Doctor13"
+      ]
+    },
+    "2025-10-17": {
+      "Day": [
+        "Doctor1",
+        "Doctor10"
+      ],
+      "Evening": [
+        "Doctor2"
+      ],
+      "Night": [
+        "Doctor8",
+        "Doctor13"
+      ]
+    },
+    "2025-10-18": {
+      "Day": [
+        "Doctor3",
+        "Doctor4"
+      ],
+      "Evening": [
+        "Doctor2"
+      ],
+      "Night": [
+        "Doctor9",
+        "Doctor11"
+      ]
+    },
+    "2025-10-19": {
+      "Day": [
+        "Doctor3",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor5"
+      ],
+      "Night": [
+        "Doctor4",
+        "Doctor9"
+      ]
+    },
+    "2025-10-20": {
+      "Day": [
+        "Doctor1",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor12"
+      ],
+      "Night": [
+        "Doctor7",
+        "Doctor11"
+      ]
+    },
+    "2025-10-21": {
+      "Day": [
+        "Doctor6",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor11",
+        "Doctor13"
+      ]
+    },
+    "2025-10-22": {
+      "Day": [
+        "Doctor6",
+        "Doctor7"
+      ],
+      "Evening": [
+        "Doctor12"
+      ],
+      "Night": [
+        "Doctor10",
+        "Doctor11"
+      ]
+    },
+    "2025-10-23": {
+      "Day": [
+        "Doctor6",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor9"
+      ],
+      "Night": [
+        "Doctor7",
+        "Doctor11"
+      ]
+    },
+    "2025-10-24": {
+      "Day": [
+        "Doctor1",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor4"
+      ],
+      "Night": [
+        "Doctor7",
+        "Doctor10"
+      ]
+    },
+    "2025-10-25": {
+      "Day": [
+        "Doctor6",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor2"
+      ],
+      "Night": [
+        "Doctor5",
+        "Doctor13"
+      ]
+    },
+    "2025-10-26": {
+      "Day": [
+        "Doctor1",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor6"
+      ],
+      "Night": [
+        "Doctor11",
+        "Doctor13"
+      ]
+    },
+    "2025-10-27": {
+      "Day": [
+        "Doctor9",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor8"
+      ],
+      "Night": [
+        "Doctor7",
+        "Doctor10"
+      ]
+    },
+    "2025-10-28": {
+      "Day": [
+        "Doctor1",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor2"
+      ],
+      "Night": [
+        "Doctor7",
+        "Doctor10"
+      ]
+    },
+    "2025-10-29": {
+      "Day": [
+        "Doctor8",
+        "Doctor9"
+      ],
+      "Evening": [
+        "Doctor11"
+      ],
+      "Night": [
+        "Doctor5",
+        "Doctor7"
+      ]
+    },
+    "2025-10-30": {
+      "Day": [
+        "Doctor1",
+        "Doctor3"
+      ],
+      "Evening": [
+        "Doctor13"
+      ],
+      "Night": [
+        "Doctor5",
+        "Doctor7"
+      ]
+    },
+    "2025-10-31": {
+      "Day": [
+        "Doctor10",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor3"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor9"
+      ]
+    },
+    "2025-11-01": {
+      "Day": [
+        "Doctor10",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor1"
+      ],
+      "Night": [
+        "Doctor4",
+        "Doctor13"
+      ]
+    },
+    "2025-11-02": {
+      "Day": [
+        "Doctor5",
+        "Doctor10"
+      ],
+      "Evening": [
+        "Doctor1"
+      ],
+      "Night": [
+        "Doctor4",
+        "Doctor13"
+      ]
+    },
+    "2025-11-03": {
+      "Day": [
+        "Doctor5",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor1"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor6"
+      ]
+    },
+    "2025-11-04": {
+      "Day": [
+        "Doctor5",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor12"
+      ],
+      "Night": [
+        "Doctor11",
+        "Doctor13"
+      ]
+    },
+    "2025-11-05": {
+      "Day": [
+        "Doctor3",
+        "Doctor9"
+      ],
+      "Evening": [
+        "Doctor12"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor11"
+      ]
+    },
+    "2025-11-06": {
+      "Day": [
+        "Doctor10",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor12"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor7"
+      ]
+    },
+    "2025-11-07": {
+      "Day": [
+        "Doctor3",
+        "Doctor5"
+      ],
+      "Evening": [
+        "Doctor9"
+      ],
+      "Night": [
+        "Doctor7",
+        "Doctor11"
+      ]
+    },
+    "2025-11-08": {
+      "Day": [
+        "Doctor1",
+        "Doctor2"
+      ],
+      "Evening": [
+        "Doctor6"
+      ],
+      "Night": [
+        "Doctor4",
+        "Doctor13"
+      ]
+    },
+    "2025-11-09": {
+      "Day": [
+        "Doctor3",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor1"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor10"
+      ]
+    },
+    "2025-11-10": {
+      "Day": [
+        "Doctor5",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor9"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor4"
+      ]
+    },
+    "2025-11-11": {
+      "Day": [
+        "Doctor5",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor8"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor6"
+      ]
+    },
+    "2025-11-12": {
+      "Day": [
+        "Doctor5",
+        "Doctor7"
+      ],
+      "Evening": [
+        "Doctor8"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor11"
+      ]
+    },
+    "2025-11-13": {
+      "Day": [
+        "Doctor4",
+        "Doctor7"
+      ],
+      "Evening": [
+        "Doctor1"
+      ],
+      "Night": [
+        "Doctor5",
+        "Doctor11"
+      ]
+    },
+    "2025-11-14": {
+      "Day": [
+        "Doctor10",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor13"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor9"
+      ]
+    },
+    "2025-11-15": {
+      "Day": [
+        "Doctor3",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor13"
+      ],
+      "Night": [
+        "Doctor10",
+        "Doctor12"
+      ]
+    },
+    "2025-11-16": {
+      "Day": [
+        "Doctor1",
+        "Doctor3"
+      ],
+      "Evening": [
+        "Doctor4"
+      ],
+      "Night": [
+        "Doctor9",
+        "Doctor10"
+      ]
+    },
+    "2025-11-17": {
+      "Day": [
+        "Doctor8",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor4"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor7"
+      ]
+    },
+    "2025-11-18": {
+      "Day": [
+        "Doctor6",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor8"
+      ],
+      "Night": [
+        "Doctor7",
+        "Doctor12"
+      ]
+    },
+    "2025-11-19": {
+      "Day": [
+        "Doctor1",
+        "Doctor2"
+      ],
+      "Evening": [
+        "Doctor8"
+      ],
+      "Night": [
+        "Doctor5",
+        "Doctor7"
+      ]
+    },
+    "2025-11-20": {
+      "Day": [
+        "Doctor9",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor6"
+      ],
+      "Night": [
+        "Doctor5",
+        "Doctor11"
+      ]
+    },
+    "2025-11-21": {
+      "Day": [
+        "Doctor2",
+        "Doctor9"
+      ],
+      "Evening": [
+        "Doctor8"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor5"
+      ]
+    },
+    "2025-11-22": {
+      "Day": [
+        "Doctor2",
+        "Doctor6"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor4"
+      ]
+    },
+    "2025-11-23": {
+      "Day": [
+        "Doctor5",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor11"
+      ]
+    },
+    "2025-11-24": {
+      "Day": [
+        "Doctor7",
+        "Doctor10"
+      ],
+      "Evening": [
+        "Doctor13"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor8"
+      ]
+    },
+    "2025-11-25": {
+      "Day": [
+        "Doctor7",
+        "Doctor9"
+      ],
+      "Evening": [
+        "Doctor2"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor11"
+      ]
+    },
+    "2025-11-26": {
+      "Day": [
+        "Doctor9",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor13"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor7"
+      ]
+    },
+    "2025-11-27": {
+      "Day": [
+        "Doctor4",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor9"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor7"
+      ]
+    },
+    "2025-11-28": {
+      "Day": [
+        "Doctor1",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor4"
+      ],
+      "Night": [
+        "Doctor7",
+        "Doctor11"
+      ]
+    },
+    "2025-11-29": {
+      "Day": [
+        "Doctor3",
+        "Doctor10"
+      ],
+      "Evening": [
+        "Doctor9"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor11"
+      ]
+    },
+    "2025-11-30": {
+      "Day": [
+        "Doctor3",
+        "Doctor10"
+      ],
+      "Evening": [
+        "Doctor6"
+      ],
+      "Night": [
+        "Doctor4",
+        "Doctor12"
+      ]
+    },
+    "2025-12-01": {
+      "Day": [
+        "Doctor5",
+        "Doctor7"
+      ],
+      "Evening": [
+        "Doctor9"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor4"
+      ]
+    },
+    "2025-12-02": {
+      "Day": [
+        "Doctor3",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor6"
+      ],
+      "Night": [
+        "Doctor5",
+        "Doctor13"
+      ]
+    },
+    "2025-12-03": {
+      "Day": [
+        "Doctor4",
+        "Doctor7"
+      ],
+      "Evening": [
+        "Doctor8"
+      ],
+      "Night": [
+        "Doctor9",
+        "Doctor13"
+      ]
+    },
+    "2025-12-04": {
+      "Day": [
+        "Doctor5",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor1"
+      ],
+      "Night": [
+        "Doctor7",
+        "Doctor8"
+      ]
+    },
+    "2025-12-05": {
+      "Day": [
+        "Doctor2",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor9"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor13"
+      ]
+    },
+    "2025-12-06": {
+      "Day": [
+        "Doctor9",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor2"
+      ],
+      "Night": [
+        "Doctor4",
+        "Doctor10"
+      ]
+    },
+    "2025-12-07": {
+      "Day": [
+        "Doctor1",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor6"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor10"
+      ]
+    },
+    "2025-12-08": {
+      "Day": [
+        "Doctor3",
+        "Doctor9"
+      ],
+      "Evening": [
+        "Doctor1"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor5"
+      ]
+    },
+    "2025-12-09": {
+      "Day": [
+        "Doctor7",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor8"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor3"
+      ]
+    },
+    "2025-12-10": {
+      "Day": [
+        "Doctor1",
+        "Doctor7"
+      ],
+      "Evening": [
+        "Doctor12"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor4"
+      ]
+    },
+    "2025-12-11": {
+      "Day": [
+        "Doctor9",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor11",
+        "Doctor12"
+      ]
+    },
+    "2025-12-12": {
+      "Day": [
+        "Doctor4",
+        "Doctor7"
+      ],
+      "Evening": [
+        "Doctor8"
+      ],
+      "Night": [
+        "Doctor9",
+        "Doctor10"
+      ]
+    },
+    "2025-12-13": {
+      "Day": [
+        "Doctor2",
+        "Doctor4"
+      ],
+      "Evening": [
+        "Doctor5"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor10"
+      ]
+    },
+    "2025-12-14": {
+      "Day": [
+        "Doctor6",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor11"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor4"
+      ]
+    },
+    "2025-12-15": {
+      "Day": [
+        "Doctor9",
+        "Doctor12"
+      ],
+      "Evening": [
+        "Doctor13"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor11"
+      ]
+    },
+    "2025-12-16": {
+      "Day": [
+        "Doctor2",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor6"
+      ],
+      "Night": [
+        "Doctor4",
+        "Doctor13"
+      ]
+    },
+    "2025-12-17": {
+      "Day": [
+        "Doctor1",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor8"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor12"
+      ]
+    },
+    "2025-12-18": {
+      "Day": [
+        "Doctor5",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor7"
+      ],
+      "Night": [
+        "Doctor3",
+        "Doctor12"
+      ]
+    },
+    "2025-12-19": {
+      "Day": [
+        "Doctor4",
+        "Doctor5"
+      ],
+      "Evening": [
+        "Doctor7"
+      ],
+      "Night": [
+        "Doctor10",
+        "Doctor12"
+      ]
+    },
+    "2025-12-20": {
+      "Day": [
+        "Doctor2",
+        "Doctor6"
+      ],
+      "Evening": [
+        "Doctor5"
+      ],
+      "Night": [
+        "Doctor10",
+        "Doctor12"
+      ]
+    },
+    "2025-12-21": {
+      "Day": [
+        "Doctor9",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor3"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor10"
+      ]
+    },
+    "2025-12-22": {
+      "Day": [
+        "Doctor3",
+        "Doctor7"
+      ],
+      "Evening": [
+        "Doctor9"
+      ],
+      "Night": [
+        "Doctor5",
+        "Doctor10"
+      ]
+    },
+    "2025-12-23": {
+      "Day": [
+        "Doctor8",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor6"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor7"
+      ]
+    },
+    "2025-12-24": {
+      "Day": [
+        "Doctor2",
+        "Doctor8"
+      ],
+      "Evening": [
+        "Doctor12"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor4"
+      ]
+    },
+    "2025-12-25": {
+      "Day": [
+        "Doctor6",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor10"
+      ],
+      "Night": [
+        "Doctor1",
+        "Doctor4"
+      ]
+    },
+    "2025-12-26": {
+      "Day": [
+        "Doctor3",
+        "Doctor11"
+      ],
+      "Evening": [
+        "Doctor8"
+      ],
+      "Night": [
+        "Doctor5",
+        "Doctor12"
+      ]
+    },
+    "2025-12-27": {
+      "Day": [
+        "Doctor9",
+        "Doctor10"
+      ],
+      "Evening": [
+        "Doctor11"
+      ],
+      "Night": [
+        "Doctor6",
+        "Doctor12"
+      ]
+    },
+    "2025-12-28": {
+      "Day": [
+        "Doctor4",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor1"
+      ],
+      "Night": [
+        "Doctor10",
+        "Doctor11"
+      ]
+    },
+    "2025-12-29": {
+      "Day": [
+        "Doctor1",
+        "Doctor13"
+      ],
+      "Evening": [
+        "Doctor2"
+      ],
+      "Night": [
+        "Doctor8",
+        "Doctor11"
+      ]
+    },
+    "2025-12-30": {
+      "Day": [
+        "Doctor3",
+        "Doctor5"
+      ],
+      "Evening": [
+        "Doctor6"
+      ],
+      "Night": [
+        "Doctor2",
+        "Doctor7"
+      ]
+    },
+    "2025-12-31": {
+      "Day": [
+        "Doctor8",
+        "Doctor9"
+      ],
+      "Evening": [
+        "Doctor6"
+      ],
+      "Night": [
+        "Doctor5",
+        "Doctor7"
+      ]
+    }
+  },
+  "statistics": {
+    "status": "OPTIMAL",
+    "solution_time_seconds": 18.72384810447693,
+    "objective_value": 5072.5,
+    "coverage_errors": 0,
+    "doctor_shift_counts": {
+      "Doctor1": 141,
+      "Doctor2": 140,
+      "Doctor3": 142,
+      "Doctor4": 140,
+      "Doctor5": 141,
+      "Doctor6": 139,
+      "Doctor7": 141,
+      "Doctor8": 140,
+      "Doctor9": 140,
+      "Doctor10": 139,
+      "Doctor11": 142,
+      "Doctor12": 141,
+      "Doctor13": 139
+    },
+    "variables": 14114,
+    "constraints": 0
+  }
+}

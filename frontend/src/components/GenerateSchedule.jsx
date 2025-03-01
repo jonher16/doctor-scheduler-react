@@ -31,8 +31,8 @@ import {
   Psychology as PsychologyIcon
 } from '@mui/icons-material';
 
-// Import the schedule optimizer (this would need to be properly set up in your project)
-// import { optimizeSchedule } from '../utils/scheduleOptimizer';
+// API URL (configurable based on environment)
+const API_BASE_URL = 'http://localhost:5000/api';
 
 function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
   const [status, setStatus] = useState("");
@@ -42,7 +42,7 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
   const [generationStats, setGenerationStats] = useState(null);
   const [useOptimizedAlgorithm, setUseOptimizedAlgorithm] = useState(true);
 
-  // Update progress simulation
+  // Update progress simulation for simple algorithm
   const updateProgress = (current, total) => {
     const progressValue = Math.round((current / total) * 100);
     setProgress(progressValue);
@@ -125,56 +125,100 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
     return schedule;
   };
 
-  // Optimized schedule generation using MILP algorithm
+  // Optimized schedule generation using the Python API
   const generateOptimizedSchedule = async () => {
-    // In a real implementation, you would call the optimizer here
-    setStatus("Starting optimization algorithm...");
-    updateProgress(10);
-    
-    // Prepare input data for the optimizer
-    const inputData = {
-      doctors: doctors,
-      holidays: holidays,
-      availability: availability
-    };
-    
-    // Since we can't actually run Python from the browser, we'll simulate
-    // the optimization process with a sleep and then use the simple algorithm
-    
-    // In a real implementation, you would use:
-    // const optimizedSchedule = await optimizeSchedule(inputData);
-    
-    // Simulate optimization process
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    updateProgress(30);
-    
-    setStatus("Solving MILP problem...");
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    updateProgress(60);
-    
-    setStatus("Optimizing solution...");
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    updateProgress(80);
-    
-    setStatus("Finalizing optimized schedule...");
-    
-    // For this simulation, we'll just use the simple schedule algorithm
-    // In a real implementation, you would use the result from optimizeSchedule
-    const schedule = generateSimpleSchedule();
-    
-    updateProgress(95);
-    
-    // In a real implementation, you would get these statistics from the optimizer
-    const optimizationStats = {
-      objectiveValue: 156.2,
-      constraints: 12543,
-      variables: 28470,
-      monthlyVariance: 7.3,
-      weekendBalance: "93.5% fairness",
-      solutionTime: "248 seconds"
-    };
-    
-    return { schedule, optimizationStats };
+    try {
+      // Set up progress tracking
+      setStatus("Connecting to optimization server...");
+      updateProgress(5);
+      
+      // Prepare input data for the optimizer
+      const inputData = {
+        doctors: doctors,
+        holidays: holidays,
+        availability: availability
+      };
+      
+      // Start the optimization in the background
+      const optimizePromise = fetch(`${API_BASE_URL}/optimize`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(inputData),
+      });
+      
+      // Poll for progress while the optimization runs
+      let isCompleted = false;
+      const startTime = Date.now();
+      
+      while (!isCompleted) {
+        // Check if we've been polling for too long (5 minutes max)
+        if (Date.now() - startTime > 5 * 60 * 1000) {
+          throw new Error("Optimization timed out after 5 minutes");
+        }
+        
+        try {
+          // Get progress update
+          const progressResponse = await fetch(`${API_BASE_URL}/optimize/progress`);
+          
+          if (progressResponse.ok) {
+            const progressData = await progressResponse.json();
+            
+            // Update the UI with progress
+            updateProgress(progressData.current);
+            setStatus(progressData.message || "Optimizing schedule...");
+            
+            // Check if completed or error
+            if (progressData.status === "completed" || progressData.status === "error") {
+              isCompleted = true;
+            } else {
+              // Wait before polling again
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+          } else {
+            // If progress endpoint fails, wait and try again
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+        } catch (progressError) {
+          console.warn("Error checking progress:", progressError);
+          // If progress check fails, wait and try again
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      }
+      
+      // Wait for the original optimization request to complete
+      const response = await optimizePromise;
+      
+      // Check for errors
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`API request failed: ${errorText}`);
+      }
+      
+      // Parse the response
+      const data = await response.json();
+      
+      // Check for API errors
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      
+      setStatus("Processing optimization results...");
+      updateProgress(95);
+      
+      // Extract the schedule and statistics
+      const schedule = data.schedule;
+      const optimizationStats = data.statistics;
+      
+      // Update progress to indicate completion
+      updateProgress(100);
+      
+      return { schedule, optimizationStats };
+    } catch (error) {
+      console.error("Optimization API error:", error);
+      throw error;
+    }
   };
 
   // Generate schedule - main function
@@ -236,9 +280,20 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
       setProgress(100);
     } catch (err) {
       console.error("Error generating schedule:", err);
-      setError("An error occurred while generating the schedule. Please try again.");
+      setError(`An error occurred while generating the schedule: ${err.message}`);
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  // Check server status
+  const checkServerStatus = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/status`);
+      return response.ok;
+    } catch (error) {
+      console.error("Server status check failed:", error);
+      return false;
     }
   };
 
@@ -409,22 +464,27 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
                             <Grid container spacing={1}>
                               <Grid item xs={6}>
                                 <Typography variant="body2">
-                                  Objective value: <strong>{generationStats.optimizationMetrics.objectiveValue}</strong>
+                                  Objective value: <strong>{generationStats.optimizationMetrics.objective_value}</strong>
                                 </Typography>
                               </Grid>
                               <Grid item xs={6}>
                                 <Typography variant="body2">
-                                  Solution time: <strong>{generationStats.optimizationMetrics.solutionTime}</strong>
+                                  Solution time: <strong>{generationStats.optimizationMetrics.solution_time_seconds.toFixed(2)} seconds</strong>
                                 </Typography>
                               </Grid>
                               <Grid item xs={6}>
                                 <Typography variant="body2">
-                                  Monthly variance: <strong>{generationStats.optimizationMetrics.monthlyVariance}</strong>
+                                  Constraints: <strong>{generationStats.optimizationMetrics.constraints}</strong>
                                 </Typography>
                               </Grid>
                               <Grid item xs={6}>
                                 <Typography variant="body2">
-                                  Weekend balance: <strong>{generationStats.optimizationMetrics.weekendBalance}</strong>
+                                  Variables: <strong>{generationStats.optimizationMetrics.variables}</strong>
+                                </Typography>
+                              </Grid>
+                              <Grid item xs={12}>
+                                <Typography variant="body2">
+                                  Status: <strong>{generationStats.optimizationMetrics.status}</strong>
                                 </Typography>
                               </Grid>
                             </Grid>
