@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Typography,
   Box,
@@ -41,10 +41,23 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
   const [error, setError] = useState("");
   const [generationStats, setGenerationStats] = useState(null);
   const [useOptimizedAlgorithm, setUseOptimizedAlgorithm] = useState(true);
+  const [serverAvailable, setServerAvailable] = useState(false);
+  const [optimizationResult, setOptimizationResult] = useState(null); // Store the optimization result
+
+  // Check server availability on mount
+  useEffect(() => {
+    checkServerStatus().then(isAvailable => {
+      setServerAvailable(isAvailable);
+      // If server is not available, default to simple algorithm
+      if (!isAvailable) {
+        setUseOptimizedAlgorithm(false);
+      }
+    });
+  }, []);
 
   // Update progress simulation for simple algorithm
   const updateProgress = (current, total) => {
-    const progressValue = Math.round((current / total) * 100);
+    const progressValue = Math.min(100, Math.round((current / total) * 100));
     setProgress(progressValue);
   };
 
@@ -130,7 +143,7 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
     try {
       // Set up progress tracking
       setStatus("Connecting to optimization server...");
-      updateProgress(5);
+      updateProgress(5, 100);
       
       // Prepare input data for the optimizer
       const inputData = {
@@ -139,8 +152,8 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
         availability: availability
       };
       
-      // Start the optimization in the background
-      const optimizePromise = fetch(`${API_BASE_URL}/optimize`, {
+      // Start the optimization request
+      const optimizationResponse = await fetch(`${API_BASE_URL}/optimize`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -148,7 +161,17 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
         body: JSON.stringify(inputData),
       });
       
-      // Poll for progress while the optimization runs
+      // Check for HTTP errors
+      if (!optimizationResponse.ok) {
+        const errorText = await optimizationResponse.text();
+        throw new Error(`API request failed: ${errorText}`);
+      }
+      
+      // Parse the response to get the result
+      const responseData = await optimizationResponse.json();
+      setOptimizationResult(responseData);
+      
+      // Start polling for progress updates
       let isCompleted = false;
       const startTime = Date.now();
       
@@ -166,12 +189,14 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
             const progressData = await progressResponse.json();
             
             // Update the UI with progress
-            updateProgress(progressData.current);
+            setProgress(progressData.current);
             setStatus(progressData.message || "Optimizing schedule...");
             
             // Check if completed or error
-            if (progressData.status === "completed" || progressData.status === "error") {
+            if (progressData.status === "completed") {
               isCompleted = true;
+            } else if (progressData.status === "error") {
+              throw new Error(progressData.message || "Optimization failed");
             } else {
               // Wait before polling again
               await new Promise(resolve => setTimeout(resolve, 1000));
@@ -187,34 +212,16 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
         }
       }
       
-      // Wait for the original optimization request to complete
-      const response = await optimizePromise;
-      
-      // Check for errors
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`API request failed: ${errorText}`);
+      // Check if we have a valid optimization result
+      if (!responseData || !responseData.schedule || !responseData.statistics) {
+        throw new Error("Invalid optimization result");
       }
       
-      // Parse the response
-      const data = await response.json();
-      
-      // Check for API errors
-      if (data.error) {
-        throw new Error(data.error);
-      }
-      
-      setStatus("Processing optimization results...");
-      updateProgress(95);
-      
-      // Extract the schedule and statistics
-      const schedule = data.schedule;
-      const optimizationStats = data.statistics;
-      
-      // Update progress to indicate completion
-      updateProgress(100);
-      
-      return { schedule, optimizationStats };
+      // Return the schedule and statistics
+      return { 
+        schedule: responseData.schedule, 
+        optimizationStats: responseData.statistics 
+      };
     } catch (error) {
       console.error("Optimization API error:", error);
       throw error;
@@ -232,6 +239,7 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
     setStatus("Initializing schedule generation...");
     setProgress(0);
     setError("");
+    setOptimizationResult(null);
 
     try {
       let schedule;
@@ -247,7 +255,7 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
         stats.doctorShifts[doc.name] = 0;
       });
       
-      if (useOptimizedAlgorithm) {
+      if (useOptimizedAlgorithm && serverAvailable) {
         // Use the MILP optimization
         const result = await generateOptimizedSchedule();
         schedule = result.schedule;
@@ -287,7 +295,7 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
   };
 
   // Check server status
-  const checkServerStatus = async () => {
+  async function checkServerStatus() {
     try {
       const response = await fetch(`${API_BASE_URL}/status`);
       return response.ok;
@@ -295,7 +303,7 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
       console.error("Server status check failed:", error);
       return false;
     }
-  };
+  }
 
   return (
     <Box>
@@ -326,6 +334,14 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
         >
           <AlertTitle>Error</AlertTitle>
           {error}
+        </Alert>
+      )}
+
+      {!serverAvailable && useOptimizedAlgorithm && (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          <AlertTitle>Optimization Server Unavailable</AlertTitle>
+          The optimization server is not responding. The application will use the simple scheduling algorithm instead.
+          You can try restarting the server by running the <code>run.sh</code> script.
         </Alert>
       )}
 
@@ -370,14 +386,15 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
                   checked={useOptimizedAlgorithm}
                   onChange={(e) => setUseOptimizedAlgorithm(e.target.checked)}
                   color="primary"
+                  disabled={!serverAvailable}
                 />
               </Box>
               
               <Tooltip title={useOptimizedAlgorithm ? 
                 "Using Mixed-Integer Linear Programming (MILP) optimization algorithm based on the technical report" : 
                 "Using simple round-robin scheduling algorithm"}>
-                <Alert severity={useOptimizedAlgorithm ? "info" : "warning"} sx={{ mb: 2 }}>
-                  {useOptimizedAlgorithm 
+                <Alert severity={useOptimizedAlgorithm && serverAvailable ? "info" : "warning"} sx={{ mb: 2 }}>
+                  {useOptimizedAlgorithm && serverAvailable
                     ? "MILP optimization will be used to generate an optimal schedule" 
                     : "Simple scheduling will be used (no optimization)"}
                 </Alert>
@@ -469,22 +486,22 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
                               </Grid>
                               <Grid item xs={6}>
                                 <Typography variant="body2">
-                                  Solution time: <strong>{generationStats.optimizationMetrics.solution_time_seconds.toFixed(2)} seconds</strong>
+                                  Solution time: <strong>{generationStats.optimizationMetrics.solution_time_seconds?.toFixed(2) || 'N/A'} seconds</strong>
                                 </Typography>
                               </Grid>
                               <Grid item xs={6}>
                                 <Typography variant="body2">
-                                  Constraints: <strong>{generationStats.optimizationMetrics.constraints}</strong>
+                                  Constraints: <strong>{generationStats.optimizationMetrics.constraints || 'N/A'}</strong>
                                 </Typography>
                               </Grid>
                               <Grid item xs={6}>
                                 <Typography variant="body2">
-                                  Variables: <strong>{generationStats.optimizationMetrics.variables}</strong>
+                                  Variables: <strong>{generationStats.optimizationMetrics.variables || 'N/A'}</strong>
                                 </Typography>
                               </Grid>
                               <Grid item xs={12}>
                                 <Typography variant="body2">
-                                  Status: <strong>{generationStats.optimizationMetrics.status}</strong>
+                                  Status: <strong>{generationStats.optimizationMetrics.status || 'N/A'}</strong>
                                 </Typography>
                               </Grid>
                             </Grid>

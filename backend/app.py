@@ -41,6 +41,7 @@ optimization_progress = {
 
 # Function to update progress
 def update_progress(progress, message=""):
+    global optimization_progress
     optimization_progress["current"] = progress
     optimization_progress["message"] = message
     optimization_progress["status"] = "running" if progress < 100 else "completed"
@@ -90,14 +91,26 @@ def optimize():
         holidays = data.get("holidays", {})
         availability = data.get("availability", {})
         
-        # Create optimizer instance
-        optimizer = ScheduleOptimizer(doctors, holidays, availability)
-        
         # Run optimization with progress callback
-        schedule, stats = optimizer.optimize(progress_callback=update_progress)
+        result = optimize_schedule(
+            {"doctors": doctors, "holidays": holidays, "availability": availability}, 
+            progress_callback=update_progress
+        )
+        
+        # Check for errors from the optimizer
+        if "error" in result and result["error"]:
+            optimization_progress["status"] = "error"
+            optimization_progress["message"] = result["error"]
+            return jsonify({
+                "error": result["error"]
+            }), 500
+        
+        # Get schedule and statistics
+        schedule = result.get("schedule", {})
+        stats = result.get("statistics", {})
         
         # Create result
-        result = {
+        result_data = {
             "schedule": schedule,
             "statistics": stats
         }
@@ -108,13 +121,13 @@ def optimize():
         filepath = os.path.join(RESULTS_DIR, filename)
         
         with open(filepath, 'w') as f:
-            json.dump(result, f, indent=2)
+            json.dump(result_data, f, indent=2)
         
         # Update progress to completed
         update_progress(100, "Optimization complete")
         
         # Return result
-        return jsonify(result)
+        return jsonify(result_data)
     
     except Exception as e:
         logger.exception("Error in optimization")
@@ -123,6 +136,7 @@ def optimize():
         return jsonify({
             "error": str(e)
         }), 500
+
 
 @app.route('/api/optimize/progress', methods=['GET'])
 def get_progress():
