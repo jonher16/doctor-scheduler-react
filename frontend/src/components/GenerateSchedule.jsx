@@ -18,7 +18,16 @@ import {
   AccordionSummary,
   AccordionDetails,
   Switch,
-  FormControlLabel
+  FormControlLabel,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Chip,
+  Tabs,
+  Tab
 } from '@mui/material';
 import {
   PlayArrow as PlayArrowIcon,
@@ -26,7 +35,11 @@ import {
   Error as ErrorIcon,
   Info as InfoIcon,
   ExpandMore as ExpandMoreIcon,
-  Psychology as PsychologyIcon
+  Psychology as PsychologyIcon,
+  CheckCircle as CheckCircleIcon,
+  Cancel as CancelIcon,
+  WeekendOutlined as WeekendIcon,
+  EventOutlined as HolidayIcon
 } from '@mui/icons-material';
 
 const API_BASE_URL = 'http://localhost:5000/api';
@@ -41,6 +54,7 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
   const [useOptimizedAlgorithm, setUseOptimizedAlgorithm] = useState(true);
   const [serverAvailable, setServerAvailable] = useState(false);
   const [optimizationResult, setOptimizationResult] = useState(null);
+  const [statsTabValue, setStatsTabValue] = useState(0);
 
   // Check server availability on mount
   useEffect(() => {
@@ -53,27 +67,21 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
   }, []);
 
   // useEffect to poll the /optimize/progress endpoint every second while optimization is running.
-  // This hook updates the progress and status in real time.
   useEffect(() => {
-    // Only poll when an optimization is in progress.
     if (!isGenerating) return;
 
-    // Set up an interval timer to poll progress every 1 second.
     const interval = setInterval(async () => {
       try {
         const response = await fetch(`${API_BASE_URL}/optimize/progress`);
         if (response.ok) {
           const data = await response.json();
-          // Update local state with current progress and status message.
           setProgress(data.current);
           setStatus(data.message || "Optimizing schedule...");
-          // If the optimization status is completed or an error occurred, stop polling.
           if (data.status === "completed" || data.status === "error") {
             setIsGenerating(false);
             clearInterval(interval);
           }
         } else {
-          // If the endpoint fails, you can choose to log or display an error.
           console.warn("Progress endpoint returned an error.");
         }
       } catch (err) {
@@ -81,7 +89,6 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
       }
     }, 1000);
 
-    // Clear the interval when the component unmounts or when isGenerating changes.
     return () => clearInterval(interval);
   }, [isGenerating]);
 
@@ -149,19 +156,20 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
 
       if (useOptimizedAlgorithm && serverAvailable) {
         // Start the optimization request.
-        // The useEffect above will handle progress updates while isGenerating is true.
         const result = await generateOptimizedSchedule();
         schedule = result.schedule;
         stats.optimized = true;
         stats.optimizationMetrics = result.optimizationStats;
+        stats.preferenceMetrics = result.optimizationStats.preference_metrics;
+        stats.weekendMetrics = result.optimizationStats.weekend_metrics;
+        stats.holidayMetrics = result.optimizationStats.holiday_metrics;
       } else {
         // Fallback to simple algorithm if optimization server is not available.
         schedule = generateSimpleSchedule();
         stats.optimized = false;
       }
       
-      // (Optional) Calculate additional statistics here if needed.
-      // For example, count total shifts and shifts per doctor.
+      // Calculate additional statistics
       let totalShifts = 0;
       const doctorShifts = {};
       doctors.forEach(doc => { doctorShifts[doc.name] = 0; });
@@ -214,6 +222,41 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
       });
     }
     return schedule;
+  };
+
+  // Helper function to calculate preference adherence percentage
+  const calculatePreferenceAdherence = (doctor) => {
+    if (!generationStats?.preferenceMetrics) return null;
+    
+    const metrics = generationStats.preferenceMetrics[doctor];
+    if (!metrics) return null;
+    
+    // If no preference is set, return null
+    if (metrics.preference === "None") return null;
+    
+    const preferredShifts = metrics.preferred_shifts || 0;
+    const totalShifts = preferredShifts + (metrics.other_shifts || 0);
+    
+    if (totalShifts === 0) return 0;
+    return Math.round((preferredShifts / totalShifts) * 100);
+  };
+
+  // Function to get senior doctor names
+  const getSeniorDoctors = () => {
+    return doctors
+      .filter(doc => doc.seniority === "Senior")
+      .map(doc => doc.name);
+  };
+  
+  // Function to get junior doctor names
+  const getJuniorDoctors = () => {
+    return doctors
+      .filter(doc => doc.seniority !== "Senior")
+      .map(doc => doc.name);
+  };
+
+  const handleTabChange = (event, newValue) => {
+    setStatsTabValue(newValue);
   };
 
   return (
@@ -344,7 +387,7 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
                     Schedule generated successfully!
                   </Alert>
                   {generationStats && (
-                    <Accordion sx={{ mt: 2 }}>
+                    <Accordion sx={{ mt: 2 }} defaultExpanded>
                       <AccordionSummary
                         expandIcon={<ExpandMoreIcon />}
                         aria-controls="panel1a-content"
@@ -357,26 +400,348 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
                           Total shifts scheduled: <strong>{generationStats.totalShifts}</strong>
                         </Typography>
                         
-                        <Typography variant="body2">Doctor workload summary:</Typography>
-                        <Box sx={{ ml: 2 }}>
-                          {Object.entries(generationStats.doctorShifts)
-                            .sort((a, b) => b[1] - a[1])
-                            .map(([doctor, shifts]) => (
-                              <Typography key={doctor} variant="body2">
-                                {doctor}: <strong>{shifts}</strong> shifts
-                              </Typography>
-                            ))}
-                        </Box>
+                        {generationStats.optimized && (
+                          <Box sx={{ width: '100%', mb: 3 }}>
+                            <Tabs
+                              value={statsTabValue}
+                              onChange={handleTabChange}
+                              variant="scrollable"
+                              scrollButtons="auto"
+                              aria-label="schedule statistics tabs"
+                            >
+                              <Tab icon={<PsychologyIcon />} label="Preferences" iconPosition="start" />
+                              <Tab icon={<WeekendIcon />} label="Weekends" iconPosition="start" />
+                              <Tab icon={<HolidayIcon />} label="Holidays" iconPosition="start" />
+                            </Tabs>
+                            
+                            <Box sx={{ mt: 2 }}>
+                              {/* Preferences Tab */}
+                              {statsTabValue === 0 && generationStats.preferenceMetrics && (
+                                <TableContainer component={Paper} variant="outlined">
+                                  <Table size="small">
+                                    <TableHead>
+                                      <TableRow>
+                                        <TableCell>Doctor</TableCell>
+                                        <TableCell>Preference</TableCell>
+                                        <TableCell align="center">Preferred Shifts</TableCell>
+                                        <TableCell align="center">Other Shifts</TableCell>
+                                        <TableCell align="center">Adherence %</TableCell>
+                                      </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                      {Object.entries(generationStats.preferenceMetrics)
+                                        .filter(([_, metrics]) => metrics.preference !== "None")
+                                        .sort(([, a], [, b]) => {
+                                          const aPerc = a.preferred_shifts / (a.preferred_shifts + a.other_shifts) || 0;
+                                          const bPerc = b.preferred_shifts / (b.preferred_shifts + b.other_shifts) || 0;
+                                          return bPerc - aPerc; // Sort by adherence percentage descending
+                                        })
+                                        .map(([doctor, metrics]) => {
+                                          const adherencePercentage = calculatePreferenceAdherence(doctor);
+                                          
+                                          return (
+                                            <TableRow key={doctor} hover>
+                                              <TableCell>{doctor}</TableCell>
+                                              <TableCell>
+                                                <Chip 
+                                                  size="small" 
+                                                  label={metrics.preference} 
+                                                  color="primary"
+                                                />
+                                              </TableCell>
+                                              <TableCell align="center">{metrics.preferred_shifts}</TableCell>
+                                              <TableCell align="center">{metrics.other_shifts}</TableCell>
+                                              <TableCell align="center">
+                                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                  {adherencePercentage >= 75 ? (
+                                                    <CheckCircleIcon fontSize="small" sx={{ color: 'success.main', mr: 0.5 }} />
+                                                  ) : adherencePercentage < 50 ? (
+                                                    <CancelIcon fontSize="small" sx={{ color: 'error.main', mr: 0.5 }} />
+                                                  ) : null}
+                                                  <Typography 
+                                                    variant="body2" 
+                                                    color={
+                                                      adherencePercentage >= 75 ? 'success.main' : 
+                                                      adherencePercentage < 50 ? 'error.main' : 
+                                                      'text.primary'
+                                                    }
+                                                  >
+                                                    {adherencePercentage}%
+                                                  </Typography>
+                                                </Box>
+                                              </TableCell>
+                                            </TableRow>
+                                          );
+                                        })}
+                                    </TableBody>
+                                  </Table>
+                                </TableContainer>
+                              )}
+                              
+                              {/* Weekend Shifts Tab */}
+                              {statsTabValue === 1 && generationStats.weekendMetrics && (
+                                <Box>
+                                  {/* Senior Weekend Stats */}
+                                  <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>
+                                    Senior Doctors - Weekend Shifts
+                                  </Typography>
+                                  <TableContainer component={Paper} variant="outlined" sx={{ mb: 3 }}>
+                                    <Table size="small">
+                                      <TableHead>
+                                        <TableRow>
+                                          <TableCell>Doctor</TableCell>
+                                          <TableCell align="center">Weekend Shifts</TableCell>
+                                          <TableCell align="right">Total Shifts</TableCell>
+                                          <TableCell align="right">Weekend %</TableCell>
+                                        </TableRow>
+                                      </TableHead>
+                                      <TableBody>
+                                        {getSeniorDoctors().map(doctorName => {
+                                          const weekendShifts = generationStats.weekendMetrics[doctorName] || 0;
+                                          const totalShifts = generationStats.doctorShifts[doctorName] || 0;
+                                          const weekendPercentage = totalShifts === 0 ? 0 : 
+                                            Math.round((weekendShifts / totalShifts) * 100);
+                                            
+                                          return (
+                                            <TableRow key={doctorName} hover>
+                                              <TableCell>{doctorName}</TableCell>
+                                              <TableCell align="center">
+                                                <Chip 
+                                                  size="small"
+                                                  label={weekendShifts}
+                                                  color="primary"
+                                                />
+                                              </TableCell>
+                                              <TableCell align="right">{totalShifts}</TableCell>
+                                              <TableCell align="right">
+                                                <Typography 
+                                                  variant="body2" 
+                                                  color={
+                                                    weekendPercentage <= 15 ? 'success.main' : 
+                                                    weekendPercentage > 25 ? 'error.main' : 
+                                                    'text.primary'
+                                                  }
+                                                >
+                                                  {weekendPercentage}%
+                                                </Typography>
+                                              </TableCell>
+                                            </TableRow>
+                                          );
+                                        })}
+                                      </TableBody>
+                                    </Table>
+                                  </TableContainer>
+                                  
+                                  {/* Junior Weekend Stats */}
+                                  <Typography variant="subtitle2" gutterBottom>
+                                    Junior Doctors - Weekend Shifts
+                                  </Typography>
+                                  <TableContainer component={Paper} variant="outlined">
+                                    <Table size="small">
+                                      <TableHead>
+                                        <TableRow>
+                                          <TableCell>Doctor</TableCell>
+                                          <TableCell align="center">Weekend Shifts</TableCell>
+                                          <TableCell align="right">Total Shifts</TableCell>
+                                          <TableCell align="right">Weekend %</TableCell>
+                                        </TableRow>
+                                      </TableHead>
+                                      <TableBody>
+                                        {getJuniorDoctors().map(doctorName => {
+                                          const weekendShifts = generationStats.weekendMetrics[doctorName] || 0;
+                                          const totalShifts = generationStats.doctorShifts[doctorName] || 0;
+                                          const weekendPercentage = totalShifts === 0 ? 0 : 
+                                            Math.round((weekendShifts / totalShifts) * 100);
+                                            
+                                          return (
+                                            <TableRow key={doctorName} hover>
+                                              <TableCell>{doctorName}</TableCell>
+                                              <TableCell align="center">
+                                                <Chip 
+                                                  size="small"
+                                                  label={weekendShifts}
+                                                  color="primary"
+                                                />
+                                              </TableCell>
+                                              <TableCell align="right">{totalShifts}</TableCell>
+                                              <TableCell align="right">
+                                                <Typography 
+                                                  variant="body2" 
+                                                  color={
+                                                    Math.abs(weekendPercentage - 20) <= 3 ? 'success.main' : 
+                                                    Math.abs(weekendPercentage - 20) > 7 ? 'error.main' : 
+                                                    'text.primary'
+                                                  }
+                                                >
+                                                  {weekendPercentage}%
+                                                </Typography>
+                                              </TableCell>
+                                            </TableRow>
+                                          );
+                                        })}
+                                      </TableBody>
+                                    </Table>
+                                  </TableContainer>
+                                </Box>
+                              )}
+                              
+                              {/* Holiday Shifts Tab */}
+                              {statsTabValue === 2 && generationStats.holidayMetrics && (
+                                <Box>
+                                  {/* Senior Holiday Stats */}
+                                  <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>
+                                    Senior Doctors - Holiday Shifts
+                                  </Typography>
+                                  <TableContainer component={Paper} variant="outlined" sx={{ mb: 3 }}>
+                                    <Table size="small">
+                                      <TableHead>
+                                        <TableRow>
+                                          <TableCell>Doctor</TableCell>
+                                          <TableCell align="center">Holiday Shifts</TableCell>
+                                          <TableCell align="right">Total Shifts</TableCell>
+                                          <TableCell align="right">Holiday %</TableCell>
+                                        </TableRow>
+                                      </TableHead>
+                                      <TableBody>
+                                        {getSeniorDoctors().map(doctorName => {
+                                          const holidayShifts = generationStats.holidayMetrics[doctorName] || 0;
+                                          const totalShifts = generationStats.doctorShifts[doctorName] || 0;
+                                          const holidayPercentage = totalShifts === 0 ? 0 : 
+                                            Math.round((holidayShifts / totalShifts) * 100);
+                                            
+                                          return (
+                                            <TableRow key={doctorName} hover>
+                                              <TableCell>{doctorName}</TableCell>
+                                              <TableCell align="center">
+                                                <Chip 
+                                                  size="small"
+                                                  label={holidayShifts}
+                                                  color="secondary"
+                                                />
+                                              </TableCell>
+                                              <TableCell align="right">{totalShifts}</TableCell>
+                                              <TableCell align="right">
+                                                <Typography 
+                                                  variant="body2" 
+                                                  color={
+                                                    holidayPercentage <= 3 ? 'success.main' : 
+                                                    holidayPercentage > 6 ? 'error.main' : 
+                                                    'text.primary'
+                                                  }
+                                                >
+                                                  {holidayPercentage}%
+                                                </Typography>
+                                              </TableCell>
+                                            </TableRow>
+                                          );
+                                        })}
+                                      </TableBody>
+                                    </Table>
+                                  </TableContainer>
+                                  
+                                  {/* Junior Holiday Stats */}
+                                  <Typography variant="subtitle2" gutterBottom>
+                                    Junior Doctors - Holiday Shifts
+                                  </Typography>
+                                  <TableContainer component={Paper} variant="outlined">
+                                    <Table size="small">
+                                      <TableHead>
+                                        <TableRow>
+                                          <TableCell>Doctor</TableCell>
+                                          <TableCell align="center">Holiday Shifts</TableCell>
+                                          <TableCell align="right">Total Shifts</TableCell>
+                                          <TableCell align="right">Holiday %</TableCell>
+                                        </TableRow>
+                                      </TableHead>
+                                      <TableBody>
+                                        {getJuniorDoctors().map(doctorName => {
+                                          const holidayShifts = generationStats.holidayMetrics[doctorName] || 0;
+                                          const totalShifts = generationStats.doctorShifts[doctorName] || 0;
+                                          const holidayPercentage = totalShifts === 0 ? 0 : 
+                                            Math.round((holidayShifts / totalShifts) * 100);
+                                            
+                                          return (
+                                            <TableRow key={doctorName} hover>
+                                              <TableCell>{doctorName}</TableCell>
+                                              <TableCell align="center">
+                                                <Chip 
+                                                  size="small"
+                                                  label={holidayShifts}
+                                                  color="secondary"
+                                                />
+                                              </TableCell>
+                                              <TableCell align="right">{totalShifts}</TableCell>
+                                              <TableCell align="right">
+                                                <Typography 
+                                                  variant="body2" 
+                                                  color={
+                                                    Math.abs(holidayPercentage - 5) <= 1 ? 'success.main' : 
+                                                    Math.abs(holidayPercentage - 5) > 3 ? 'error.main' : 
+                                                    'text.primary'
+                                                  }
+                                                >
+                                                  {holidayPercentage}%
+                                                </Typography>
+                                              </TableCell>
+                                            </TableRow>
+                                          );
+                                        })}
+                                      </TableBody>
+                                    </Table>
+                                  </TableContainer>
+                                </Box>
+                              )}
+                            </Box>
+                          </Box>
+                        )}
+                        
+                        <Typography variant="subtitle2" gutterBottom sx={{ mt: 3 }}>
+                          Doctor Workload Summary
+                        </Typography>
+                        <TableContainer component={Paper} variant="outlined">
+                          <Table size="small">
+                            <TableHead>
+                              <TableRow>
+                                <TableCell>Doctor</TableCell>
+                                <TableCell>Seniority</TableCell>
+                                <TableCell align="right">Total Shifts</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {Object.entries(generationStats.doctorShifts)
+                                .sort((a, b) => b[1] - a[1])
+                                .map(([doctor, shifts]) => {
+                                  const doctorInfo = doctors.find(d => d.name === doctor);
+                                  const seniority = doctorInfo ? doctorInfo.seniority : 'Unknown';
+                                  
+                                  return (
+                                    <TableRow key={doctor} hover>
+                                      <TableCell>{doctor}</TableCell>
+                                      <TableCell>
+                                        <Chip
+                                          size="small"
+                                          label={seniority}
+                                          color={seniority === 'Senior' ? 'primary' : 'default'}
+                                          variant={seniority === 'Senior' ? 'filled' : 'outlined'}
+                                        />
+                                      </TableCell>
+                                      <TableCell align="right">{shifts}</TableCell>
+                                    </TableRow>
+                                  );
+                                })}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
                         
                         {generationStats.optimized && generationStats.optimizationMetrics && (
-                          <Box sx={{ mt: 2, p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
+                          <Box sx={{ mt: 3, p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
                             <Typography variant="subtitle2" gutterBottom>
                               Optimization Metrics
                             </Typography>
                             <Grid container spacing={1}>
                               <Grid item xs={6}>
                                 <Typography variant="body2">
-                                  Objective value: <strong>{generationStats.optimizationMetrics.objective_value}</strong>
+                                  Objective value: <strong>{generationStats.optimizationMetrics.objective_value?.toFixed(2) || 'N/A'}</strong>
                                 </Typography>
                               </Grid>
                               <Grid item xs={6}>

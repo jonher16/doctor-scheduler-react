@@ -2,20 +2,14 @@
 """
 Hospital Staff Scheduler - MILP Optimization using PuLP
 
-This version reimplements the scheduling model with PuLP. It creates binary
-decision variables for each (doctor, date, shift) assignment, enforces
-constraints for coverage, availability, one shift per day, rest between shifts,
-and holiday rules. Seniority rules are prioritized over shift preferences.
-Here, the monthly workload (hours) is balanced (<= 10 hour difference),
-the weekend/holiday assignments are balanced according to targets, and 
-junior doctors are encouraged to work more weekend/holiday shifts. Moreover,
-senior doctors are strictly prohibited from working on long holidays.
+This relaxed version converts hard constraints into soft constraints
+to ensure the optimization problem is feasible.
 """
 
 import datetime
 import time
 import logging
-import threading  # Import threading to simulate progress updates
+import threading
 from typing import Dict, List, Any, Tuple, Set, Callable
 import pulp
 
@@ -49,17 +43,21 @@ class ScheduleOptimizer:
         # Seniors should have significantly fewer weekend/holiday hours.
         self.seniors_holiday_target = 30  # Lower target for seniors
         self.juniors_holiday_target = 55  # Higher target for juniors
+        
+        # Maximum allowed monthly hours difference (soft constraint)
+        self.max_monthly_variance = 15  # Relaxed from 10 to 15
 
-        # Maximum allowed monthly hours difference (hard constraint)
-        self.max_monthly_variance = 10
-
+        # Generate date collections
         self.all_dates = self._generate_dates()
         self.weekends = self._identify_weekends()
-
+        self.weekdays = set(self.all_dates) - self.weekends
+        
         # Weights for the objective function
-        self.alpha = 1.0  # Weight for weekend/holiday fairness penalty
-        self.beta = 3.0   # Weight for monthly workload balance (enforced as hard constraint)
-        self.gamma = 0.5  # Weight for shift preference penalty (only applied to juniors)
+        self.alpha = 1.0   # Weight for weekend/holiday fairness 
+        self.beta = 2.0    # Weight for monthly workload balance
+        self.gamma = 2.0   # Weight for shift preference penalty
+        self.delta = 10.0  # Weight for senior excess penalty
+        self.epsilon = 1.0 # Weight for weekend/holiday balance between doctors
 
     def _generate_dates(self) -> List[str]:
         """Generate all dates for the year 2025 in YYYY-MM-DD format."""
@@ -100,12 +98,29 @@ class ScheduleOptimizer:
         """Extract month from date string."""
         d = datetime.date.fromisoformat(date_str)
         return d.month
+        
+    def _dates_in_month(self, month: int) -> List[str]:
+        """Get all dates in a specific month."""
+        return [d for d in self.all_dates if self._group_by_month(d) == month]
+        
+    def _weekends_in_month(self, month: int) -> List[str]:
+        """Get all weekend dates in a specific month."""
+        month_dates = self._dates_in_month(month)
+        return [d for d in month_dates if d in self.weekends]
+        
+    def _weekdays_in_month(self, month: int) -> List[str]:
+        """Get all weekday dates in a specific month."""
+        month_dates = self._dates_in_month(month)
+        return [d for d in month_dates if d not in self.weekends]
+        
+    def _holidays_in_month(self, month: int) -> List[str]:
+        """Get all holiday dates in a specific month."""
+        month_dates = self._dates_in_month(month)
+        return [d for d in month_dates if d in self.holidays]
 
     def optimize(self, progress_callback: Callable = None) -> Tuple[Dict, Dict]:
         """
         Run the optimization using PuLP and return the schedule and statistics.
-        
-        Simulated progress updates (from 50% to 90%) are provided via a separate thread.
         
         Args:
             progress_callback: Optional callback to report progress.
@@ -124,12 +139,18 @@ class ScheduleOptimizer:
 
         # Create decision variables.
         doctor_names = [doc["name"] for doc in self.doctors]
+        senior_names = [doc["name"] for doc in self.doctors if doc.get("seniority", "") == "Senior"]
+        junior_names = [doc["name"] for doc in self.doctors if doc.get("seniority", "") != "Senior"]
+        
         x = {}
         for doctor in doctor_names:
             for date in self.all_dates:
                 for shift in self.shifts:
                     var_name = f"{doctor}_{date}_{shift}"
                     x[(doctor, date, shift)] = pulp.LpVariable(var_name, cat='Binary')
+
+        if progress_callback:
+            progress_callback(10, "Creating variables...")
 
         # --- Constraints ---
 
@@ -175,15 +196,119 @@ class ScheduleOptimizer:
                             prob += (x[(doctor_name, date, shift)] == 0,
                                      f"SeniorLongHoliday_{doctor_name}_{date}_{shift}")
 
-        # --- Objective Function ---
+        if progress_callback:
+            progress_callback(30, "Adding hard constraints...")
 
-        # a) Monthly workload balance (hard constraint):
-        # The difference between the maximum and minimum monthly hours across all doctors must not exceed 10.
-        months = {}
-        for date in self.all_dates:
-            m = self._group_by_month(date)
-            months.setdefault(m, []).append(date)
-        for m, dates in months.items():
+        if progress_callback:
+            progress_callback(50, "Building objective function, starting solver...")
+
+        # --- Objective Function Terms ---
+
+        # 1. Weekend/Holiday Fairness Penalty:
+        # Encourage doctors to have weekend/holiday assignments near target values.
+        fairness_penalties = []
+        
+        # Weekend balance for seniors
+        senior_weekend_shifts = {}
+        for doctor in senior_names:
+            senior_weekend_shifts[doctor] = pulp.lpSum(
+                x[(doctor, date, shift)]
+                for date in self.weekends
+                for shift in self.shifts
+            )
+        
+        # If we have multiple seniors, balance their weekend shifts
+        if len(senior_names) > 1:
+            senior_weekend_avg = pulp.lpSum(senior_weekend_shifts.values()) / len(senior_names)
+            for doctor in senior_names:
+                above = pulp.LpVariable(f"senior_weekend_above_{doctor}", lowBound=0)
+                below = pulp.LpVariable(f"senior_weekend_below_{doctor}", lowBound=0)
+                prob += (senior_weekend_shifts[doctor] - senior_weekend_avg <= above)
+                prob += (senior_weekend_avg - senior_weekend_shifts[doctor] <= below)
+                fairness_penalties.append(self.epsilon * (above + below))
+        
+        # Weekend balance for juniors
+        junior_weekend_shifts = {}
+        for doctor in junior_names:
+            junior_weekend_shifts[doctor] = pulp.lpSum(
+                x[(doctor, date, shift)]
+                for date in self.weekends
+                for shift in self.shifts
+            )
+        
+        # If we have multiple juniors, balance their weekend shifts
+        if len(junior_names) > 1:
+            junior_weekend_avg = pulp.lpSum(junior_weekend_shifts.values()) / len(junior_names)
+            for doctor in junior_names:
+                above = pulp.LpVariable(f"junior_weekend_above_{doctor}", lowBound=0)
+                below = pulp.LpVariable(f"junior_weekend_below_{doctor}", lowBound=0)
+                prob += (junior_weekend_shifts[doctor] - junior_weekend_avg <= above)
+                prob += (junior_weekend_avg - junior_weekend_shifts[doctor] <= below)
+                fairness_penalties.append(self.epsilon * (above + below))
+        
+        # Ensure seniors have fewer weekend shifts than juniors (as a penalty)
+        if senior_names and junior_names:
+            senior_avg_weekend = pulp.lpSum(senior_weekend_shifts.values()) / len(senior_names)
+            junior_avg_weekend = pulp.lpSum(junior_weekend_shifts.values()) / len(junior_names)
+            senior_excess = pulp.LpVariable("senior_weekend_excess", lowBound=0)
+            prob += (senior_avg_weekend <= junior_avg_weekend * 0.7 + senior_excess)
+            fairness_penalties.append(5 * self.alpha * senior_excess)
+
+        # 2. Holiday Balance
+        holiday_penalties = []
+        
+        # Holiday balance for seniors
+        senior_holiday_shifts = {}
+        for doctor in senior_names:
+            senior_holiday_shifts[doctor] = pulp.lpSum(
+                x[(doctor, date, shift)]
+                for date in self.holidays
+                for shift in self.shifts
+            )
+        
+        # If we have multiple seniors, balance their holiday shifts
+        if len(senior_names) > 1:
+            senior_holiday_avg = pulp.lpSum(senior_holiday_shifts.values()) / len(senior_names)
+            for doctor in senior_names:
+                above = pulp.LpVariable(f"senior_holiday_above_{doctor}", lowBound=0)
+                below = pulp.LpVariable(f"senior_holiday_below_{doctor}", lowBound=0)
+                prob += (senior_holiday_shifts[doctor] - senior_holiday_avg <= above)
+                prob += (senior_holiday_avg - senior_holiday_shifts[doctor] <= below)
+                holiday_penalties.append(self.epsilon * (above + below))
+        
+        # Holiday balance for juniors
+        junior_holiday_shifts = {}
+        for doctor in junior_names:
+            junior_holiday_shifts[doctor] = pulp.lpSum(
+                x[(doctor, date, shift)]
+                for date in self.holidays
+                for shift in self.shifts
+            )
+        
+        # If we have multiple juniors, balance their holiday shifts
+        if len(junior_names) > 1:
+            junior_holiday_avg = pulp.lpSum(junior_holiday_shifts.values()) / len(junior_names)
+            for doctor in junior_names:
+                above = pulp.LpVariable(f"junior_holiday_above_{doctor}", lowBound=0)
+                below = pulp.LpVariable(f"junior_holiday_below_{doctor}", lowBound=0)
+                prob += (junior_holiday_shifts[doctor] - junior_holiday_avg <= above)
+                prob += (junior_holiday_avg - junior_holiday_shifts[doctor] <= below)
+                holiday_penalties.append(self.epsilon * (above + below))
+        
+        # Ensure seniors have fewer holiday shifts than juniors (as a penalty)
+        if senior_names and junior_names:
+            senior_avg_holiday = pulp.lpSum(senior_holiday_shifts.values()) / len(senior_names)
+            junior_avg_holiday = pulp.lpSum(junior_holiday_shifts.values()) / len(junior_names)
+            senior_excess = pulp.LpVariable("senior_holiday_excess", lowBound=0)
+            prob += (senior_avg_holiday <= junior_avg_holiday * 0.7 + senior_excess)
+            holiday_penalties.append(5 * self.alpha * senior_excess)
+
+        # 3. Monthly Workload Balance (soft constraint with penalties)
+        monthly_balance_penalties = []
+        months = range(1, 13)  # 1-12 for all months
+        
+        for m in months:
+            dates = self._dates_in_month(m)
             monthly_hours = {}
             for doctor in doctor_names:
                 monthly_hours[doctor] = pulp.lpSum(
@@ -197,33 +322,17 @@ class ScheduleOptimizer:
                          f"MaxHours_{m}_{doctor}")
                 prob += (min_hours <= monthly_hours[doctor],
                          f"MinHours_{m}_{doctor}")
-            prob += (max_hours - min_hours <= self.max_monthly_variance,
+            
+            # Soft constraint on monthly variance
+            monthly_variance = pulp.LpVariable(f"monthly_variance_{m}", lowBound=0)
+            prob += (max_hours - min_hours <= self.max_monthly_variance + monthly_variance,
                      f"MonthlyVariance_{m}")
+            monthly_balance_penalties.append(self.beta * monthly_variance)
 
-        # b) Weekend/Holiday Fairness Penalty:
-        # Encourage doctors to have weekend/holiday assignments near target values.
-        fairness_penalties = []
-        for doc in self.doctors:
-            doctor_name = doc["name"]
-            target = self.seniors_holiday_target if doc.get("seniority", "") == "Senior" else self.juniors_holiday_target
-            wh_hours = pulp.lpSum(
-                x[(doctor_name, date, shift)] * self.shift_hours[shift]
-                for date in self.all_dates
-                if date in self.weekends or date in self.holidays
-                for shift in self.shifts
-            )
-            above = pulp.LpVariable(f"above_target_{doctor_name}", lowBound=0)
-            below = pulp.LpVariable(f"below_target_{doctor_name}", lowBound=0)
-            prob += (wh_hours - target <= above, f"Above_{doctor_name}")
-            prob += (target - wh_hours <= below, f"Below_{doctor_name}")
-            fairness_penalties.append(self.alpha * (above + below))
-
-        # c) Shift Preference Penalty (only for juniors):
-        # Apply penalties for deviations from preferred shifts.
+        # 4. Shift Preference Penalty:
+        # Apply penalties for deviations from preferred shifts for ALL doctors
         preference_penalties = []
         for doc in self.doctors:
-            if doc.get("seniority", "") == "Senior":
-                continue  # Skip preferences for seniors.
             doctor_name = doc["name"]
             if "pref" in doc and doc["pref"] != "None":
                 if doc["pref"] == "Day Only":
@@ -236,17 +345,19 @@ class ScheduleOptimizer:
                     prefs = {"Day": 1, "Evening": 1, "Night": 1}
             else:
                 prefs = {"Day": 1, "Evening": 1, "Night": 1}
+                
+            # Apply stronger preference enforcement for juniors
+            weight_modifier = 1.0 if doc.get("seniority", "") == "Senior" else 1.5
+                
             for date in self.all_dates:
                 for shift in self.shifts:
-                    preference_penalties.append(self.gamma * prefs.get(shift, 1) * x[(doctor_name, date, shift)])
+                    preference_penalties.append(
+                        self.gamma * weight_modifier * prefs.get(shift, 1) * 
+                        x[(doctor_name, date, shift)]
+                    )
 
-        # d) (Optional) Additional penalties for weekend/holiday assignments
-        # can be added here if further fine-tuning is needed.
-
-        # e) Senior Workload Constraint Penalty:
+        # 5. Senior Workload Constraint Penalty:
         # Encourage senior doctors to work fewer total hours than juniors.
-        senior_names = [doc["name"] for doc in self.doctors if doc.get("seniority", "") == "Senior"]
-        junior_names = [doc["name"] for doc in self.doctors if doc.get("seniority", "") != "Senior"]
         senior_excess_penalty_term = 0
         if senior_names and junior_names:
             senior_total_all = pulp.lpSum(
@@ -260,26 +371,25 @@ class ScheduleOptimizer:
             num_juniors = len(junior_names)
             num_seniors = len(senior_names)
             senior_excess = pulp.LpVariable("senior_excess", lowBound=0)
-            prob += senior_total_all * num_juniors <= junior_total_all * num_seniors * 0.85 + senior_excess, "SeniorWorkloadConstraint"
-            senior_excess_penalty_term = 500 * senior_excess
+            prob += senior_total_all * num_juniors <= junior_total_all * num_seniors * 0.9 + senior_excess, "SeniorWorkloadConstraint"
+            senior_excess_penalty_term = self.delta * senior_excess
 
         # Combine all objective terms.
         prob += (pulp.lpSum(fairness_penalties) +
+                 pulp.lpSum(holiday_penalties) +
+                 pulp.lpSum(monthly_balance_penalties) +
                  pulp.lpSum(preference_penalties) +
                  senior_excess_penalty_term), "TotalObjective"
-        
-        if progress_callback:
-            progress_callback(10, "Constraints added, starting solver...")
 
         # --- Simulate Progress Updates ---
         solved_flag = {"done": False}  # Mutable flag shared with the simulation thread
 
         def progress_simulation():
-            current = 10
+            current = 50
             while not solved_flag["done"]:
                 if progress_callback:
                     progress_callback(current, f"Solving... ({current}%)")
-                current += 3
+                current += 2
                 if current > 90:
                     current = 90
                 time.sleep(1)
@@ -288,7 +398,7 @@ class ScheduleOptimizer:
         progress_thread.start()    
 
         # --- Solve the Model ---
-        solver = pulp.PULP_CBC_CMD(timeLimit=60, msg=True)
+        solver = pulp.PULP_CBC_CMD(timeLimit=120, msg=True)  # Increased to 120 seconds
         result_status = prob.solve(solver)
 
         # Signal the simulation thread to stop.
@@ -296,7 +406,7 @@ class ScheduleOptimizer:
         progress_thread.join()
         
         if progress_callback:
-            progress_callback(100, "Optimization complete")
+            progress_callback(95, "Processing results...")
 
         logger.info(f"Solver status: {pulp.LpStatus[result_status]}")
         solution_time = time.time() - start_time
@@ -304,14 +414,58 @@ class ScheduleOptimizer:
         # --- Construct the Schedule ---
         schedule = {}
         doctor_shift_counts = {doc: 0 for doc in doctor_names}
+        preference_metrics = {}
+        weekend_metrics = {}
+        holiday_metrics = {}
+        
         if pulp.LpStatus[result_status] in ["Optimal", "Feasible"]:
+            # Initialize metrics
+            for doc in self.doctors:
+                doctor_name = doc["name"]
+                pref = doc.get("pref", "None")
+                preference_metrics[doctor_name] = {
+                    "preference": pref,
+                    "preferred_shifts": 0,
+                    "other_shifts": 0
+                }
+                weekend_metrics[doctor_name] = 0
+                holiday_metrics[doctor_name] = 0
+            
+            # Process all assignments
             for date in self.all_dates:
                 schedule[date] = {shift: [] for shift in self.shifts}
+                is_weekend = date in self.weekends
+                is_holiday = date in self.holidays
+                
                 for doctor in doctor_names:
                     for shift in self.shifts:
-                        if pulp.value(x[(doctor, date, shift)]) == 1:
+                        if pulp.value(x[(doctor, date, shift)]) > 0.5:  # Use threshold to handle floating point issues
                             schedule[date][shift].append(doctor)
                             doctor_shift_counts[doctor] += 1
+                            
+                            # Track weekend/holiday metrics
+                            if is_weekend:
+                                weekend_metrics[doctor] += 1
+                            if is_holiday:
+                                holiday_metrics[doctor] += 1
+                            
+                            # Track preference metrics
+                            doc_data = next((d for d in self.doctors if d["name"] == doctor), None)
+                            if doc_data:
+                                pref = doc_data.get("pref", "None")
+                                is_preferred = False
+                                
+                                if pref == "Day Only" and shift == "Day":
+                                    is_preferred = True
+                                elif pref == "Evening Only" and shift == "Evening":
+                                    is_preferred = True
+                                elif pref == "Night Only" and shift == "Night":
+                                    is_preferred = True
+                                
+                                if is_preferred:
+                                    preference_metrics[doctor]["preferred_shifts"] += 1
+                                else:
+                                    preference_metrics[doctor]["other_shifts"] += 1
         else:
             logger.error("No feasible solution found")
             if progress_callback:
@@ -328,6 +482,9 @@ class ScheduleOptimizer:
             for shift in self.shifts:
                 if len(schedule[date][shift]) != self.shift_requirements[shift]:
                     coverage_errors += 1
+                    
+        if progress_callback:
+            progress_callback(100, "Optimization complete")
 
         stats = {
             "status": pulp.LpStatus[result_status],
@@ -335,6 +492,9 @@ class ScheduleOptimizer:
             "objective_value": pulp.value(prob.objective),
             "coverage_errors": coverage_errors,
             "doctor_shift_counts": doctor_shift_counts,
+            "preference_metrics": preference_metrics,
+            "weekend_metrics": weekend_metrics,
+            "holiday_metrics": holiday_metrics,
             "variables": len(prob.variables()),
             "constraints": len(prob.constraints)
         }
@@ -406,6 +566,7 @@ if __name__ == "__main__":
     result = optimize_schedule(sample_data)
     print(f"Optimization status: {result['statistics']['status']}")
     print(f"Solution time: {result['statistics'].get('solution_time_seconds', 'N/A')} seconds")
+    print(f"Objective value: {result['statistics'].get('objective_value', 'N/A')}")
     print("Sample of schedule (first 3 days):")
     schedule = result["schedule"]
     dates = sorted(schedule.keys())[:3]

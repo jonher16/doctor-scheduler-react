@@ -14,6 +14,8 @@ import threading
 import time
 from flask import Flask, request, jsonify, Response, stream_with_context
 from flask_cors import CORS
+
+# Import the relaxed optimizer
 from schedule_optimizer import optimize_schedule, ScheduleOptimizer
 
 # Configure logging

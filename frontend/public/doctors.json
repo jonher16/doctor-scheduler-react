@@ -1,9 +1,9 @@
 [
     {"name": "Doctor1", "seniority": "Junior", "pref": "None"},
     {"name": "Doctor2", "seniority": "Junior", "pref": "None"},
-    {"name": "Doctor3", "seniority": "Junior", "pref": "Evening"},
-    {"name": "Doctor4", "seniority": "Junior", "pref": "Evening"},
-    {"name": "Doctor5", "seniority": "Junior", "pref": "Evening"},
+    {"name": "Doctor3", "seniority": "Junior", "pref": "None"},
+    {"name": "Doctor4", "seniority": "Junior", "pref": "None"},
+    {"name": "Doctor5", "seniority": "Junior", "pref": "None"},
     {"name": "Doctor6", "seniority": "Junior", "pref": "None"},
     {"name": "Doctor7", "seniority": "Junior", "pref": "None"},
     {"name": "Doctor8", "seniority": "Junior", "pref": "None"},
