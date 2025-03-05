@@ -28,3 +28,4 @@ backend/results
 build
 release
 bundled_backend
+.venv

@@ -32,7 +32,8 @@
       "main.js",
       "preload.js",
       "package.json",
-      "build/icon.*"
+      "build/icon.*",
+      "copy-defaults.js"
     ],
     "extraResources": [
       {

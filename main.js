@@ -118,73 +118,67 @@ async function startBackendServer() {
     logBackend('error', `Error reading backend directory: ${err.message}`);
   }
   
-  // Check if Python is installed
-  const pythonInstalled = await checkPythonInstalled();
-  
-  if (!pythonInstalled) {
-    const errorMessage = 'Python is not installed. Please install Python 3.8 or higher and make sure it is in your PATH.';
-    logBackend('error', errorMessage);
-    
-    // Show a more helpful dialog for Windows users
-    if (process.platform === 'win32') {
-      dialog.showErrorBox(
-        'Python Required',
-        'This application requires Python to run the backend server.\n\n' +
-        'Please install Python 3.8 or higher from:\n' +
-        'https://www.python.org/downloads/\n\n' +
-        'IMPORTANT: During installation, check the option "Add Python to PATH"'
-      );
-    } else {
-      dialog.showErrorBox('Python Required', errorMessage);
-    }
-    
-    app.quit();
-    return;
-  }
-  
   // Determine how to start the backend
   let cmd, args, cwd;
   
-  // Check for launcher scripts first
-  if (process.platform === 'win32' && fs.existsSync(path.join(backendDir, 'launch_backend.bat'))) {
-    // Use Windows batch file
-    cmd = path.join(backendDir, 'launch_backend.bat');
+  // Check for the standalone executable first
+  const backendExe = process.platform === 'win32' ? 
+    path.join(backendDir, 'backend_server.exe') : 
+    path.join(backendDir, 'backend_server');
+  
+  if (fs.existsSync(backendExe)) {
+    // Use the standalone executable
+    cmd = backendExe;
     args = [];
     cwd = backendDir;
-    logBackend('info', 'Using Windows launcher script');
-  } else if (process.platform !== 'win32' && fs.existsSync(path.join(backendDir, 'launch_backend.sh'))) {
-    // Use Linux/Mac shell script
-    cmd = path.join(backendDir, 'launch_backend.sh');
-    args = [];
-    cwd = backendDir;
-    logBackend('info', 'Using Linux/Mac launcher script');
-  } else if (fs.existsSync(path.join(backendDir, 'app.py'))) {
-    // Use Python directly
-    cmd = process.platform === 'win32' ? 'python' : 'python3';
-    args = ['app.py'];
-    cwd = backendDir;
-    logBackend('info', 'Using Python directly');
+    logBackend('info', `Using standalone backend executable: ${backendExe}`);
   } else {
-    const errorMessage = 'Backend application (app.py) not found in the backend directory.';
-    logBackend('error', errorMessage);
+    // Fall back to other methods if the executable doesn't exist
+    logBackend('error', `Standalone backend executable not found at: ${backendExe}`);
     
-    dialog.showErrorBox(
-      'Backend Not Found',
-      errorMessage + '\n\nDetailed logs are available at: ' + path.join(app.getPath('userData'), 'logs')
-    );
-    
-    app.quit();
-    return;
+    if (process.platform === 'win32' && fs.existsSync(path.join(backendDir, 'launch_backend.bat'))) {
+      // Use Windows batch file as fallback
+      cmd = 'cmd.exe';
+      args = ['/c', path.join(backendDir, 'launch_backend.bat')];
+      cwd = backendDir;
+      logBackend('info', 'Falling back to Windows launcher script');
+    } else if (process.platform !== 'win32' && fs.existsSync(path.join(backendDir, 'launch_backend.sh'))) {
+      // Use Linux/Mac shell script
+      cmd = path.join(backendDir, 'launch_backend.sh');
+      args = [];
+      cwd = backendDir;
+      logBackend('info', 'Falling back to Linux/Mac launcher script');
+    } else if (fs.existsSync(path.join(backendDir, 'app.py'))) {
+      // Use Python directly as last resort
+      cmd = process.platform === 'win32' ? 'python' : 'python3';
+      args = [path.join(backendDir, 'app.py')];
+      cwd = backendDir;
+      logBackend('info', 'Falling back to direct Python script');
+    } else {
+      const errorMessage = 'Backend application not found in the backend directory.';
+      logBackend('error', errorMessage);
+      
+      dialog.showErrorBox(
+        'Backend Not Found',
+        errorMessage + '\n\nDetailed logs are available at: ' + path.join(app.getPath('userData'), 'logs')
+      );
+      
+      app.quit();
+      return;
+    }
   }
   
   try {
     // Start the backend process
     logBackend('info', `Starting backend with command: ${cmd} ${args.join(' ')} in directory ${cwd}`);
     
+    // Determine whether to use shell mode based on what we're executing
+    const useShell = !fs.existsSync(backendExe) && process.platform === 'win32';
+    
     backendProcess = spawn(cmd, args, {
       cwd: cwd,
       stdio: 'pipe',
-      shell: process.platform === 'win32' // Use shell for Windows
+      shell: useShell
     });
     
     // Log stdout

@@ -568,7 +568,7 @@ function App() {
               <MenuIcon />
             </IconButton>
             <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-              Hospital Staff Scheduler
+              Hospital Doctor Scheduler
             </Typography>
           </Toolbar>
         </AppBar>
