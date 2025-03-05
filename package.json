@@ -33,7 +33,8 @@
       "preload.js",
       "package.json",
       "build/icon.*",
-      "copy-defaults.js"
+      "copy-defaults.js",
+      "launch_backend.bat"
     ],
     "extraResources": [
       {

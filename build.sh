@@ -1,268 +1,156 @@
 #!/bin/bash
-# Complete build script for Hospital Scheduler with self-contained backend
+# Hospital Scheduler Build Script for Linux (targeting Windows)
 
-# Function to check if command exists
-command_exists() {
-  command -v "$1" &> /dev/null
-}
+echo "===== Hospital Scheduler Build Process ====="
 
-# Print header
-echo "===================================="
-echo "Hospital Scheduler - Complete Build"
-echo "===================================="
-
-# Check requirements
-if ! command_exists npm; then
-  echo "❌ npm is required but not installed"
-  exit 1
+# Check if Node.js is installed
+if ! command -v node &> /dev/null; then
+    echo "Error: Node.js is not installed or not in PATH."
+    echo "Please install Node.js from https://nodejs.org/"
+    exit 1
 fi
 
-if ! command_exists python || ! command_exists python3; then
-  echo "❌ Python is required for bundling the backend (only needed for build, not for end users)"
-  exit 1
+# Check if npm is installed
+if ! command -v npm &> /dev/null; then
+    echo "Error: npm is not installed or not in PATH."
+    echo "Please install Node.js from https://nodejs.org/"
+    exit 1
 fi
 
-# Set Python command
-PYTHON_CMD="python3"
-if ! command_exists python3; then
-  PYTHON_CMD="python"
+# Install dependencies if node_modules doesn't exist
+if [ ! -d "node_modules" ]; then
+    echo "Installing dependencies..."
+    npm install
+    if [ $? -ne 0 ]; then
+        echo "Error installing dependencies!"
+        exit 1
+    fi
 fi
 
-# Create the bundler script
-echo "📝 Creating backend bundler script..."
-cat > bundle_backend.py << 'EOL'
-#!/usr/bin/env python
-"""
-Comprehensive backend bundler that creates a standalone executable with all dependencies.
-No Python installation required on target machines.
-"""
-import os
-import sys
-import subprocess
-import platform
-import shutil
+# Check for wine (needed for Windows builds on Linux)
+if ! command -v wine &> /dev/null; then
+    echo "Warning: Wine is not installed. This is needed to build Windows installers on Linux."
+    echo "Install it with: sudo apt-get install wine"
+    read -p "Continue anyway? (y/n) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        exit 1
+    fi
+fi
 
-def check_dependencies():
-    """Install PyInstaller and other dependencies needed for bundling."""
-    print("Checking and installing bundling dependencies...")
-    
-    try:
-        # First try to import PyInstaller
-        import PyInstaller
-        print("PyInstaller is already installed.")
-    except ImportError:
-        print("Installing PyInstaller...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "PyInstaller"])
-    
-    # Install backend dependencies
-    requirements_file = os.path.join("backend", "requirements.txt")
-    if os.path.exists(requirements_file):
-        print("Installing backend dependencies...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", requirements_file])
-    else:
-        print(f"Warning: Could not find {requirements_file}")
-        # Install the core dependencies manually
-        core_deps = ["flask==2.3.3", "flask-cors==4.0.0", "ortools==9.8.3296", 
-                    "gunicorn==21.2.0", "pulp==3.0.2"]
-        for dep in core_deps:
-            print(f"Installing {dep}...")
-            subprocess.check_call([sys.executable, "-m", "pip", "install", dep])
-    
-    print("All dependencies installed!")
+echo
+echo "1. Building React Frontend..."
+npm run build
 
-def build_backend():
-    """Build the backend server into a standalone executable."""
-    print("\nBuilding standalone backend executable...")
-    
-    # Determine platform-specific settings
-    is_windows = platform.system() == "Windows"
-    output_name = "backend_server.exe" if is_windows else "backend_server"
-    icon_option = []
-    
-    # Check for icon file
-    if is_windows and os.path.exists("build/icon.ico"):
-        icon_option = ["--icon", "build/icon.ico"]
-    elif not is_windows and os.path.exists("build/icon.png"):
-        icon_option = ["--icon", "build/icon.png"]
-    
-    # Create a temp directory for the build
-    os.makedirs("temp_backend", exist_ok=True)
-    
-    # Create a small Flask server wrapper to handle imports properly
-    wrapper_path = os.path.join("temp_backend", "server_wrapper.py")
-    with open(wrapper_path, "w") as f:
-        f.write("""#!/usr/bin/env python
-# Wrapper script for the Flask backend server
-import os
-import sys
-import importlib.util
-
-# Add the backend directory to the path
-backend_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "backend")
-if os.path.exists(backend_dir):
-    sys.path.insert(0, backend_dir)
-
-# Import and run the Flask app
-from app import app
-
-if __name__ == "__main__":
-    # Run the app on localhost:5000
-    app.run(host="0.0.0.0", port=5000)
-""")
-    
-    # Copy the backend files to the temp directory
-    backend_temp_dir = os.path.join("temp_backend", "backend")
-    os.makedirs(backend_temp_dir, exist_ok=True)
-    
-    for item in os.listdir("backend"):
-        source = os.path.join("backend", item)
-        destination = os.path.join(backend_temp_dir, item)
-        
-        if os.path.isfile(source):
-            shutil.copy2(source, destination)
-        elif os.path.isdir(source):
-            if item not in ["__pycache__", "dist", "build"]:
-                shutil.copytree(source, destination, dirs_exist_ok=True)
-    
-    # Remove any existing build/dist directories in the temp directory
-    for cleanup_dir in [os.path.join("temp_backend", "build"), 
-                         os.path.join("temp_backend", "dist")]:
-        if os.path.exists(cleanup_dir):
-            shutil.rmtree(cleanup_dir)
-    
-    # Build the executable
-    build_command = [
-        sys.executable, "-m", "PyInstaller",
-        "--onefile",
-        "--clean",
-        f"--name={output_name}",
-        "--hidden-import=flask",
-        "--hidden-import=flask_cors",
-        "--hidden-import=ortools",
-        "--hidden-import=pulp",
-    ]
-    
-    # Add icon if available
-    if icon_option:
-        build_command.extend(icon_option)
-    
-    # Specify the wrapper script
-    build_command.append(wrapper_path)
-    
-    # Run PyInstaller
-    print("Running PyInstaller with command:")
-    print(" ".join(build_command))
-    subprocess.check_call(build_command, cwd="temp_backend")
-    
-    # Move the executable to bundled_backend
-    os.makedirs("bundled_backend", exist_ok=True)
-    source_exe = os.path.join("temp_backend", "dist", output_name)
-    dest_exe = os.path.join("bundled_backend", output_name)
-    
-    if os.path.exists(source_exe):
-        # Remove existing executable if it exists
-        if os.path.exists(dest_exe):
-            os.remove(dest_exe)
-        
-        # Copy the new executable
-        shutil.copy2(source_exe, dest_exe)
-        print(f"\n✅ Successfully created standalone executable at: {dest_exe}")
-        
-        # Make it executable on Unix-like systems
-        if not is_windows:
-            os.chmod(dest_exe, 0o755)
-        
-        # Clean up temp directories
-        shutil.rmtree("temp_backend")
-        
-        return True
-    else:
-        print(f"\n❌ Error: Could not find executable at {source_exe}")
-        return False
-
-def main():
-    """Main function to orchestrate the build process."""
-    print("=" * 60)
-    print("Hospital Scheduler - Backend Bundler")
-    print("=" * 60)
-    print(f"Python: {sys.executable}")
-    print(f"Platform: {platform.system()}")
-    print("=" * 60)
-    
-    # Check and install dependencies
-    check_dependencies()
-    
-    # Build the backend executable
-    success = build_backend()
-    
-    if success:
-        print("\n✅ Backend bundled successfully!")
-        print("You can now build the Electron app with this bundled backend.")
-    else:
-        print("\n❌ Failed to bundle backend.")
-        sys.exit(1)
-
-if __name__ == "__main__":
-    main()
-EOL
-
-# Make the bundler script executable
-chmod +x bundle_backend.py
-
-# Run the bundler script
-echo "🐍 Creating standalone Python backend executable..."
-$PYTHON_CMD bundle_backend.py
-
-# Check if bundling was successful
 if [ $? -ne 0 ]; then
-  echo "❌ Backend bundling failed. Aborting packaging."
-  exit 1
+    echo "Error building React frontend!"
+    exit 1
 fi
 
-# Check if backend executable exists
-BACKEND_EXE="bundled_backend/backend_server"
-if [[ "$OSTYPE" == "msys"* || "$OSTYPE" == "win32" ]]; then
-  BACKEND_EXE="bundled_backend/backend_server.exe"
+echo
+echo "2. Creating required backend files..."
+
+# Check if backend directory exists
+if [ ! -d "backend" ]; then
+    echo "Error: Backend directory not found!"
+    exit 1
 fi
 
-if [ ! -f "$BACKEND_EXE" ]; then
-  echo "❌ Backend executable not found at $BACKEND_EXE"
-  exit 1
+# Create the launch_backend.bat file
+echo "Creating launch_backend.bat file..."
+cat > backend/launch_backend.bat << 'EOF'
+@echo off
+REM Windows launcher for backend
+echo Starting Hospital Scheduler Backend...
+
+REM Check if Python is installed
+python --version >nul 2>&1
+if %ERRORLEVEL% NEQ 0 (
+    echo ERROR: Python is not installed or not in PATH.
+    echo Please install Python 3.8 or higher from https://www.python.org/downloads/
+    echo Make sure to check "Add Python to PATH" during installation.
+    exit /b 1
+)
+
+REM Get the directory where this batch file resides
+set BACKEND_DIR=%~dp0
+
+REM Run the backend using the app.py file in the same directory
+python "%BACKEND_DIR%app.py"
+exit /b %ERRORLEVEL%
+EOF
+
+# Create the launch_backend.sh file (in case it's needed)
+echo "Creating launch_backend.sh file..."
+cat > backend/launch_backend.sh << 'EOF'
+#!/bin/bash
+# Linux launcher for backend
+echo "Starting Hospital Scheduler Backend..."
+
+# Check if Python is installed
+if ! command -v python3 &> /dev/null; then
+    echo "ERROR: Python is not installed"
+    echo "Please install Python 3.8 or higher"
+    exit 1
 fi
 
-echo "✅ Backend executable created successfully at $BACKEND_EXE"
+# Get the directory where this script resides
+BACKEND_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-# Update main.js to use the standalone executable
-echo "📝 Updating main.js to use the standalone executable..."
+# Run the backend
+python3 "${BACKEND_DIR}/app.py"
+exit $?
+EOF
 
-# Install dependencies
-echo "📦 Installing dependencies..."
-npm install
+# Make the shell script executable
+chmod +x backend/launch_backend.sh
 
-# Build the React application
-echo "🔨 Building React application..."
-npx vite build
+echo "3. Checking for installer.nsh..."
+if [ ! -f "installer.nsh" ]; then
+    echo "Creating installer.nsh file..."
+    cat > installer.nsh << 'EOF'
+!macro customInstall
+  ; Check if Python is installed
+  nsExec::ExecToStack 'py --version'
+  Pop $0
+  Pop $1
+  ${If} $0 != 0
+    MessageBox MB_YESNO "Python is required but not detected. Would you like to download and install Python now?" IDYES download IDNO continue
+    download:
+      ExecShell "open" "https://www.python.org/downloads/windows/"
+    continue:
+  ${EndIf}
+  
+  ; Install required Python packages if Python is installed
+  ${If} $0 == 0
+    DetailPrint "Installing required Python packages..."
+    nsExec::ExecToLog 'py -m pip install flask==2.3.3 flask-cors==4.0.0'
+  ${EndIf}
+!macroend
+EOF
+    chmod 644 installer.nsh
+fi
 
-# Check if build was successful
+echo
+echo "4. Creating Distribution Package..."
+# Check if we're building specifically for Windows or for all platforms
+if [ "$1" == "--all" ]; then
+    echo "Building for all platforms..."
+    npx electron-builder -wl  # Windows and Linux
+elif [ "$1" == "--linux" ]; then
+    echo "Building for Linux only..."
+    npx electron-builder --linux
+else
+    echo "Building for Windows..."
+    npx electron-builder --win
+fi
+
 if [ $? -ne 0 ]; then
-  echo "❌ React build failed. Aborting packaging."
-  exit 1
+    echo "Error creating distribution package!"
+    exit 1
 fi
 
-# Create a verification file
-echo "This file helps verify that resources are correctly included in the build." > bundled_backend/VERIFY.txt
-
-# Update package.json to include copy-defaults.js in the build
-echo "📝 Updating package.json..."
-sed -i 's/"files": \[/"files": \[\n    "copy-defaults.js",/' package.json 2>/dev/null || true
-
-# Package for Windows (NSIS installer)
-echo "📦 Packaging for Windows (NSIS installer)..."
-npm run dist:win
-
-# Package for Linux (AppImage)
-echo "📦 Packaging for Linux (AppImage)..."
-npm run dist:linux
-
-echo "✅ Build complete!"
-echo "You can find the packaged applications in the release directory."
+echo
+echo "===== Build Complete! ====="
+echo "Installer can be found in the \"release\" directory"
+echo

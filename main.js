@@ -1,4 +1,4 @@
-// main.js - Electron main process file with improved default file handling
+// main.js - Electron main process file with bat file compatibility
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
@@ -41,21 +41,6 @@ function logBackend(type, message) {
   return logEntry;
 }
 
-// Function to check if Python is installed
-function checkPythonInstalled() {
-  return new Promise((resolve) => {
-    const pythonProcess = spawn(process.platform === 'win32' ? 'python' : 'python3', ['--version']);
-    
-    pythonProcess.on('close', (code) => {
-      resolve(code === 0);
-    });
-    
-    pythonProcess.on('error', () => {
-      resolve(false);
-    });
-  });
-}
-
 // Function to get Backend directory
 function getBackendDir() {
   // In development mode, use the backend directory in the project
@@ -64,28 +49,7 @@ function getBackendDir() {
   }
   
   // In production, the backend should be in the resources directory
-  const resourcesPath = process.resourcesPath;
-  const backendDir = path.join(resourcesPath, 'backend');
-  
-  if (fs.existsSync(backendDir)) {
-    return backendDir;
-  }
-  
-  // Fallback to other possible locations
-  const possibleLocations = [
-    path.join(app.getAppPath(), 'backend'),
-    path.join(process.cwd(), 'backend'),
-    path.join(path.dirname(app.getAppPath()), 'backend')
-  ];
-  
-  for (const location of possibleLocations) {
-    if (fs.existsSync(location)) {
-      return location;
-    }
-  }
-  
-  // If no backend directory is found, return null
-  return null;
+  return path.join(process.resourcesPath, 'backend');
 }
 
 // Function to start backend server
@@ -95,90 +59,63 @@ async function startBackendServer() {
   // Find the backend directory
   const backendDir = getBackendDir();
   
-  if (!backendDir) {
-    const errorMessage = 'Backend directory not found. Please reinstall the application.';
+  if (!fs.existsSync(backendDir)) {
+    const errorMessage = `Backend directory not found at: ${backendDir}`;
     logBackend('error', errorMessage);
     
     dialog.showErrorBox(
       'Backend Not Found',
-      errorMessage + '\n\nDetailed logs are available at: ' + path.join(app.getPath('userData'), 'logs')
+      errorMessage + '\n\nPlease reinstall the application.'
     );
     
     app.quit();
     return;
   }
   
-  logBackend('info', `Found backend directory at: ${backendDir}`);
+  logBackend('info', `Using backend directory: ${backendDir}`);
   
-  // Check what files exist in the backend directory
   try {
-    const files = fs.readdirSync(backendDir);
-    logBackend('info', `Files in backend directory: ${files.join(', ')}`);
-  } catch (err) {
-    logBackend('error', `Error reading backend directory: ${err.message}`);
-  }
-  
-  // Determine how to start the backend
-  let cmd, args, cwd;
-  
-  // Check for the standalone executable first
-  const backendExe = process.platform === 'win32' ? 
-    path.join(backendDir, 'backend_server.exe') : 
-    path.join(backendDir, 'backend_server');
-  
-  if (fs.existsSync(backendExe)) {
-    // Use the standalone executable
-    cmd = backendExe;
-    args = [];
-    cwd = backendDir;
-    logBackend('info', `Using standalone backend executable: ${backendExe}`);
-  } else {
-    // Fall back to other methods if the executable doesn't exist
-    logBackend('error', `Standalone backend executable not found at: ${backendExe}`);
+    let cmd, args, cwd, shell = false;
     
-    if (process.platform === 'win32' && fs.existsSync(path.join(backendDir, 'launch_backend.bat'))) {
-      // Use Windows batch file as fallback
-      cmd = 'cmd.exe';
-      args = ['/c', path.join(backendDir, 'launch_backend.bat')];
-      cwd = backendDir;
-      logBackend('info', 'Falling back to Windows launcher script');
-    } else if (process.platform !== 'win32' && fs.existsSync(path.join(backendDir, 'launch_backend.sh'))) {
-      // Use Linux/Mac shell script
-      cmd = path.join(backendDir, 'launch_backend.sh');
-      args = [];
-      cwd = backendDir;
-      logBackend('info', 'Falling back to Linux/Mac launcher script');
-    } else if (fs.existsSync(path.join(backendDir, 'app.py'))) {
-      // Use Python directly as last resort
-      cmd = process.platform === 'win32' ? 'python' : 'python3';
-      args = [path.join(backendDir, 'app.py')];
-      cwd = backendDir;
-      logBackend('info', 'Falling back to direct Python script');
+    // Try to use the launcher batch file/script first
+    if (process.platform === 'win32') {
+      const launchBat = path.join(backendDir, 'launch_backend.bat');
+      if (fs.existsSync(launchBat)) {
+        cmd = launchBat;
+        args = [];
+        cwd = backendDir;
+        shell = true; // Use shell for .bat files
+        logBackend('info', `Using launch batch file: ${launchBat}`);
+      } else {
+        // Fall back to direct Python execution
+        logBackend('info', 'No launch batch file found, trying direct Python execution');
+        cmd = 'python';
+        args = [path.join(backendDir, 'app.py')];
+        cwd = backendDir;
+      }
     } else {
-      const errorMessage = 'Backend application not found in the backend directory.';
-      logBackend('error', errorMessage);
-      
-      dialog.showErrorBox(
-        'Backend Not Found',
-        errorMessage + '\n\nDetailed logs are available at: ' + path.join(app.getPath('userData'), 'logs')
-      );
-      
-      app.quit();
-      return;
+      // On non-Windows platforms, try the shell script first
+      const launchSh = path.join(backendDir, 'launch_backend.sh');
+      if (fs.existsSync(launchSh) && fs.statSync(launchSh).mode & 0o111) {
+        cmd = launchSh;
+        args = [];
+        cwd = backendDir;
+        logBackend('info', `Using launch shell script: ${launchSh}`);
+      } else {
+        // Fall back to direct Python execution
+        logBackend('info', 'No launch shell script found or it is not executable, trying direct Python execution');
+        cmd = 'python3';
+        args = [path.join(backendDir, 'app.py')];
+        cwd = backendDir;
+      }
     }
-  }
-  
-  try {
-    // Start the backend process
-    logBackend('info', `Starting backend with command: ${cmd} ${args.join(' ')} in directory ${cwd}`);
     
-    // Determine whether to use shell mode based on what we're executing
-    const useShell = !fs.existsSync(backendExe) && process.platform === 'win32';
+    logBackend('info', `Starting backend with command: ${cmd} ${args.join(' ')} (shell: ${shell ? 'yes' : 'no'})`);
     
     backendProcess = spawn(cmd, args, {
       cwd: cwd,
       stdio: 'pipe',
-      shell: useShell
+      shell: shell
     });
     
     // Log stdout
@@ -228,7 +165,7 @@ async function startBackendServer() {
     
     dialog.showErrorBox(
       'Backend Error',
-      `Failed to start the backend server: ${error.message}\n\nDetailed logs are available at: ${path.join(app.getPath('userData'), 'logs')}`
+      `Failed to start the backend server: ${error.message}\n\nPlease check your Python installation.`
     );
     
     app.quit();
@@ -262,24 +199,26 @@ function createWindow() {
     mainWindow.loadFile(indexPath);
   }
   
-  // Add context menu for inspecting elements
-  mainWindow.webContents.on('context-menu', (_, params) => {
-    const menu = require('electron').Menu.buildFromTemplate([
-      {
-        label: 'Inspect Element',
-        click: () => {
-          mainWindow.webContents.inspectElement(params.x, params.y);
+  // Add context menu for inspecting elements in development
+  if (isDev) {
+    mainWindow.webContents.on('context-menu', (_, params) => {
+      const menu = require('electron').Menu.buildFromTemplate([
+        {
+          label: 'Inspect Element',
+          click: () => {
+            mainWindow.webContents.inspectElement(params.x, params.y);
+          }
+        },
+        {
+          label: 'Open Developer Tools',
+          click: () => {
+            mainWindow.webContents.openDevTools();
+          }
         }
-      },
-      {
-        label: 'Open Developer Tools',
-        click: () => {
-          mainWindow.webContents.openDevTools();
-        }
-      }
-    ]);
-    menu.popup();
-  });
+      ]);
+      menu.popup();
+    });
+  }
   
   // Handle window close
   mainWindow.on('closed', () => {
@@ -291,10 +230,7 @@ function createWindow() {
 app.whenReady().then(async () => {
   logBackend('info', `Starting application from: ${__dirname}`);
   logBackend('info', `User data directory: ${app.getPath('userData')}`);
-  
-  if (process.resourcesPath) {
-    logBackend('info', `Resources path: ${process.resourcesPath}`);
-  }
+  logBackend('info', `Resources path: ${process.resourcesPath}`);
   
   // Copy default files to userData directory (only happens on first run)
   const defaultFilesCopy = await copyDefaultFilesToUserData();
@@ -357,7 +293,8 @@ ipcMain.handle('get-app-paths', () => {
     appPath: app.getAppPath(),
     userData: app.getPath('userData'),
     resourcesPath: process.resourcesPath,
-    currentDir: __dirname
+    currentDir: __dirname,
+    backendDir: getBackendDir()
   };
 });
 
