@@ -1,5 +1,108 @@
 {
+  "name": "hospital-scheduler",
+  "productName": "Hospital Scheduler",
+  "version": "1.0.0",
+  "description": "Hospital Staff Scheduler with optimized scheduling algorithms",
+  "author": {
+    "name": "Hospital Scheduler Team",
+    "email": "scheduler@example.com"
+  },
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"cd frontend && vite\" \"cross-env NODE_ENV=development electron .\"",
+    "build": "npx vite build",
+    "bundle-backend": "./bundle-backend.sh",
+    "electron": "electron .",
+    "postinstall": "electron-builder install-app-deps",
+    "pack": "electron-builder --dir",
+    "dist": "npm run bundle-backend && electron-builder",
+    "dist:win": "npm run bundle-backend && electron-builder --win",
+    "dist:linux": "npm run bundle-backend && electron-builder --linux",
+    "dist:all": "npm run bundle-backend && electron-builder -mwl"
+  },
+  "build": {
+    "appId": "com.hospital.scheduler",
+    "productName": "Hospital Scheduler",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "main.js",
+      "preload.js",
+      "package.json",
+      "build/icon.*"
+    ],
+    "extraResources": [
+      {
+        "from": "./bundled_backend",
+        "to": "backend",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "./frontend/public/doctors.json",
+        "to": "default/doctors.json"
+      },
+      {
+        "from": "./frontend/public/holidays.json",
+        "to": "default/holidays.json"
+      }
+    ],
+    "asar": {
+      "smartUnpack": true
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Office",
+      "icon": "build/icon.png",
+      "maintainer": "Hospital Scheduler Team <scheduler@example.com>"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Hospital Scheduler"
+    }
+  },
   "dependencies": {
+    "@emotion/react": "^11.11.3",
+    "@emotion/styled": "^11.11.0",
+    "@mui/icons-material": "^5.15.7",
+    "@mui/material": "^5.15.7",
+    "chart.js": "^4.4.8",
+    "react": "^19.0.0",
+    "react-chartjs-2": "^5.3.0",
+    "react-dom": "^19.0.0",
+    "react-tabs": "^6.1.0",
     "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.21.0",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "electron": "^30.0.0",
+    "electron-builder": "^24.13.1",
+    "eslint": "^9.21.0",
+    "eslint-plugin-react": "^7.37.4",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "eslint-plugin-react-refresh": "^0.4.19",
+    "globals": "^15.15.0",
+    "vite": "^6.2.0",
+    "wait-on": "^7.2.0"
   }
 }

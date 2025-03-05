@@ -25,3 +25,6 @@ dist-ssr
 results
 backend/__pycache__
 backend/results
+build
+release
+bundled_backend

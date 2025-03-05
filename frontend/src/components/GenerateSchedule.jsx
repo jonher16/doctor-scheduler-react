@@ -42,9 +42,8 @@ import {
   EventOutlined as HolidayIcon
 } from '@mui/icons-material';
 
-const API_BASE_URL = 'http://localhost:5000/api';
-
-function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
+// Update the function signature to accept apiUrl prop
+function GenerateSchedule({ doctors, holidays, availability, setSchedule, apiUrl }) {
   // States to store progress and status messages
   const [status, setStatus] = useState("");
   const [progress, setProgress] = useState(0);
@@ -55,6 +54,9 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
   const [serverAvailable, setServerAvailable] = useState(false);
   const [optimizationResult, setOptimizationResult] = useState(null);
   const [statsTabValue, setStatsTabValue] = useState(0);
+
+  // Use the provided API URL or fall back to default
+  const BACKEND_API_URL = apiUrl || 'http://localhost:5000/api';
 
   // Check server availability on mount
   useEffect(() => {
@@ -72,7 +74,7 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
 
     const interval = setInterval(async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/optimize/progress`);
+        const response = await fetch(`${BACKEND_API_URL}/optimize/progress`);
         if (response.ok) {
           const data = await response.json();
           setProgress(data.current);
@@ -90,12 +92,12 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isGenerating]);
+  }, [isGenerating, BACKEND_API_URL]);
 
   // Function to check if the server is available.
   async function checkServerStatus() {
     try {
-      const response = await fetch(`${API_BASE_URL}/status`);
+      const response = await fetch(`${BACKEND_API_URL}/status`);
       return response.ok;
     } catch (error) {
       console.error("Server status check failed:", error);
@@ -112,7 +114,7 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule }) {
       const inputData = { doctors, holidays, availability };
 
       // Start the optimization by calling the /optimize endpoint.
-      const optimizationResponse = await fetch(`${API_BASE_URL}/optimize`, {
+      const optimizationResponse = await fetch(`${BACKEND_API_URL}/optimize`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(inputData),

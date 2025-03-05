@@ -1,4 +1,4 @@
-// Updated App.jsx with support for schedule editing
+// Updated App.jsx with userData file loading
 
 import React, { useState, useEffect } from 'react';
 import { 
@@ -38,6 +38,7 @@ import DoctorNeeds from './components/DoctorNeeds';
 import GenerateSchedule from './components/GenerateSchedule';
 import Dashboard from './components/Dashboard';
 import MonthlyCalendarView from './components/MonthlyCalendarView';
+import BackendMonitor from './components/BackendMonitor';
 
 // Create a custom theme
 const theme = createTheme({
@@ -95,6 +96,14 @@ const menuItems = [
   { text: 'Dashboard', icon: <DashboardIcon />, component: 'dashboard' },
 ];
 
+// Determine if we're running in Electron
+const isElectron = window.platform?.isElectron;
+
+// Set the API URL based on environment
+const API_URL = isElectron 
+  ? 'http://localhost:5000/api'  // Local backend when in Electron
+  : import.meta.env.VITE_API_URL || 'http://localhost:5000/api'; // From env or default
+
 function App() {
   const [doctors, setDoctorsState] = useState([]);
   const [holidays, setHolidaysState] = useState({});
@@ -102,6 +111,8 @@ function App() {
   const [schedule, setScheduleState] = useState({});
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeComponent, setActiveComponent] = useState('doctors');
+  const [isLoading, setIsLoading] = useState(true);
+  const [appPaths, setAppPaths] = useState(null);
   
   // For notifications
   const [notification, setNotification] = useState({
@@ -190,36 +201,80 @@ function App() {
 
   // Load data on mount
   useEffect(() => {
-    // Try to load from localStorage first, then fall back to JSON files
+    const loadInitialData = async () => {
+      setIsLoading(true);
+      
+      try {
+        // If in Electron mode, try to get app paths for debugging
+        if (isElectron && window.electron) {
+          const paths = await window.electron.getAppPaths();
+          console.log("Application paths:", paths);
+          setAppPaths(paths);
+        }
+        
+        // Try to load from localStorage first
+        const localDataLoaded = await loadFromLocalStorage();
+        
+        // If in Electron mode, try to load default files from userData
+        if (isElectron && window.electron) {
+          // Only load defaults if localStorage didn't have the data
+          if (!localDataLoaded) {
+            await loadFromUserData();
+          }
+        }
+        // If in web mode, try to load from public JSON files
+        else if (!localDataLoaded) {
+          await loadFromPublicFiles();
+        }
+      } catch (error) {
+        console.error("Error loading initial data:", error);
+        // Show error notification
+        setNotification({
+          open: true,
+          message: `Error loading initial data: ${error.message}`,
+          severity: 'error'
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    loadInitialData();
+  }, []);
+  
+  // Load data from localStorage
+  const loadFromLocalStorage = async () => {
+    let loadedDoctors = false;
+    let loadedHolidays = false;
     
     // Load doctors
     const localDoctors = localStorage.getItem('doctors');
     if (localDoctors) {
       try {
-        setDoctorsState(JSON.parse(localDoctors));
-        console.log("Loaded doctors from localStorage");
+        const doctorsData = JSON.parse(localDoctors);
+        if (doctorsData && doctorsData.length > 0) {
+          setDoctorsState(doctorsData);
+          console.log("Loaded doctors from localStorage");
+          loadedDoctors = true;
+        }
       } catch (err) {
         console.error('Error parsing doctors from localStorage', err);
-        // Fall back to JSON file
-        loadDoctorsFromFile();
       }
-    } else {
-      loadDoctorsFromFile();
     }
 
     // Load holidays
     const localHolidays = localStorage.getItem('holidays');
     if (localHolidays) {
       try {
-        setHolidaysState(JSON.parse(localHolidays));
-        console.log("Loaded holidays from localStorage");
+        const holidaysData = JSON.parse(localHolidays);
+        if (holidaysData && Object.keys(holidaysData).length > 0) {
+          setHolidaysState(holidaysData);
+          console.log("Loaded holidays from localStorage");
+          loadedHolidays = true;
+        }
       } catch (err) {
         console.error('Error parsing holidays from localStorage', err);
-        // Fall back to JSON file
-        loadHolidaysFromFile();
       }
-    } else {
-      loadHolidaysFromFile();
     }
 
     // Load availability
@@ -230,8 +285,6 @@ function App() {
         console.log("Loaded availability from localStorage");
       } catch (err) {
         console.error('Error parsing availability from localStorage', err);
-        // Initialize as empty object
-        setAvailabilityState({});
       }
     }
 
@@ -244,30 +297,98 @@ function App() {
         console.log("Loaded schedule from localStorage");
       } catch (err) {
         console.error('Error parsing schedule from localStorage', err);
-        // Initialize as empty object
-        setScheduleState({});
       }
     }
-  }, []);
-
-  const loadDoctorsFromFile = () => {
-    fetch('/doctors.json')
-      .then(res => res.json())
-      .then(data => {
-        setDoctorsState(data);
-        console.log("Loaded doctors from file:", data);
-      })
-      .catch(err => console.error('Error loading doctors.json', err));
+    
+    return loadedDoctors && loadedHolidays;
   };
-
-  const loadHolidaysFromFile = () => {
-    fetch('/holidays.json')
-      .then(res => res.json())
-      .then(data => {
-        setHolidaysState(data);
-        console.log("Loaded holidays from file:", data);
-      })
-      .catch(err => console.error('Error loading holidays.json', err));
+  
+  // Load data from userData directory via Electron
+  const loadFromUserData = async () => {
+    if (!isElectron || !window.electron) return false;
+    
+    let loadedDoctors = false;
+    let loadedHolidays = false;
+    
+    // Load doctors if not available
+    if (!doctors || doctors.length === 0) {
+      try {
+        const defaultDoctors = await window.electron.loadUserDataFile('doctors.json');
+        if (defaultDoctors && defaultDoctors.length > 0) {
+          console.log("Loaded doctors from userData directory");
+          setDoctors(defaultDoctors); // This also saves to localStorage
+          loadedDoctors = true;
+        }
+      } catch (err) {
+        console.error("Error loading doctors from userData directory", err);
+      }
+    } else {
+      loadedDoctors = true;
+    }
+    
+    // Load holidays if not available
+    if (!holidays || Object.keys(holidays).length === 0) {
+      try {
+        const defaultHolidays = await window.electron.loadUserDataFile('holidays.json');
+        if (defaultHolidays && Object.keys(defaultHolidays).length > 0) {
+          console.log("Loaded holidays from userData directory");
+          setHolidays(defaultHolidays); // This also saves to localStorage
+          loadedHolidays = true;
+        }
+      } catch (err) {
+        console.error("Error loading holidays from userData directory", err);
+      }
+    } else {
+      loadedHolidays = true;
+    }
+    
+    return loadedDoctors && loadedHolidays;
+  };
+  
+  // Load data from public JSON files
+  const loadFromPublicFiles = async () => {
+    let loadedDoctors = false;
+    let loadedHolidays = false;
+    
+    // Load doctors if not available
+    if (!doctors || doctors.length === 0) {
+      try {
+        const response = await fetch('/doctors.json');
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data.length > 0) {
+            console.log("Loaded doctors from public file");
+            setDoctors(data); // This also saves to localStorage
+            loadedDoctors = true;
+          }
+        }
+      } catch (err) {
+        console.error("Error loading public doctors.json", err);
+      }
+    } else {
+      loadedDoctors = true;
+    }
+    
+    // Load holidays if not available
+    if (!holidays || Object.keys(holidays).length === 0) {
+      try {
+        const response = await fetch('/holidays.json');
+        if (response.ok) {
+          const data = await response.json();
+          if (data && Object.keys(data).length > 0) {
+            console.log("Loaded holidays from public file");
+            setHolidays(data); // This also saves to localStorage
+            loadedHolidays = true;
+          }
+        }
+      } catch (err) {
+        console.error("Error loading public holidays.json", err);
+      }
+    } else {
+      loadedHolidays = true;
+    }
+    
+    return loadedDoctors && loadedHolidays;
   };
 
   const toggleDrawer = (open) => (event) => {
@@ -354,6 +475,50 @@ function App() {
 
   // Render the active component
   const renderComponent = () => {
+    if (isLoading) {
+      return (
+        <Box display="flex" justifyContent="center" alignItems="center" height="100%">
+          <Typography variant="h6">Loading application data...</Typography>
+        </Box>
+      );
+    }
+    
+    // Check if we have required data
+    const hasDoctors = doctors && doctors.length > 0;
+    const hasHolidays = holidays && Object.keys(holidays).length > 0;
+    
+    // If data is missing, show message with app paths for debugging
+    if ((!hasDoctors || !hasHolidays) && isElectron) {
+      return (
+        <Box>
+          <Alert severity="warning" sx={{ mb: 3 }}>
+            <AlertTitle>Missing Data</AlertTitle>
+            {!hasDoctors && <p>No doctors data available. Please add doctors or check application installation.</p>}
+            {!hasHolidays && <p>No holidays data available. Please add holidays or check application installation.</p>}
+          </Alert>
+          
+          {appPaths && (
+            <Box sx={{ mt: 3, p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
+              <Typography variant="h6">Application Paths (Debug Info)</Typography>
+              <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'break-word' }}>
+                {JSON.stringify(appPaths, null, 2)}
+              </pre>
+            </Box>
+          )}
+          
+          <Box sx={{ mt: 3 }}>
+            <Button 
+              variant="contained" 
+              onClick={() => window.location.reload()}
+              sx={{ mr: 2 }}
+            >
+              Reload Application
+            </Button>
+          </Box>
+        </Box>
+      );
+    }
+    
     switch (activeComponent) {
       case 'doctors':
         return <DoctorConfig doctors={doctors} setDoctors={setDoctors} />;
@@ -368,6 +533,7 @@ function App() {
             holidays={holidays}
             availability={availability}
             setSchedule={setSchedule}
+            apiUrl={API_URL}  // Pass API URL to component
           />
         );
       case 'dashboard': {
@@ -447,6 +613,9 @@ function App() {
             </Paper>
           </Container>
         </Box>
+        
+        {/* Backend Monitor - only in Electron mode */}
+        <BackendMonitor />
         
         {/* Notification */}
         <Snackbar 
