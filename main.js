@@ -1,4 +1,4 @@
-// main.js - Electron main process file with bat file compatibility
+// main.js - Direct EXE execution
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
@@ -75,86 +75,137 @@ async function startBackendServer() {
   logBackend('info', `Using backend directory: ${backendDir}`);
   
   try {
-    let cmd, args, cwd, shell = false;
-    
-    // Try to use the launcher batch file/script first
-    if (process.platform === 'win32') {
-      const launchBat = path.join(backendDir, 'launch_backend.bat');
-      if (fs.existsSync(launchBat)) {
-        cmd = launchBat;
-        args = [];
-        cwd = backendDir;
-        shell = true; // Use shell for .bat files
-        logBackend('info', `Using launch batch file: ${launchBat}`);
-      } else {
-        // Fall back to direct Python execution
-        logBackend('info', 'No launch batch file found, trying direct Python execution');
-        cmd = 'python';
-        args = [path.join(backendDir, 'app.py')];
-        cwd = backendDir;
-      }
-    } else {
-      // On non-Windows platforms, try the shell script first
-      const launchSh = path.join(backendDir, 'launch_backend.sh');
-      if (fs.existsSync(launchSh) && fs.statSync(launchSh).mode & 0o111) {
-        cmd = launchSh;
-        args = [];
-        cwd = backendDir;
-        logBackend('info', `Using launch shell script: ${launchSh}`);
-      } else {
-        // Fall back to direct Python execution
-        logBackend('info', 'No launch shell script found or it is not executable, trying direct Python execution');
-        cmd = 'python3';
-        args = [path.join(backendDir, 'app.py')];
-        cwd = backendDir;
-      }
+    // List files in backend directory for debugging
+    let files = [];
+    try {
+      files = fs.readdirSync(backendDir);
+      logBackend('info', `Files in backend directory: ${files.join(', ')}`);
+    } catch (err) {
+      logBackend('error', `Error reading backend directory: ${err.message}`);
     }
     
-    logBackend('info', `Starting backend with command: ${cmd} ${args.join(' ')} (shell: ${shell ? 'yes' : 'no'})`);
+    // SIMPLEST APPROACH: Try to directly use the .exe file that we confirmed exists
+    const exePath = path.join(backendDir, 'hospital_backend.exe');
     
-    backendProcess = spawn(cmd, args, {
-      cwd: cwd,
-      stdio: 'pipe',
-      shell: shell
-    });
-    
-    // Log stdout
-    backendProcess.stdout.on('data', (data) => {
-      const message = data.toString().trim();
-      if (message) {
-        const logEntry = logBackend('stdout', message);
-        
-        // Notify the renderer process of new logs
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('backend-log', logEntry);
-        }
-      }
-    });
-    
-    // Log stderr
-    backendProcess.stderr.on('data', (data) => {
-      const message = data.toString().trim();
-      if (message) {
-        const logEntry = logBackend('stderr', message);
-        
-        // Notify the renderer process of new logs
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('backend-log', logEntry);
-        }
-      }
-    });
-    
-    // Handle backend process exit
-    backendProcess.on('close', (code) => {
-      logBackend('system', `Backend process exited with code ${code}`);
+    if (fs.existsSync(exePath)) {
+      logBackend('info', `Found exe file: ${exePath}`);
       
-      // Notify the renderer if backend crashes unexpectedly
-      if (code !== 0 && mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('backend-exit', { code });
-      }
+      // Use quotation marks around the path to handle spaces
+      logBackend('info', `Starting backend with direct EXE execution`);
       
-      backendProcess = null;
-    });
+      // Use exec instead of spawn for simplicity with Windows paths
+      const { exec } = require('child_process');
+      
+      backendProcess = exec(`"${exePath}"`, {
+        cwd: backendDir
+      });
+      
+      logBackend('info', `Process started with PID: ${backendProcess.pid}`);
+      
+      // Log stdout
+      backendProcess.stdout?.on('data', (data) => {
+        const message = data.toString().trim();
+        if (message) {
+          const logEntry = logBackend('stdout', message);
+          
+          // Notify the renderer process of new logs
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('backend-log', logEntry);
+          }
+        }
+      });
+      
+      // Log stderr
+      backendProcess.stderr?.on('data', (data) => {
+        const message = data.toString().trim();
+        if (message) {
+          const logEntry = logBackend('stderr', message);
+          
+          // Notify the renderer process of new logs
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('backend-log', logEntry);
+          }
+        }
+      });
+      
+      // Handle backend process exit
+      backendProcess.on('close', (code) => {
+        logBackend('system', `Backend process exited with code ${code}`);
+        
+        // Notify the renderer if backend crashes unexpectedly
+        if (code !== 0 && mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('backend-exit', { code });
+        }
+        
+        backendProcess = null;
+      });
+      
+      // Handle errors in starting process
+      backendProcess.on('error', (err) => {
+        logBackend('error', `Backend process error: ${err.message}`);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('backend-exit', { 
+            code: -1, 
+            error: err.message 
+          });
+        }
+      });
+    }
+    // Fallback: Try with Python and app.py
+    else if (fs.existsSync(path.join(backendDir, 'app.py'))) {
+      const appPyPath = path.join(backendDir, 'app.py');
+      logBackend('info', `Executable not found, falling back to Python: ${appPyPath}`);
+      
+      // Use Python to run app.py
+      backendProcess = spawn('python', [appPyPath], {
+        cwd: backendDir,
+        stdio: 'pipe'
+      });
+      
+      // Log process information
+      logBackend('info', `Process started with PID: ${backendProcess.pid}`);
+      
+      // Log stdout
+      backendProcess.stdout.on('data', (data) => {
+        const message = data.toString().trim();
+        if (message) {
+          const logEntry = logBackend('stdout', message);
+          
+          // Notify the renderer process of new logs
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('backend-log', logEntry);
+          }
+        }
+      });
+      
+      // Log stderr
+      backendProcess.stderr.on('data', (data) => {
+        const message = data.toString().trim();
+        if (message) {
+          const logEntry = logBackend('stderr', message);
+          
+          // Notify the renderer process of new logs
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('backend-log', logEntry);
+          }
+        }
+      });
+      
+      // Handle backend process exit
+      backendProcess.on('close', (code) => {
+        logBackend('system', `Backend process exited with code ${code}`);
+        
+        // Notify the renderer if backend crashes unexpectedly
+        if (code !== 0 && mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('backend-exit', { code });
+        }
+        
+        backendProcess = null;
+      });
+    }
+    else {
+      throw new Error("No executable or Python script found in backend directory");
+    }
     
     // Wait for the backend to start
     await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -165,7 +216,7 @@ async function startBackendServer() {
     
     dialog.showErrorBox(
       'Backend Error',
-      `Failed to start the backend server: ${error.message}\n\nPlease check your Python installation.`
+      `Failed to start the backend server: ${error.message}\n\nPlease reinstall the application.`
     );
     
     app.quit();
@@ -234,7 +285,7 @@ app.whenReady().then(async () => {
   
   // Copy default files to userData directory (only happens on first run)
   const defaultFilesCopy = await copyDefaultFilesToUserData();
-  logBackend('info', `Default files copied: ${defaultFilesCopy.filesCopied.join(', ')}`);
+  logBackend('info', `Default files copied: ${defaultFilesCopy.filesCopied.join(', ') || 'none'}`);
   if (defaultFilesCopy.filesMissing.length > 0) {
     logBackend('info', `Default files not found: ${defaultFilesCopy.filesMissing.join(', ')}`);
   }

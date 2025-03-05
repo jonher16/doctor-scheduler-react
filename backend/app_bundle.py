@@ -250,3 +250,13 @@ def get_run(run_id):
 if __name__ == "__main__":
     # Start server on port 5000
     app.run(host='0.0.0.0', port=5000, debug=True)
+# Add a __main__ block to ensure app can be run directly
+if __name__ == "__main__":
+    import sys
+    print("Starting Hospital Scheduler Backend...", file=sys.stderr)
+    print("Python version:", sys.version, file=sys.stderr)
+    try:
+        app.run(host='0.0.0.0', port=5000, debug=False)
+    except Exception as e:
+        print(f"Error starting Flask app: {e}", file=sys.stderr)
+        sys.exit(1)

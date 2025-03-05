@@ -3,11 +3,22 @@
 block_cipher = None
 
 a = Analysis(
-    ['app.py'],
+    ['app_bundle.py'],
     pathex=[],
     binaries=[],
     datas=[],
-    hiddenimports=['flask_cors'],
+    hiddenimports=[
+        'flask', 
+        'flask_cors', 
+        'schedule_optimizer',
+        'random',
+        'copy',
+        'time',
+        'logging',
+        'threading',
+        'datetime',
+        'json'
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -18,27 +29,15 @@ a = Analysis(
     noarchive=False,
 )
 
-# PyInstaller in newer versions has 3-element tuples in a.datas
-# We'll safely handle this by not trying to unpack it
-filtered_datas = []
-for data_item in a.datas:
-    # Check if it's a pyconfig file
-    if isinstance(data_item, tuple):
-        if len(data_item) >= 1 and 'pyconfig' not in str(data_item[0]):
-            filtered_datas.append(data_item)
-    else:
-        filtered_datas.append(data_item)
-
-a.datas = filtered_datas
-
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
+# Explicitly set target to Windows .exe
 exe = EXE(
     pyz,
     a.scripts,
     [],
     exclude_binaries=True,
-    name='hospital_scheduler_backend',
+    name='hospital_backend',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -59,5 +58,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='backend',
+    name='hospital_backend',
 )

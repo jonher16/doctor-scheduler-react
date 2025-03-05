@@ -12,7 +12,7 @@
   "scripts": {
     "dev": "concurrently \"cd frontend && vite\" \"cross-env NODE_ENV=development electron .\"",
     "build": "npx vite build",
-    "bundle-backend": "./bundle-backend.sh",
+    "bundle-backend": "chmod +x ./bundle-backend.sh && ./bundle-backend.sh",
     "electron": "electron .",
     "postinstall": "electron-builder install-app-deps",
     "pack": "electron-builder --dir",
@@ -33,8 +33,7 @@
       "preload.js",
       "package.json",
       "build/icon.*",
-      "copy-defaults.js",
-      "launch_backend.bat"
+      "copy-defaults.js"
     ],
     "extraResources": [
       {
@@ -75,7 +74,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Hospital Scheduler"
+      "shortcutName": "Hospital Scheduler",
+      "include": "installer.nsh"
     }
   },
   "dependencies": {
