@@ -30,3 +30,4 @@ release
 bundled_backend
 .venv
 winehq.key
+default

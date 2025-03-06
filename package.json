@@ -12,14 +12,17 @@
   "scripts": {
     "dev": "concurrently \"cd frontend && vite\" \"cross-env NODE_ENV=development electron .\"",
     "build": "npx vite build",
-    "bundle-backend": "chmod +x ./bundle-backend.sh && ./bundle-backend.sh",
+    "bundle-backend": "bundle-backend.bat",
+    "bundle-backend:unix": "chmod +x ./bundle-backend.sh && ./bundle-backend.sh",
     "electron": "electron .",
     "postinstall": "electron-builder install-app-deps",
     "pack": "electron-builder --dir",
     "dist": "npm run bundle-backend && electron-builder",
     "dist:win": "npm run bundle-backend && electron-builder --win",
-    "dist:linux": "npm run bundle-backend && electron-builder --linux",
-    "dist:all": "npm run bundle-backend && electron-builder -mwl"
+    "dist:win:portable": "npm run bundle-backend && electron-builder --win portable",
+    "dist:linux": "npm run bundle-backend:unix && electron-builder --linux",
+    "dist:all": "npm run bundle-backend && electron-builder -wl",
+    "build:win": "build.bat"
   },
   "build": {
     "appId": "com.hospital.scheduler",
@@ -42,6 +45,10 @@
         "filter": ["**/*"]
       },
       {
+        "from": "./default",
+        "to": "default"
+      },
+      {
         "from": "./frontend/public/doctors.json",
         "to": "default/doctors.json"
       },
@@ -55,7 +62,8 @@
     },
     "win": {
       "target": [
-        "nsis"
+        "nsis",
+        "portable"
       ],
       "icon": "build/icon.ico",
       "artifactName": "${productName}-Setup-${version}.${ext}"
@@ -74,8 +82,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Hospital Scheduler",
-      "include": "installer.nsh"
+      "shortcutName": "Hospital Scheduler"
     }
   },
   "dependencies": {
