@@ -17,7 +17,7 @@ trap cleanup SIGINT SIGTERM
 # Start the backend server in the background
 echo "Starting the optimization server..."
 cd backend
-source .venv/bin/activate
+source .venv/Scripts/activate
 python app.py &
 BACKEND_PID=$!
 

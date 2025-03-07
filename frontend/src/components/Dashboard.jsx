@@ -1,4 +1,3 @@
-// Updated Dashboard.jsx with Monthly Calendar View
 import React, { useState, useEffect } from 'react';
 import {
   Typography,
@@ -26,7 +25,8 @@ import {
   CalendarMonth as CalendarMonthIcon,
   Analytics as AnalyticsIcon,
   Search as SearchIcon,
-  CalendarViewMonth as CalendarViewMonthIcon
+  CalendarViewMonth as CalendarViewMonthIcon,
+  WbSunny as DayIcon // Add shift icon
 } from '@mui/icons-material';
 import MonthlyHours from './MonthlyHours';
 import WeekendHolidayBalance from './WeekendHolidayBalance';
@@ -34,6 +34,7 @@ import YearlySchedule from './YearlySchedule';
 import ScheduleStatistics from './ScheduleStatistics';
 import MonthlyCalendarView from './MonthlyCalendarView';
 import ExcelExportButton from './ExcelExportButton';
+import DoctorShiftTypesChart from './DoctorShiftTypesChart'; // Import the new component
 
 function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
   const [tabValue, setTabValue] = useState(0);
@@ -355,6 +356,11 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
                 iconPosition="start" 
               />
               <Tab 
+                icon={<DayIcon />} 
+                label="Shift Types" 
+                iconPosition="start" 
+              />
+              <Tab 
                 icon={<TimelineIcon />} 
                 label="Weekend/Holiday Balance" 
                 iconPosition="start" 
@@ -384,12 +390,15 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
                 <MonthlyHours doctors={localDoctors} schedule={localSchedule} selectedMonth={month} />
               )}
               {tabValue === 2 && (
-                <WeekendHolidayBalance doctors={localDoctors} schedule={localSchedule} holidays={localHolidays} />
+                <DoctorShiftTypesChart doctors={localDoctors} schedule={localSchedule} selectedMonth={month} />
               )}
               {tabValue === 3 && (
-                <YearlySchedule doctors={localDoctors} schedule={localSchedule} />
+                <WeekendHolidayBalance doctors={localDoctors} schedule={localSchedule} holidays={localHolidays} />
               )}
               {tabValue === 4 && (
+                <YearlySchedule doctors={localDoctors} schedule={localSchedule} />
+              )}
+              {tabValue === 5 && (
                 <ScheduleStatistics doctors={localDoctors} schedule={localSchedule} />
               )}
             </Box>
