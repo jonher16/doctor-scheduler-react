@@ -132,10 +132,21 @@
                   });
                 }
               }
-            } else if (data.message.includes("complete") || data.current >= 95) {
+            } // New code
+            else if (data.message.includes("complete") || data.current >= 95) {
               stage = "finalizing";
-              // Final stage maps to 90-100%
-              calculatedProgress = 90 + (data.current * 10 / 100);
+              // If backend reports 100% or "complete", set to 100%
+              if (data.current >= 100 || data.status === "completed") {
+                calculatedProgress = 100;
+              } else {
+                // Otherwise map 95-99% to 90-99%
+                calculatedProgress = 90 + ((data.current - 95) * 9 / 5);
+              }
+            }
+            
+            // And ensure completion status sets progress to 100%
+            if (data.status === "completed") {
+              calculatedProgress = 100;
             }
             
             setOptimizationStage(stage);
@@ -195,6 +206,9 @@
         // Parse the final optimization result.
         const responseData = await optimizationResponse.json();
         setOptimizationResult(responseData);
+        setProgress(100);
+        setStatus("Schedule generated successfully!");
+
         return { 
           schedule: responseData.schedule, 
           optimizationStats: responseData.statistics 
@@ -273,25 +287,27 @@
     const generateSimpleSchedule = () => {
       // Use a more detailed progress simulation for the simple algorithm
       let progressTimer;
-      const startProgress = () => {
-        let simProgress = 0;
-        progressTimer = setInterval(() => {
-          simProgress += 3;
-          setProgress(Math.min(95, simProgress));
-          
-          if (simProgress < 30) {
-            setStatus("Initializing schedule generation...");
-          } else if (simProgress < 60) {
-            setStatus("Assigning doctors to shifts...");
-          } else if (simProgress < 95) {
-            setStatus("Finalizing schedule...");
-          }
-          
-          if (simProgress >= 95) {
-            clearInterval(progressTimer);
-          }
-        }, 300);
-      };
+      // New code
+    const startProgress = () => {
+      let simProgress = 0;
+      progressTimer = setInterval(() => {
+        simProgress += 3;
+        // Only go up to 90% in simulation, leave last 10% for actual completion
+        setProgress(Math.min(90, simProgress));
+        
+        if (simProgress < 30) {
+          setStatus("Initializing schedule generation...");
+        } else if (simProgress < 60) {
+          setStatus("Assigning doctors to shifts...");
+        } else if (simProgress < 90) {
+          setStatus("Finalizing schedule...");
+        }
+        
+        if (simProgress >= 90) {
+          clearInterval(progressTimer);
+        }
+      }, 300);
+    };
       
       // Start the progress simulation
       startProgress();
@@ -321,7 +337,9 @@
       
       // Clean up timer
       clearInterval(progressTimer);
-      
+      setProgress(100);
+      setStatus("Schedule generated successfully!");
+
       return schedule;
     };
 
@@ -448,10 +466,10 @@
                 </Box>
                 
                 <Tooltip title={useOptimizedAlgorithm ? 
-                  "Using MILP optimization algorithm" : "Using simple scheduling algorithm"}>
+                  "Using TabuSearch optimization algorithm" : "Using simple scheduling algorithm"}>
                   <Alert severity={useOptimizedAlgorithm && serverAvailable ? "info" : "warning"} sx={{ mb: 2 }}>
                     {useOptimizedAlgorithm && serverAvailable
-                      ? "MILP optimization will be used to generate an optimal schedule" 
+                      ? "TabuSearch optimization will be used to generate an optimal schedule" 
                       : "Simple scheduling will be used (no optimization)"}
                   </Alert>
                 </Tooltip>
