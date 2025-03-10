@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Hospital Staff Scheduler - Corrected Tabu Search Optimization
+Hospital Staff Scheduler: Tabu Search Optimization
 
 This version implements the Tabu Search optimization with specific corrections for:
 1. Proper senior/junior workload distribution
