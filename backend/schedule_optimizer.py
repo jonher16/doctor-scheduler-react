@@ -64,9 +64,9 @@ class ScheduleOptimizer:
 
         # Targets for weekend/holiday assignments
         # Making these more explicit - juniors should work more weekend/holidays
-        self.juniors_holiday_target = 55  # Target for juniors
-        self.seniors_holiday_target = 35  # Target for seniors (20h less)
-        
+        self.juniors_holiday_target = 50  # Target for juniors
+        self.seniors_holiday_target = 42  # Target for seniors (20h less)
+        self.junior_senior_holiday_diff = self.juniors_holiday_target - self.seniors_holiday_target
         # Monthly workload balance thresholds
         # Set this to exactly 10h as requested
         self.max_monthly_variance = 10  # Max difference between doctors in a month
@@ -227,8 +227,26 @@ class ScheduleOptimizer:
                     junior_candidates = [d for d in preferred_docs if d in self.junior_doctors]
                     senior_candidates = [d for d in preferred_docs if d in self.senior_doctors]
                     
-                    # Prioritize juniors for weekend/holiday shifts
-                    preferred_docs = junior_candidates + senior_candidates
+                    # Use a probabilistic approach instead of strict prioritization
+                    if random.random() < 0.6:  # 60% chance to slightly favor juniors
+                        # Interleave juniors and seniors with a slight bias toward juniors
+                        preferred_docs = []
+                        j_idx, s_idx = 0, 0
+                        while j_idx < len(junior_candidates) or s_idx < len(senior_candidates):
+                            # Add two juniors then one senior (2:1 ratio)
+                            if j_idx < len(junior_candidates):
+                                preferred_docs.append(junior_candidates[j_idx])
+                                j_idx += 1
+                            if j_idx < len(junior_candidates):
+                                preferred_docs.append(junior_candidates[j_idx])
+                                j_idx += 1
+                            if s_idx < len(senior_candidates):
+                                preferred_docs.append(senior_candidates[s_idx])
+                                s_idx += 1
+                    else:
+                        # Sometimes just randomize them
+                        preferred_docs = junior_candidates + senior_candidates
+                        random.shuffle(preferred_docs)
                 
                 # Take the required number of preferred doctors if available
                 preferred_selections = []
@@ -425,29 +443,42 @@ class ScheduleOptimizer:
                     diff_gap = (avg_senior - (avg_junior - self.senior_junior_monthly_diff))
                     cost += self.w_senior_workload * diff_gap
 
-        # 6. Weekend/Holiday fairness - use pre-computed assignments and stricter penalties
+        # 6. Weekend/Holiday fairness
         wh_hours = self._calculate_weekend_holiday_hours(schedule)
-        
-        # Calculate average junior and senior weekend/holiday hours
+
+        # Calculate hours for each group
         junior_wh_hours = {doc: wh_hours[doc] for doc in self.junior_doctors}
         senior_wh_hours = {doc: wh_hours[doc] for doc in self.senior_doctors}
-        
+
+        # Calculate within-group variance to ensure fairness within each group
+        if junior_wh_hours:
+            j_values = list(junior_wh_hours.values())
+            junior_wh_variance = max(j_values) - min(j_values) if j_values else 0
+            cost += self.w_wh * (junior_wh_variance ** 1.5)  # Penalize variance within juniors
+
+        if senior_wh_hours:
+            s_values = list(senior_wh_hours.values())
+            senior_wh_variance = max(s_values) - min(s_values) if s_values else 0
+            cost += self.w_wh * (senior_wh_variance ** 1.5)  # Penalize variance within seniors
+
+        # Calculate averages for comparing groups
         avg_junior_wh = sum(junior_wh_hours.values()) / max(len(junior_wh_hours), 1)
         avg_senior_wh = sum(senior_wh_hours.values()) / max(len(senior_wh_hours), 1)
-        
-        # Penalize deviations from targets with stronger penalties
-        # Check if seniors are working too many weekend/holiday hours
-        if avg_senior_wh > self.seniors_holiday_target:
-            cost += self.w_wh * ((avg_senior_wh - self.seniors_holiday_target) ** 2)
-        
-        # Check if juniors are not meeting their target
-        if avg_junior_wh < self.juniors_holiday_target:
-            cost += self.w_wh * ((self.juniors_holiday_target - avg_junior_wh) ** 1.5)
-        
-        # Explicitly check if seniors are working too close to what juniors work
-        if avg_senior_wh > (avg_junior_wh - 15):  # Seniors should work at least 15h less than juniors
-            gap = avg_senior_wh - (avg_junior_wh - 15)
-            cost += self.w_wh * 2 * (gap ** 2)  # Stronger squared penalty
+
+        # Instead of strict adherence to absolute targets, use a ratio approach
+        target_ratio = 0.85  # Seniors should have ~85% of the weekend/holiday hours that juniors have
+
+        # Calculate the ideal senior average based on junior average
+        ideal_senior_avg = avg_junior_wh * target_ratio
+
+        # Add a mild penalty if senior average deviates significantly from ideal
+        if avg_senior_wh > avg_junior_wh:  # Seniors should never have more than juniors
+            # Linear penalty if seniors work more than juniors
+            cost += self.w_wh * 2 * (avg_senior_wh - avg_junior_wh)
+        elif avg_senior_wh < ideal_senior_avg * 0.8:  # Too few shifts for seniors
+            # Mild penalty if seniors work less than 80% of their ideal target
+            # This prevents seniors from getting almost no weekend/holiday shifts
+            cost += self.w_wh * (ideal_senior_avg * 0.8 - avg_senior_wh)
         
         # 7. Preference Adherence Penalty - modified to better handle preferences
         # Calculate preference adherence counts first
@@ -892,7 +923,8 @@ class ScheduleOptimizer:
                     avg_senior = sum(hrs for _, hrs in senior_wh) / len(senior_wh)
                     
                     # If seniors are working too much compared to juniors
-                    if avg_senior > (avg_junior - 15):
+                    if avg_senior > avg_junior:
+                        
                         # Find a weekend/holiday where a senior works and replace with a junior
                         for date in self.all_dates:
                             is_wh = date in self.weekends or date in self.holidays
@@ -910,7 +942,26 @@ class ScheduleOptimizer:
                                     idx, senior_doc = random.choice(senior_indices)
                                     junior_doc = junior_wh[0][0]  # Junior with lowest hours
                                     potential_moves.append((date, shift, idx, senior_doc, junior_doc))
-                
+                    
+                    elif avg_senior < avg_junior * 0.7:  # Seniors have less than 70% of junior hours
+                        # Find weekend/holiday shifts for juniors with highest hours
+                        junior_with_most = max(junior_wh, key=lambda x: x[1])[0]
+                        
+                        # Look for shifts to transfer to seniors with lowest hours
+                        senior_with_least = min(senior_wh, key=lambda x: x[1])[0]
+                        
+                        for date in self.all_dates:
+                            is_wh = date in self.weekends or date in self.holidays
+                            if not is_wh or date not in current_schedule:
+                                continue
+                            
+                            for shift in self.shifts:
+                                if shift not in current_schedule[date]:
+                                    continue
+                                
+                                if junior_with_most in current_schedule[date][shift]:
+                                    idx = current_schedule[date][shift].index(junior_with_most)
+                                    potential_moves.append((date, shift, idx, junior_with_most, senior_with_least))
                 if not potential_moves:
                     continue  # Try another move type if no potential moves
                 
