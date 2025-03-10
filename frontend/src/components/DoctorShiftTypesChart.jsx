@@ -2,20 +2,55 @@ import React, { useState, useEffect } from 'react';
 import { 
   BarChart, 
   Bar, 
+  PieChart,
+  Pie,
+  Cell,
   XAxis, 
   YAxis, 
   CartesianGrid, 
-  Tooltip as ChartTooltip, 
+  Tooltip, 
   Legend, 
   ResponsiveContainer,
-  Cell
+  LabelList
 } from 'recharts';
+import {
+  Typography,
+  Box,
+  Paper,
+  Grid,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Chip,
+  Card,
+  CardContent,
+  Divider,
+  LinearProgress,
+  Tabs,
+  Tab,
+  Badge,
+  Alert,
+  useTheme
+} from '@mui/material';
+import {
+  WbSunny as DayIcon,
+  Brightness3 as NightIcon,
+  Brightness6 as EveningIcon,
+  Stars as PreferenceIcon,
+  Person as PersonIcon,
+  BarChart as BarChartIcon
+} from '@mui/icons-material';
 
 const DoctorShiftTypesChart = ({ doctors, schedule, selectedMonth }) => {
-  // Use the provided selectedMonth or default to current month
-  const month = selectedMonth || new Date().getMonth() + 1;
+  const theme = useTheme();
+  const [tabValue, setTabValue] = useState(0);
   const [shiftData, setShiftData] = useState([]);
   const [totalShifts, setTotalShifts] = useState({ day: 0, evening: 0, night: 0 });
+  const [doctorPreferenceData, setDoctorPreferenceData] = useState([]);
+  const [overallDistribution, setOverallDistribution] = useState([]);
 
   // Process data when schedule, doctors, or selected month changes
   useEffect(() => {
@@ -24,12 +59,22 @@ const DoctorShiftTypesChart = ({ doctors, schedule, selectedMonth }) => {
     const processedData = processScheduleData();
     setShiftData(processedData.shiftData);
     setTotalShifts(processedData.totalShifts);
-  }, [schedule, doctors, month]);
+    setDoctorPreferenceData(processedData.preferenceData);
+    
+    // Calculate overall distribution for pie chart
+    const distribution = [
+      { name: 'Day', value: processedData.totalShifts.day, color: '#FF9800' },
+      { name: 'Evening', value: processedData.totalShifts.evening, color: '#2196F3' },
+      { name: 'Night', value: processedData.totalShifts.night, color: '#673AB7' }
+    ];
+    setOverallDistribution(distribution);
+  }, [schedule, doctors, selectedMonth]);
 
   // Process the schedule data for the chart
   const processScheduleData = () => {
     const doctorShifts = {};
     const totalShiftCounts = { day: 0, evening: 0, night: 0 };
+    const preferenceData = [];
     
     // Initialize data for each doctor
     doctors.forEach(doc => {
@@ -39,7 +84,8 @@ const DoctorShiftTypesChart = ({ doctors, schedule, selectedMonth }) => {
         evening: 0,
         night: 0,
         total: 0,
-        seniority: doc.seniority || 'Junior'
+        seniority: doc.seniority || 'Junior',
+        preference: doc.pref || 'None'
       };
     });
     
@@ -49,7 +95,7 @@ const DoctorShiftTypesChart = ({ doctors, schedule, selectedMonth }) => {
       const date = new Date(dateStr);
       const dateMonth = date.getMonth() + 1; // JavaScript months are 0-indexed
       
-      if (dateMonth === month) {
+      if (dateMonth === selectedMonth) {
         // Process each shift type
         ['Day', 'Evening', 'Night'].forEach(shiftType => {
           if (daySchedule[shiftType]) {
@@ -67,6 +113,43 @@ const DoctorShiftTypesChart = ({ doctors, schedule, selectedMonth }) => {
       }
     });
     
+    // Calculate preference adherence
+    Object.values(doctorShifts).forEach(doctor => {
+      if (doctor.total > 0) {
+        let preferredCount = 0;
+        let nonPreferredCount = 0;
+        
+        if (doctor.preference === 'Day Only') {
+          preferredCount = doctor.day;
+          nonPreferredCount = doctor.evening + doctor.night;
+        } else if (doctor.preference === 'Evening Only') {
+          preferredCount = doctor.evening;
+          nonPreferredCount = doctor.day + doctor.night;
+        } else if (doctor.preference === 'Night Only') {
+          preferredCount = doctor.night;
+          nonPreferredCount = doctor.day + doctor.evening;
+        } else {
+          // No specific preference
+          preferredCount = 0;
+          nonPreferredCount = 0;
+        }
+        
+        const adherencePercentage = doctor.total > 0 && doctor.preference !== 'None' 
+          ? Math.round((preferredCount / doctor.total) * 100) 
+          : null;
+          
+        preferenceData.push({
+          name: doctor.name,
+          seniority: doctor.seniority,
+          preference: doctor.preference,
+          preferred: preferredCount,
+          nonPreferred: nonPreferredCount,
+          total: doctor.total,
+          adherencePercentage
+        });
+      }
+    });
+    
     // Convert to array and sort by total shifts
     const shiftDataArray = Object.values(doctorShifts)
       .filter(doctor => doctor.total > 0) // Only include doctors who worked in this month
@@ -74,7 +157,12 @@ const DoctorShiftTypesChart = ({ doctors, schedule, selectedMonth }) => {
     
     return {
       shiftData: shiftDataArray,
-      totalShifts: totalShiftCounts
+      totalShifts: totalShiftCounts,
+      preferenceData: preferenceData.sort((a, b) => 
+        b.adherencePercentage !== null && a.adherencePercentage !== null 
+          ? b.adherencePercentage - a.adherencePercentage 
+          : (b.adherencePercentage !== null ? -1 : 1)
+      )
     };
   };
 
@@ -91,188 +179,725 @@ const DoctorShiftTypesChart = ({ doctors, schedule, selectedMonth }) => {
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-white p-4 shadow-lg rounded-md">
-          <p className="font-bold">{label}</p>
-          <div className="border-t border-b border-gray-200 my-2"></div>
+        <Paper elevation={3} sx={{ p: 2, backgroundColor: 'white', minWidth: 180 }}>
+          <Typography variant="subtitle2" gutterBottom>{label}</Typography>
+          <Divider sx={{ my: 1 }} />
           
           {payload.map((entry, index) => (
-            <div key={index} className="flex items-center mb-1">
-              <div 
-                className="w-3 h-3 mr-2 rounded-sm"
-                style={{ backgroundColor: entry.color }} 
+            <Box key={index} sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+              <Box 
+                sx={{ 
+                  width: 12, 
+                  height: 12, 
+                  mr: 1, 
+                  borderRadius: 0.5,
+                  backgroundColor: entry.color 
+                }} 
               />
-              <p className="text-sm">
+              <Typography variant="body2">
                 {entry.name}: {entry.value} shift{entry.value !== 1 ? 's' : ''}
-              </p>
-            </div>
+              </Typography>
+            </Box>
           ))}
           
-          <div className="border-t border-gray-200 my-2"></div>
-          <p className="text-sm font-bold">
+          <Divider sx={{ my: 1 }} />
+          <Typography variant="body2" fontWeight="bold">
             Total: {payload.reduce((sum, entry) => sum + entry.value, 0)} shifts
-          </p>
-        </div>
+          </Typography>
+        </Paper>
       );
     }
     return null;
   };
 
+  // Handler for tab change
+  const handleTabChange = (event, newValue) => {
+    setTabValue(newValue);
+  };
+
+  // Color scheme for shift types
+  const shiftColors = {
+    day: '#FF9800',     // Orange for day shifts
+    evening: '#2196F3', // Blue for evening shifts
+    night: '#673AB7'    // Purple for night shifts
+  };
+
+  // Custom legend for charts
+  const renderColorfulLegendText = (value, entry) => {
+    const { color } = entry;
+    return <Typography style={{ color }}>{value}</Typography>;
+  };
+
+  // Helper to get percentage text for pie chart
+  const RADIAN = Math.PI / 180;
+  const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, index, name }) => {
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+    return (
+      <text x={x} y={y} fill="white" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central">
+        {`${name} ${(percent * 100).toFixed(0)}%`}
+      </text>
+    );
+  };
+
   // No data available
   if (shiftData.length === 0) {
     return (
-      <div className="min-h-96 flex justify-center items-center">
-        <div className="bg-blue-50 text-blue-700 p-4 rounded-md w-full max-w-lg">
-          <p className="text-center">
-            No shift data available for {getMonthName(month)}
-          </p>
-        </div>
-      </div>
+      <Box sx={{ minHeight: 400, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <Alert severity="info" sx={{ width: '100%', maxWidth: 600 }}>
+          <Typography variant="body1">
+            No shift data available for {getMonthName(selectedMonth)}
+          </Typography>
+        </Alert>
+      </Box>
     );
   }
 
-  // Colors for the bars
-  const shiftColors = {
-    day: '#FFB74D',    // Orange for day shifts
-    evening: '#42A5F5', // Blue for evening shifts
-    night: '#5C6BC0'    // Indigo for night shifts
-  };
-
   return (
-    <div className="min-h-96">
-      <div className="grid grid-cols-1 gap-6">
-        <div className="bg-white rounded-lg shadow-md">
-          <div className="p-4">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">
-                Shift Type Distribution - {getMonthName(month)} 2025
-              </h2>
-            </div>
-            
-            <div className="mb-6 flex flex-wrap gap-4 justify-center">
-              <div className="flex items-center">
-                <div className="w-4 h-4 bg-orange-400 mr-2 rounded-sm"></div>
-                <span className="text-sm">Day Shifts: {totalShifts.day}</span>
-              </div>
-              <div className="flex items-center">
-                <div className="w-4 h-4 bg-blue-400 mr-2 rounded-sm"></div>
-                <span className="text-sm">Evening Shifts: {totalShifts.evening}</span>
-              </div>
-              <div className="flex items-center">
-                <div className="w-4 h-4 bg-indigo-400 mr-2 rounded-sm"></div>
-                <span className="text-sm">Night Shifts: {totalShifts.night}</span>
-              </div>
-            </div>
-            
-            <div className="h-96">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={shiftData}
-                  margin={{ top: 20, right: 30, left: 20, bottom: 70 }}
-                  barSize={30}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis 
-                    dataKey="name" 
-                    angle={-45} 
-                    textAnchor="end" 
-                    height={70} 
-                    tick={{ fontSize: 12 }}
-                  />
-                  <YAxis 
-                    label={{ 
-                      value: 'Number of Shifts', 
-                      angle: -90, 
-                      position: 'insideLeft',
-                      style: { textAnchor: 'middle' }
-                    }} 
-                  />
-                  <ChartTooltip content={<CustomTooltip />} />
-                  <Legend />
-                  <Bar 
-                    dataKey="day" 
-                    name="Day Shifts" 
-                    stackId="a" 
-                    fill={shiftColors.day} 
-                  />
-                  <Bar 
-                    dataKey="evening" 
-                    name="Evening Shifts" 
-                    stackId="a" 
-                    fill={shiftColors.evening} 
-                  />
-                  <Bar 
-                    dataKey="night" 
-                    name="Night Shifts" 
-                    stackId="a" 
-                    fill={shiftColors.night} 
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-white rounded-lg shadow-md">
-          <div className="p-4">
-            <h2 className="text-xl font-semibold mb-4">
-              Shift Type Analysis by Doctor
-            </h2>
-            <div className="border-b border-gray-200 mb-4"></div>
-            
-            <div className="overflow-x-auto">
-              <table className="min-w-full">
-                <thead>
-                  <tr className="bg-gray-50">
-                    <th className="py-2 px-4 text-left border-b">Doctor</th>
-                    <th className="py-2 px-4 text-center border-b">Seniority</th>
-                    <th className="py-2 px-4 text-center border-b">Day Shifts</th>
-                    <th className="py-2 px-4 text-center border-b">Evening Shifts</th>
-                    <th className="py-2 px-4 text-center border-b">Night Shifts</th>
-                    <th className="py-2 px-4 text-center border-b">Total Shifts</th>
-                    <th className="py-2 px-4 text-center border-b">Shift Pattern</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {shiftData.map((doctor, index) => {
-                    // Calculate percentage distribution for shift pattern visualization
-                    const total = doctor.day + doctor.evening + doctor.night;
-                    const dayPercent = total > 0 ? (doctor.day / total) * 100 : 0;
-                    const eveningPercent = total > 0 ? (doctor.evening / total) * 100 : 0;
-                    const nightPercent = total > 0 ? (doctor.night / total) * 100 : 0;
+    <Box sx={{ minHeight: 400 }}>
+      <Tabs
+        value={tabValue}
+        onChange={handleTabChange}
+        variant="scrollable"
+        scrollButtons="auto"
+        sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}
+      >
+        <Tab 
+          label="Shift Distribution" 
+          icon={<Badge badgeContent={shiftData.length} color="primary"><BarChartIcon sx={{ fontSize: 20 }} /></Badge>} 
+          iconPosition="start"
+        />
+        <Tab 
+          label="Preference Analysis" 
+          icon={<PreferenceIcon />} 
+          iconPosition="start"
+        />
+      </Tabs>
+
+      {/* Shift Distribution Tab */}
+      {tabValue === 0 && (
+        <Grid container spacing={3}>
+          {/* Summary Cards */}
+          <Grid item xs={12} md={4}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  {getMonthName(selectedMonth)} 2025 Summary
+                </Typography>
+                <Divider sx={{ mb: 2 }} />
+
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <DayIcon sx={{ color: shiftColors.day }} />
+                    <Typography variant="body1">Day Shifts: </Typography>
+                    <Chip label={totalShifts.day} color="warning" size="small" />
+                  </Box>
+                  
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <EveningIcon sx={{ color: shiftColors.evening }} />
+                    <Typography variant="body1">Evening Shifts: </Typography>
+                    <Chip label={totalShifts.evening} color="info" size="small" />
+                  </Box>
+                  
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <NightIcon sx={{ color: shiftColors.night }} />
+                    <Typography variant="body1">Night Shifts: </Typography>
+                    <Chip label={totalShifts.night} color="secondary" size="small" />
+                  </Box>
+
+                  <Box sx={{ mt: 1 }}>
+                    <Typography variant="body2" gutterBottom>Total Shifts Distribution</Typography>
+                    <Box sx={{ height: 300 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={overallDistribution}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            label={renderCustomizedLabel}
+                            outerRadius={80}
+                            fill="#8884d8"
+                            dataKey="value"
+                          >
+                            {overallDistribution.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip />
+                          <Legend />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </Box>
+                  </Box>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Main Chart */}
+          <Grid item xs={12} md={8}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  Doctor Shift Distribution - {getMonthName(selectedMonth)} 2025
+                </Typography>
+                <Divider sx={{ mb: 2 }} />
+
+                <Box sx={{ height: 400, mb: 2 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={shiftData}
+                      margin={{ top: 20, right: 30, left: 20, bottom: 70 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis 
+                        dataKey="name" 
+                        angle={-45} 
+                        textAnchor="end" 
+                        height={70} 
+                        tick={{ fontSize: 12 }}
+                      />
+                      <YAxis 
+                        label={{ 
+                          value: 'Number of Shifts', 
+                          angle: -90, 
+                          position: 'insideLeft',
+                          style: { textAnchor: 'middle' }
+                        }} 
+                      />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Legend 
+                        formatter={renderColorfulLegendText}
+                        iconSize={10}
+                      />
+                      <Bar 
+                        dataKey="day" 
+                        name="Day Shifts" 
+                        stackId="a" 
+                        fill={shiftColors.day}
+                        radius={[4, 4, 0, 0]}
+                      >
+                        <LabelList dataKey="day" position="inside" fill="#fff" />
+                      </Bar>
+                      <Bar 
+                        dataKey="evening" 
+                        name="Evening Shifts" 
+                        stackId="a" 
+                        fill={shiftColors.evening}
+                        radius={[0, 0, 0, 0]}
+                      >
+                        <LabelList dataKey="evening" position="inside" fill="#fff" />
+                      </Bar>
+                      <Bar 
+                        dataKey="night" 
+                        name="Night Shifts" 
+                        stackId="a" 
+                        fill={shiftColors.night}
+                        radius={[0, 0, 4, 4]}
+                      >
+                        <LabelList dataKey="night" position="inside" fill="#fff" />
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Detailed Table */}
+          <Grid item xs={12}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  Detailed Shift Analysis by Doctor
+                </Typography>
+                <Divider sx={{ mb: 2 }} />
+
+                <TableContainer component={Paper} variant="outlined">
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow sx={{ backgroundColor: theme.palette.action.hover }}>
+                        <TableCell>Doctor</TableCell>
+                        <TableCell align="center">Seniority</TableCell>
+                        <TableCell align="center">Shift Preference</TableCell>
+                        <TableCell align="center">
+                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <DayIcon sx={{ color: shiftColors.day, mr: 0.5 }} />
+                            Day
+                          </Box>
+                        </TableCell>
+                        <TableCell align="center">
+                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <EveningIcon sx={{ color: shiftColors.evening, mr: 0.5 }} />
+                            Evening
+                          </Box>
+                        </TableCell>
+                        <TableCell align="center">
+                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <NightIcon sx={{ color: shiftColors.night, mr: 0.5 }} />
+                            Night
+                          </Box>
+                        </TableCell>
+                        <TableCell align="center">Total</TableCell>
+                        <TableCell align="center">Shift Pattern</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {shiftData.map((doctor, index) => {
+                        // Calculate percentage distribution for shift pattern visualization
+                        const total = doctor.day + doctor.evening + doctor.night;
+                        const dayPercent = total > 0 ? (doctor.day / total) * 100 : 0;
+                        const eveningPercent = total > 0 ? (doctor.evening / total) * 100 : 0;
+                        const nightPercent = total > 0 ? (doctor.night / total) * 100 : 0;
+                        
+                        // Determine if pattern matches preference
+                        let matchesPreference = false;
+                        if (doctor.preference === 'Day Only' && dayPercent > 70) matchesPreference = true;
+                        else if (doctor.preference === 'Evening Only' && eveningPercent > 70) matchesPreference = true;
+                        else if (doctor.preference === 'Night Only' && nightPercent > 70) matchesPreference = true;
+                        
+                        return (
+                          <TableRow 
+                            key={index} 
+                            sx={{ '&:nth-of-type(odd)': { backgroundColor: theme.palette.action.hover } }}
+                          >
+                            <TableCell>
+                              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                <PersonIcon sx={{ mr: 1, opacity: 0.6 }} />
+                                {doctor.name}
+                              </Box>
+                            </TableCell>
+                            <TableCell align="center">
+                              <Chip 
+                                label={doctor.seniority} 
+                                color={doctor.seniority === 'Senior' ? 'primary' : 'default'} 
+                                size="small"
+                                variant={doctor.seniority === 'Senior' ? 'filled' : 'outlined'}
+                              />
+                            </TableCell>
+                            <TableCell align="center">
+                              {doctor.preference !== 'None' ? (
+                                <Chip 
+                                  label={doctor.preference} 
+                                  color="info" 
+                                  size="small"
+                                />
+                              ) : (
+                                <Typography variant="body2" color="text.secondary">None</Typography>
+                              )}
+                            </TableCell>
+                            <TableCell align="center">
+                              <Chip 
+                                label={doctor.day}
+                                size="small"
+                                variant={doctor.preference === 'Day Only' ? 'filled' : 'outlined'}
+                                color={doctor.preference === 'Day Only' ? 'warning' : 'default'}
+                              />
+                            </TableCell>
+                            <TableCell align="center">
+                              <Chip 
+                                label={doctor.evening}
+                                size="small"
+                                variant={doctor.preference === 'Evening Only' ? 'filled' : 'outlined'}
+                                color={doctor.preference === 'Evening Only' ? 'info' : 'default'}
+                              />
+                            </TableCell>
+                            <TableCell align="center">
+                              <Chip 
+                                label={doctor.night}
+                                size="small"
+                                variant={doctor.preference === 'Night Only' ? 'filled' : 'outlined'}
+                                color={doctor.preference === 'Night Only' ? 'secondary' : 'default'}
+                              />
+                            </TableCell>
+                            <TableCell align="center">
+                              <Typography variant="body1" fontWeight="bold">
+                                {doctor.total}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Box sx={{ position: 'relative', width: '100%' }}>
+                                <Box sx={{ 
+                                  display: 'flex', 
+                                  height: 16, 
+                                  width: '100%', 
+                                  borderRadius: 1, 
+                                  overflow: 'hidden',
+                                  boxShadow: 1
+                                }}>
+                                  {dayPercent > 0 && (
+                                    <Box sx={{ 
+                                      width: `${dayPercent}%`, 
+                                      backgroundColor: shiftColors.day,
+                                      display: 'flex',
+                                      justifyContent: 'center',
+                                      alignItems: 'center',
+                                      color: 'white',
+                                      fontSize: '0.7rem',
+                                      fontWeight: 'bold'
+                                    }}>
+                                      {dayPercent >= 20 && `${Math.round(dayPercent)}%`}
+                                    </Box>
+                                  )}
+                                  {eveningPercent > 0 && (
+                                    <Box sx={{ 
+                                      width: `${eveningPercent}%`, 
+                                      backgroundColor: shiftColors.evening,
+                                      display: 'flex',
+                                      justifyContent: 'center',
+                                      alignItems: 'center',
+                                      color: 'white',
+                                      fontSize: '0.7rem',
+                                      fontWeight: 'bold'
+                                    }}>
+                                      {eveningPercent >= 20 && `${Math.round(eveningPercent)}%`}
+                                    </Box>
+                                  )}
+                                  {nightPercent > 0 && (
+                                    <Box sx={{ 
+                                      width: `${nightPercent}%`, 
+                                      backgroundColor: shiftColors.night,
+                                      display: 'flex',
+                                      justifyContent: 'center',
+                                      alignItems: 'center',
+                                      color: 'white',
+                                      fontSize: '0.7rem',
+                                      fontWeight: 'bold'
+                                    }}>
+                                      {nightPercent >= 20 && `${Math.round(nightPercent)}%`}
+                                    </Box>
+                                  )}
+                                </Box>
+                                
+                                {doctor.preference !== 'None' && (
+                                  <Box sx={{ 
+                                    position: 'absolute', 
+                                    top: -8, 
+                                    right: -8,
+                                  }}>
+                                    {matchesPreference ? (
+                                      <Chip
+                                        label="✓"
+                                        size="small"
+                                        color="success"
+                                        sx={{ height: 16, width: 16, fontSize: '0.7rem' }}
+                                      />
+                                    ) : (
+                                      <Chip
+                                        label="×"
+                                        size="small"
+                                        color="error"
+                                        sx={{ height: 16, width: 16, fontSize: '0.7rem' }}
+                                      />
+                                    )}
+                                  </Box>
+                                )}
+                              </Box>
+                              
+                              <Typography variant="caption" sx={{ display: 'block', mt: 0.5, color: 'text.secondary' }}>
+                                D: {Math.round(dayPercent)}% • E: {Math.round(eveningPercent)}% • N: {Math.round(nightPercent)}%
+                              </Typography>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      )}
+
+      {/* Preference Analysis Tab */}
+      {tabValue === 1 && (
+        <Grid container spacing={3}>
+          <Grid item xs={12}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  Shift Preference Adherence Analysis
+                </Typography>
+                <Divider sx={{ mb: 2 }} />
+                
+                {doctorPreferenceData.filter(d => d.preference !== 'None').length > 0 ? (
+                  <>
+                    <TableContainer component={Paper} variant="outlined" sx={{ mb: 4 }}>
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow sx={{ backgroundColor: theme.palette.action.hover }}>
+                            <TableCell>Doctor</TableCell>
+                            <TableCell align="center">Preference</TableCell>
+                            <TableCell align="center">Preferred Shifts</TableCell>
+                            <TableCell align="center">Other Shifts</TableCell>
+                            <TableCell align="center">Total Shifts</TableCell>
+                            <TableCell align="center">Adherence</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {doctorPreferenceData
+                            .filter(data => data.preference !== 'None')
+                            .map((data, index) => (
+                              <TableRow 
+                                key={index}
+                                sx={{ '&:nth-of-type(odd)': { backgroundColor: theme.palette.action.hover } }}
+                              >
+                                <TableCell>
+                                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                    <PersonIcon sx={{ mr: 1, opacity: 0.6 }} />
+                                    {data.name}
+                                  </Box>
+                                </TableCell>
+                                <TableCell align="center">
+                                  <Chip 
+                                    label={data.preference} 
+                                    color="info" 
+                                    size="small"
+                                  />
+                                </TableCell>
+                                <TableCell align="center">{data.preferred}</TableCell>
+                                <TableCell align="center">{data.nonPreferred}</TableCell>
+                                <TableCell align="center">{data.total}</TableCell>
+                                <TableCell align="center">
+                                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <Box sx={{ width: '70%', mr: 1 }}>
+                                      <LinearProgress 
+                                        variant="determinate" 
+                                        value={data.adherencePercentage || 0}
+                                        color={
+                                          data.adherencePercentage >= 80 ? 'success' :
+                                          data.adherencePercentage >= 50 ? 'warning' : 'error'
+                                        }
+                                        sx={{ height: 10, borderRadius: 5 }}
+                                      />
+                                    </Box>
+                                    <Typography 
+                                      variant="body2"
+                                      color={
+                                        data.adherencePercentage >= 80 ? 'success.main' :
+                                        data.adherencePercentage >= 50 ? 'warning.main' : 'error.main'
+                                      }
+                                    >
+                                      {data.adherencePercentage}%
+                                    </Typography>
+                                  </Box>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
                     
-                    return (
-                      <tr key={index} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                        <td className="py-2 px-4 border-b">{doctor.name}</td>
-                        <td className="py-2 px-4 text-center border-b">
-                          {doctor.seniority}
-                        </td>
-                        <td className="py-2 px-4 text-center border-b">{doctor.day}</td>
-                        <td className="py-2 px-4 text-center border-b">{doctor.evening}</td>
-                        <td className="py-2 px-4 text-center border-b">{doctor.night}</td>
-                        <td className="py-2 px-4 text-center border-b font-bold">{doctor.total}</td>
-                        <td className="py-2 px-4 border-b">
-                          <div className="flex h-5 w-full rounded overflow-hidden" title={`Day: ${dayPercent.toFixed(1)}%, Evening: ${eveningPercent.toFixed(1)}%, Night: ${nightPercent.toFixed(1)}%`}>
-                            {dayPercent > 0 && (
-                              <div style={{ width: `${dayPercent}%`, backgroundColor: shiftColors.day }} />
-                            )}
-                            {eveningPercent > 0 && (
-                              <div style={{ width: `${eveningPercent}%`, backgroundColor: shiftColors.evening }} />
-                            )}
-                            {nightPercent > 0 && (
-                              <div style={{ width: `${nightPercent}%`, backgroundColor: shiftColors.night }} />
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+                    {/* Chart showing preference adherence */}
+                    <Box sx={{ height: 400 }}>
+                      <Typography variant="subtitle1" gutterBottom>
+                        Shift Preference Adherence Chart
+                      </Typography>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                          data={doctorPreferenceData.filter(d => d.preference !== 'None')}
+                          margin={{ top: 20, right: 30, left: 20, bottom: 70 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis 
+                            dataKey="name" 
+                            angle={-45} 
+                            textAnchor="end" 
+                            height={70} 
+                            tick={{ fontSize: 12 }}
+                          />
+                          <YAxis 
+                            label={{ 
+                              value: 'Number of Shifts', 
+                              angle: -90, 
+                              position: 'insideLeft',
+                              style: { textAnchor: 'middle' }
+                            }} 
+                          />
+                          <Tooltip />
+                          <Legend />
+                          <Bar 
+                            dataKey="preferred" 
+                            name="Preferred Shifts" 
+                            stackId="a" 
+                            fill={theme.palette.success.main}
+                            radius={[4, 4, 0, 0]}
+                          >
+                            <LabelList dataKey="preferred" position="inside" fill="#fff" />
+                          </Bar>
+                          <Bar 
+                            dataKey="nonPreferred" 
+                            name="Other Shifts" 
+                            stackId="a" 
+                            fill={theme.palette.error.light}
+                            radius={[0, 0, 4, 4]}
+                          >
+                            <LabelList dataKey="nonPreferred" position="inside" fill="#fff" />
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </Box>
+                  </>
+                ) : (
+                  <Alert severity="info" sx={{ width: '100%' }}>
+                    <Typography variant="body1">
+                      No doctors with shift preferences found in the current schedule.
+                    </Typography>
+                  </Alert>
+                )}
+              </CardContent>
+            </Card>
+          </Grid>
+                
+          {/* Summary Card for Preference Trends */}
+          {doctorPreferenceData.filter(d => d.preference !== 'None').length > 0 && (
+            <Grid item xs={12}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Preference Adherence Summary
+                  </Typography>
+                  <Divider sx={{ mb: 2 }} />
+                  
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} md={6}>
+                      <Paper elevation={2} sx={{ p: 2, bgcolor: theme.palette.background.default }}>
+                        <Typography variant="subtitle1" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
+                          <DayIcon sx={{ mr: 1, color: shiftColors.day }} />
+                          Day Shift Preferences
+                        </Typography>
+                        
+                        {doctorPreferenceData.filter(d => d.preference === 'Day Only').length > 0 ? (
+                          <Box>
+                            {doctorPreferenceData
+                              .filter(d => d.preference === 'Day Only')
+                              .map((doc, index) => (
+                                <Box key={index} sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                  <Typography variant="body2">{doc.name}:</Typography>
+                                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                    <Box sx={{ width: 120, mr: 1 }}>
+                                      <LinearProgress 
+                                        variant="determinate" 
+                                        value={doc.adherencePercentage || 0}
+                                        color={
+                                          doc.adherencePercentage >= 80 ? 'success' :
+                                          doc.adherencePercentage >= 50 ? 'warning' : 'error'
+                                        }
+                                        sx={{ height: 8, borderRadius: 4 }}
+                                      />
+                                    </Box>
+                                    <Typography variant="body2">{doc.adherencePercentage}%</Typography>
+                                  </Box>
+                                </Box>
+                              ))}
+                          </Box>
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">
+                            No doctors with Day Only preference
+                          </Typography>
+                        )}
+                      </Paper>
+                    </Grid>
+                    
+                    <Grid item xs={12} md={6}>
+                      <Paper elevation={2} sx={{ p: 2, bgcolor: theme.palette.background.default }}>
+                        <Typography variant="subtitle1" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
+                          <NightIcon sx={{ mr: 1, color: shiftColors.night }} />
+                          Night Shift Preferences
+                        </Typography>
+                        
+                        {doctorPreferenceData.filter(d => d.preference === 'Night Only').length > 0 ? (
+                          <Box>
+                            {doctorPreferenceData
+                              .filter(d => d.preference === 'Night Only')
+                              .map((doc, index) => (
+                                <Box key={index} sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                  <Typography variant="body2">{doc.name}:</Typography>
+                                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                    <Box sx={{ width: 120, mr: 1 }}>
+                                      <LinearProgress 
+                                        variant="determinate" 
+                                        value={doc.adherencePercentage || 0}
+                                        color={
+                                          doc.adherencePercentage >= 80 ? 'success' :
+                                          doc.adherencePercentage >= 50 ? 'warning' : 'error'
+                                        }
+                                        sx={{ height: 8, borderRadius: 4 }}
+                                      />
+                                    </Box>
+                                    <Typography variant="body2">{doc.adherencePercentage}%</Typography>
+                                  </Box>
+                                </Box>
+                              ))}
+                          </Box>
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">
+                            No doctors with Night Only preference
+                          </Typography>
+                        )}
+                      </Paper>
+                    </Grid>
+                    
+                    <Grid item xs={12}>
+                      <Paper elevation={2} sx={{ p: 2, bgcolor: theme.palette.background.default }}>
+                        <Typography variant="subtitle1" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
+                          <EveningIcon sx={{ mr: 1, color: shiftColors.evening }} />
+                          Evening Shift Preferences
+                        </Typography>
+                        
+                        {doctorPreferenceData.filter(d => d.preference === 'Evening Only').length > 0 ? (
+                          <Box>
+                            {doctorPreferenceData
+                              .filter(d => d.preference === 'Evening Only')
+                              .map((doc, index) => (
+                                <Box key={index} sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                  <Typography variant="body2">{doc.name}:</Typography>
+                                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                    <Box sx={{ width: 120, mr: 1 }}>
+                                      <LinearProgress 
+                                        variant="determinate" 
+                                        value={doc.adherencePercentage || 0}
+                                        color={
+                                          doc.adherencePercentage >= 80 ? 'success' :
+                                          doc.adherencePercentage >= 50 ? 'warning' : 'error'
+                                        }
+                                        sx={{ height: 8, borderRadius: 4 }}
+                                      />
+                                    </Box>
+                                    <Typography variant="body2">{doc.adherencePercentage}%</Typography>
+                                  </Box>
+                                </Box>
+                              ))}
+                          </Box>
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">
+                            No doctors with Evening Only preference
+                          </Typography>
+                        )}
+                      </Paper>
+                    </Grid>
+                    
+                    <Grid item xs={12}>
+                      <Alert severity="info">
+                        <Typography variant="body2">
+                          <b>Note:</b> Higher preference adherence percentage indicates that doctors are assigned 
+                          to their preferred shift types more often. This is important for doctor satisfaction and 
+                          may influence their performance and well-being.
+                        </Typography>
+                      </Alert>
+                    </Grid>
+                  </Grid>
+                </CardContent>
+              </Card>
+            </Grid>
+          )}
+        </Grid>
+      )}
+    </Box>
   );
 };
 

@@ -93,7 +93,7 @@ function YearlySchedule({ doctors, schedule }) {
 
   return (
     <Box sx={{ minHeight: '400px' }}>
-      <Typography variant="h5" gutterBottom>Yearly Schedule Overview</Typography>
+      <Typography variant="h5" gutterBottom>Yearly Shifts</Typography>
       <TableContainer component={Paper}>
         <Table>
           <TableHead>

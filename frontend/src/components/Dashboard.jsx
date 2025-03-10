@@ -367,7 +367,7 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
               />
               <Tab 
                 icon={<CalendarMonthIcon />} 
-                label="Yearly Schedule" 
+                label="Yearly Shifts" 
                 iconPosition="start" 
               />
               <Tab 
