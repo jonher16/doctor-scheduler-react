@@ -106,7 +106,7 @@ class ScheduleOptimizer:
         self.w_rest = 500        # Inadequate rest after night shift - hard constraint
         self.w_senior_holiday = 1000  # Senior working on long holidays - hard constraint
         self.w_balance = 30      # Increased penalty for monthly workload balance (was 10)
-        self.w_wh = 5            # Increased penalty for weekend/holiday distribution (was 1)
+        self.w_wh = 30            # Increased penalty for weekend/holiday distribution (was 1)
         self.w_pref = {          # Preference violations with seniors getting priority
             "Junior": 10,        # For juniors
             "Senior": 25         # For seniors - increased to give seniors higher priority
@@ -629,8 +629,8 @@ class ScheduleOptimizer:
             
             # Decide which type of move to prioritize based on issues
             move_type = random.choices(
-                ["evening_preference", "senior_workload", "monthly_balance", "random"],
-                weights=[0.4, 0.3, 0.2, 0.1],  # Prioritize evening preferences and senior workload
+                ["evening_preference", "senior_workload", "monthly_balance", "weekend_holiday_balance","random"],
+                weights=[0.4, 0.3, 0.2, 0.2, 0.1],  # Prioritize evening preferences and senior workload
                 k=1
             )[0]
             
@@ -833,7 +833,124 @@ class ScheduleOptimizer:
                         new_doctor = random.choice(available_docs)
                 else:
                     continue  # Lowest doctor not available
-            
+            # 4. Weekend/Holiday balance move
+            elif move_type == "weekend_holiday_balance":
+                # Calculate current weekend/holiday hours for all doctors
+                wh_hours = self._calculate_weekend_holiday_hours(current_schedule)
+                
+                # Sort doctors by weekend/holiday hours (within their seniority group)
+                junior_wh = [(doc, wh_hours.get(doc, 0)) for doc in self.junior_doctors]
+                senior_wh = [(doc, wh_hours.get(doc, 0)) for doc in self.senior_doctors]
+                
+                junior_wh.sort(key=lambda x: x[1])  # Sort by hours (ascending)
+                senior_wh.sort(key=lambda x: x[1])  # Sort by hours (ascending)
+                
+                # Try to find a weekend/holiday shift to move from highest to lowest
+                potential_moves = []
+                
+                # 1. First try to balance juniors
+                if len(junior_wh) >= 2 and junior_wh[-1][1] - junior_wh[0][1] > 16:
+                    highest_doc, highest_hours = junior_wh[-1]
+                    lowest_doc, lowest_hours = junior_wh[0]
+                    
+                    # Find weekend/holiday shifts where the highest doctor works
+                    for date in self.all_dates:
+                        is_wh = date in self.weekends or date in self.holidays
+                        if not is_wh or date not in current_schedule:
+                            continue
+                        
+                        for shift in self.shifts:
+                            if shift not in current_schedule[date]:
+                                continue
+                            
+                            if highest_doc in current_schedule[date][shift]:
+                                idx = current_schedule[date][shift].index(highest_doc)
+                                potential_moves.append((date, shift, idx, highest_doc, lowest_doc))
+                
+                # 2. Then try to balance seniors
+                if len(senior_wh) >= 2 and senior_wh[-1][1] - senior_wh[0][1] > 16:
+                    highest_doc, highest_hours = senior_wh[-1]
+                    lowest_doc, lowest_hours = senior_wh[0]
+                    
+                    # Find weekend/holiday shifts where the highest doctor works
+                    for date in self.all_dates:
+                        is_wh = date in self.weekends or date in self.holidays
+                        if not is_wh or date not in current_schedule:
+                            continue
+                        
+                        for shift in self.shifts:
+                            if shift not in current_schedule[date]:
+                                continue
+                            
+                            if highest_doc in current_schedule[date][shift]:
+                                idx = current_schedule[date][shift].index(highest_doc)
+                                potential_moves.append((date, shift, idx, highest_doc, lowest_doc))
+                
+                # 3. Finally, ensure proper junior/senior split
+                if junior_wh and senior_wh:
+                    avg_junior = sum(hrs for _, hrs in junior_wh) / len(junior_wh)
+                    avg_senior = sum(hrs for _, hrs in senior_wh) / len(senior_wh)
+                    
+                    # If seniors are working too much compared to juniors
+                    if avg_senior > (avg_junior - 15):
+                        # Find a weekend/holiday where a senior works and replace with a junior
+                        for date in self.all_dates:
+                            is_wh = date in self.weekends or date in self.holidays
+                            if not is_wh or date not in current_schedule:
+                                continue
+                            
+                            for shift in self.shifts:
+                                if shift not in current_schedule[date]:
+                                    continue
+                                
+                                senior_indices = [(i, doc) for i, doc in enumerate(current_schedule[date][shift]) 
+                                                if doc in self.senior_doctors]
+                                
+                                if senior_indices:
+                                    idx, senior_doc = random.choice(senior_indices)
+                                    junior_doc = junior_wh[0][0]  # Junior with lowest hours
+                                    potential_moves.append((date, shift, idx, senior_doc, junior_doc))
+                
+                if not potential_moves:
+                    continue  # Try another move type if no potential moves
+                
+                # Choose one of the potential moves
+                date, shift, idx, old_doctor, new_doctor = random.choice(potential_moves)
+                
+                # Check if the replacement doctor is available
+                if not self._is_doctor_available(new_doctor, date, shift):
+                    continue  # Try another move if doctor not available
+                
+                # Check if already assigned to another shift that day
+                already_assigned = False
+                for other_shift in self.shifts:
+                    if other_shift == shift:
+                        continue
+                    if other_shift in current_schedule[date] and new_doctor in current_schedule[date][other_shift]:
+                        already_assigned = True
+                        break
+                
+                if already_assigned:
+                    continue  # Try another move if doctor already assigned
+                
+                # Create new schedule with this move
+                new_schedule = {
+                    k: v if k != date else {
+                        s: list(doctors) if s != shift else [
+                            doc if i != idx else new_doctor
+                            for i, doc in enumerate(doctors)
+                        ]
+                        for s, doctors in v.items()
+                    }
+                    for k, v in current_schedule.items()
+                }
+                
+                # Record the move
+                move = (date, shift, old_doctor, new_doctor)
+                neighbors.append((new_schedule, move))
+                continue  # Move successful, go to next iteration
+        
+    # If we couldn't generate enough smart moves, fall back to random ones
             # 4. Random move as fallback
             else:
                 # Select a random date and shift

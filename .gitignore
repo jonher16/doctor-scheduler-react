@@ -32,3 +32,4 @@ bundled_backend
 .venv
 winehq.key
 default
+backend/__pycache__/schedule_optimizer.cpython-312.pyc
