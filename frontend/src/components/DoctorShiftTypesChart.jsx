@@ -113,28 +113,57 @@ const DoctorShiftTypesChart = ({ doctors, schedule, selectedMonth }) => {
       }
     });
     
-    // Calculate preference adherence
+    // Calculate preference adherence with weighted metrics
     Object.values(doctorShifts).forEach(doctor => {
       if (doctor.total > 0) {
         let preferredCount = 0;
         let nonPreferredCount = 0;
+        let weightedAdherencePercentage = null;
         
+        // Count shifts by preference
         if (doctor.preference === 'Day Only') {
           preferredCount = doctor.day;
           nonPreferredCount = doctor.evening + doctor.night;
+          
+          // Calculate weighted adherence - account for ratio of shift types
+          // Day shifts are typically 2 per day (40% of total shifts)
+          if (totalShiftCounts.day > 0) {
+            weightedAdherencePercentage = Math.round((doctor.day / totalShiftCounts.day) / 
+              ((doctor.day / Math.max(1, totalShiftCounts.day)) + 
+               (doctor.evening / Math.max(1, totalShiftCounts.evening)) + 
+               (doctor.night / Math.max(1, totalShiftCounts.night))) * 100);
+          }
         } else if (doctor.preference === 'Evening Only') {
           preferredCount = doctor.evening;
           nonPreferredCount = doctor.day + doctor.night;
+          
+          // Evening shifts are typically 1 per day (20% of total shifts)
+          // We apply a higher weight to account for fewer available evening shifts
+          if (totalShiftCounts.evening > 0) {
+            weightedAdherencePercentage = Math.round((doctor.evening / totalShiftCounts.evening) / 
+              ((doctor.day / Math.max(1, totalShiftCounts.day)) + 
+               (doctor.evening / Math.max(1, totalShiftCounts.evening)) + 
+               (doctor.night / Math.max(1, totalShiftCounts.night))) * 100);
+          }
         } else if (doctor.preference === 'Night Only') {
           preferredCount = doctor.night;
           nonPreferredCount = doctor.day + doctor.evening;
+          
+          // Night shifts are typically 2 per day (40% of total shifts)
+          if (totalShiftCounts.night > 0) {
+            weightedAdherencePercentage = Math.round((doctor.night / totalShiftCounts.night) / 
+              ((doctor.day / Math.max(1, totalShiftCounts.day)) + 
+               (doctor.evening / Math.max(1, totalShiftCounts.evening)) + 
+               (doctor.night / Math.max(1, totalShiftCounts.night))) * 100);
+          }
         } else {
           // No specific preference
           preferredCount = 0;
           nonPreferredCount = 0;
         }
         
-        const adherencePercentage = doctor.total > 0 && doctor.preference !== 'None' 
+        // Standard (unweighted) adherence percentage
+        const standardAdherencePercentage = doctor.total > 0 && doctor.preference !== 'None' 
           ? Math.round((preferredCount / doctor.total) * 100) 
           : null;
           
@@ -145,7 +174,8 @@ const DoctorShiftTypesChart = ({ doctors, schedule, selectedMonth }) => {
           preferred: preferredCount,
           nonPreferred: nonPreferredCount,
           total: doctor.total,
-          adherencePercentage
+          adherencePercentage: standardAdherencePercentage,
+          weightedAdherencePercentage: weightedAdherencePercentage
         });
       }
     });
@@ -308,28 +338,83 @@ const DoctorShiftTypesChart = ({ doctors, schedule, selectedMonth }) => {
                   </Box>
 
                   <Box sx={{ mt: 1 }}>
-                    <Typography variant="body2" gutterBottom>Total Shifts Distribution</Typography>
-                    <Box sx={{ height: 300 }}>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={overallDistribution}
-                            cx="50%"
-                            cy="50%"
-                            labelLine={false}
-                            label={renderCustomizedLabel}
-                            outerRadius={80}
-                            fill="#8884d8"
-                            dataKey="value"
-                          >
-                            {overallDistribution.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={entry.color} />
-                            ))}
-                          </Pie>
-                          <Tooltip />
-                          <Legend />
-                        </PieChart>
-                      </ResponsiveContainer>
+                    <Typography variant="body2" gutterBottom>Monthly Shift Balance</Typography>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
+                      {/* Shift distribution by seniority */}
+                      <Box>
+                        <Typography variant="caption" sx={{ mb: 1, display: 'block' }}>
+                          Senior vs. Junior Distribution
+                        </Typography>
+                        
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">Senior Doctors</Typography>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Box sx={{ 
+                                flex: 1, 
+                                display: 'flex', 
+                                height: 8, 
+                                borderRadius: 4,
+                                overflow: 'hidden'
+                              }}>
+                                <Box sx={{ 
+                                  width: `${shiftData.filter(d => d.seniority === 'Senior').reduce((sum, doc) => sum + doc.day, 0) / 
+                                    Math.max(1, totalShifts.day) * 100}%`, 
+                                  bgcolor: shiftColors.day 
+                                }} />
+                                <Box sx={{ 
+                                  width: `${shiftData.filter(d => d.seniority === 'Senior').reduce((sum, doc) => sum + doc.evening, 0) / 
+                                    Math.max(1, totalShifts.evening) * 100}%`, 
+                                  bgcolor: shiftColors.evening 
+                                }} />
+                                <Box sx={{ 
+                                  width: `${shiftData.filter(d => d.seniority === 'Senior').reduce((sum, doc) => sum + doc.night, 0) / 
+                                    Math.max(1, totalShifts.night) * 100}%`, 
+                                  bgcolor: shiftColors.night 
+                                }} />
+                              </Box>
+                              <Typography variant="caption">
+                                {Math.round(shiftData.filter(d => d.seniority === 'Senior').reduce((sum, doc) => sum + doc.total, 0) / 
+                                  Math.max(1, Object.values(totalShifts).reduce((a, b) => a + b, 0)) * 100)}%
+                              </Typography>
+                            </Box>
+                          </Box>
+                          
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">Junior Doctors</Typography>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Box sx={{ 
+                                flex: 1, 
+                                display: 'flex', 
+                                height: 8, 
+                                borderRadius: 4,
+                                overflow: 'hidden'
+                              }}>
+                                <Box sx={{ 
+                                  width: `${shiftData.filter(d => d.seniority !== 'Senior').reduce((sum, doc) => sum + doc.day, 0) / 
+                                    Math.max(1, totalShifts.day) * 100}%`, 
+                                  bgcolor: shiftColors.day 
+                                }} />
+                                <Box sx={{ 
+                                  width: `${shiftData.filter(d => d.seniority !== 'Senior').reduce((sum, doc) => sum + doc.evening, 0) / 
+                                    Math.max(1, totalShifts.evening) * 100}%`, 
+                                  bgcolor: shiftColors.evening 
+                                }} />
+                                <Box sx={{ 
+                                  width: `${shiftData.filter(d => d.seniority !== 'Senior').reduce((sum, doc) => sum + doc.night, 0) / 
+                                    Math.max(1, totalShifts.night) * 100}%`, 
+                                  bgcolor: shiftColors.night 
+                                }} />
+                              </Box>
+                              <Typography variant="caption">
+                                {Math.round(shiftData.filter(d => d.seniority !== 'Senior').reduce((sum, doc) => sum + doc.total, 0) / 
+                                  Math.max(1, Object.values(totalShifts).reduce((a, b) => a + b, 0)) * 100)}%
+                              </Typography>
+                            </Box>
+                          </Box>
+                        </Box>
+                      </Box>
+                      
                     </Box>
                   </Box>
                 </Box>
@@ -344,9 +429,9 @@ const DoctorShiftTypesChart = ({ doctors, schedule, selectedMonth }) => {
                 <Typography variant="h6" gutterBottom>
                   Doctor Shift Distribution - {getMonthName(selectedMonth)} 2025
                 </Typography>
-                <Divider sx={{ mb: 2 }} />
+                <Divider  />
 
-                <Box sx={{ height: 400, mb: 2 }}>
+                <Box sx={{ height: 500, mb: 2 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
                       data={shiftData}
@@ -635,7 +720,8 @@ const DoctorShiftTypesChart = ({ doctors, schedule, selectedMonth }) => {
                             <TableCell align="center">Preferred Shifts</TableCell>
                             <TableCell align="center">Other Shifts</TableCell>
                             <TableCell align="center">Total Shifts</TableCell>
-                            <TableCell align="center">Adherence</TableCell>
+                            <TableCell align="center">Standard Adherence</TableCell>
+                            <TableCell align="center">Weighted Adherence*</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
@@ -683,6 +769,30 @@ const DoctorShiftTypesChart = ({ doctors, schedule, selectedMonth }) => {
                                       }
                                     >
                                       {data.adherencePercentage}%
+                                    </Typography>
+                                  </Box>
+                                </TableCell>
+                                <TableCell align="center">
+                                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <Box sx={{ width: '70%', mr: 1 }}>
+                                      <LinearProgress 
+                                        variant="determinate" 
+                                        value={data.weightedAdherencePercentage || 0}
+                                        color={
+                                          data.weightedAdherencePercentage >= 80 ? 'success' :
+                                          data.weightedAdherencePercentage >= 50 ? 'warning' : 'error'
+                                        }
+                                        sx={{ height: 10, borderRadius: 5 }}
+                                      />
+                                    </Box>
+                                    <Typography 
+                                      variant="body2"
+                                      color={
+                                        data.weightedAdherencePercentage >= 80 ? 'success.main' :
+                                        data.weightedAdherencePercentage >= 50 ? 'warning.main' : 'error.main'
+                                      }
+                                    >
+                                      {data.weightedAdherencePercentage}%
                                     </Typography>
                                   </Box>
                                 </TableCell>
@@ -887,6 +997,11 @@ const DoctorShiftTypesChart = ({ doctors, schedule, selectedMonth }) => {
                           <b>Note:</b> Higher preference adherence percentage indicates that doctors are assigned 
                           to their preferred shift types more often. This is important for doctor satisfaction and 
                           may influence their performance and well-being.
+                        </Typography>
+                        <Typography variant="body2" sx={{ mt: 1 }}>
+                          <b>* Weighted Adherence:</b> Accounts for the fact that there are fewer evening shifts (1 per day) 
+                          compared to day and night shifts (2 per day each). This provides a more fair comparison, especially 
+                          for doctors with "Evening Only" preferences who have fewer opportunities to work their preferred shifts.
                         </Typography>
                       </Alert>
                     </Grid>

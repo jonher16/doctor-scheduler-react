@@ -357,12 +357,12 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
               />
               <Tab 
                 icon={<DayIcon />} 
-                label="Shift Types" 
+                label="Monthly Shift Types" 
                 iconPosition="start" 
               />
               <Tab 
                 icon={<TimelineIcon />} 
-                label="Weekend/Holiday Balance" 
+                label="Yearly Weekends/Holidays" 
                 iconPosition="start" 
               />
               <Tab 
@@ -372,7 +372,7 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
               />
               <Tab 
                 icon={<AnalyticsIcon />} 
-                label="Statistics" 
+                label="Yearly Hours Summary" 
                 iconPosition="start" 
               />
             </Tabs>
