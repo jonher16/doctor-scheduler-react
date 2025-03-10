@@ -14,6 +14,9 @@ import threading
 import time
 from flask import Flask, request, jsonify, Response, stream_with_context
 from flask_cors import CORS
+from flask.logging import default_handler
+import werkzeug._internal as _werkzeug_internal
+
 
 # Import the relaxed optimizer
 from schedule_optimizer import optimize_schedule, ScheduleOptimizer
@@ -24,6 +27,10 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger("SchedulerServer")
+
+# Completely disable Werkzeug logger before creating the Flask app
+#werkzeug_logger = logging.getLogger('werkzeug')
+#werkzeug_logger.setLevel(logging.ERROR)  # Belt and suspenders approach
 
 app = Flask(__name__)
 CORS(app)  # Enable Cross-Origin Resource Sharing
