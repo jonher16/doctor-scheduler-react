@@ -540,9 +540,9 @@ const DoctorShiftTypesChart = ({ doctors, schedule, selectedMonth }) => {
                         
                         // Determine if pattern matches preference
                         let matchesPreference = false;
-                        if (doctor.preference === 'Day Only' && dayPercent > 70) matchesPreference = true;
-                        else if (doctor.preference === 'Evening Only' && eveningPercent > 70) matchesPreference = true;
-                        else if (doctor.preference === 'Night Only' && nightPercent > 70) matchesPreference = true;
+                        if (doctor.preference === 'Day Only' && dayPercent > 60) matchesPreference = true;
+                        else if (doctor.preference === 'Evening Only' && eveningPercent > 60) matchesPreference = true;
+                        else if (doctor.preference === 'Night Only' && nightPercent > 60) matchesPreference = true;
                         
                         return (
                           <TableRow 
