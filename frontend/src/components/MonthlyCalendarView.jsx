@@ -27,7 +27,7 @@ import {
   Edit as EditIcon,
 } from '@mui/icons-material';
 
-function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate }) {
+function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate, selectedMonth }) {
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(2025); // Fixed to 2025 for this app
   const [calendarDays, setCalendarDays] = useState([]);
@@ -37,6 +37,14 @@ function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate }) 
   const [selectedDoctors, setSelectedDoctors] = useState([]);
   const [availableDoctors, setAvailableDoctors] = useState([]);
   const [currentSchedule, setCurrentSchedule] = useState({});
+
+  // Add useEffect to respond to selectedMonth changes from parent component
+  useEffect(() => {
+    if (selectedMonth) {
+      // Convert from 1-12 format to 0-11 format
+      setCurrentMonth(selectedMonth - 1);
+    }
+  }, [selectedMonth]);
 
   // Use a soft pastel color palette for doctor identification.
   const doctorColors = React.useMemo(() => {

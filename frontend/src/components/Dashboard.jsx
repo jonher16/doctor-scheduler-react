@@ -26,14 +26,14 @@ import {
   Analytics as AnalyticsIcon,
   Search as SearchIcon,
   CalendarViewMonth as CalendarViewMonthIcon,
-  WbSunny as DayIcon // Add shift icon
+  WbSunny as DayIcon
 } from '@mui/icons-material';
 import MonthlyHours from './MonthlyHours';
 import WeekendHolidayBalance from './WeekendHolidayBalance';
 import YearlySummary from './YearlySummary';
 import MonthlyCalendarView from './MonthlyCalendarView';
 import ExcelExportButton from './ExcelExportButton';
-import DoctorShiftTypesChart from './DoctorShiftTypesChart'; // Import the new component
+import DoctorShiftTypesChart from './DoctorShiftTypesChart';
 
 function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
   const [tabValue, setTabValue] = useState(0);
@@ -51,6 +51,19 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
     severity: 'success'
   });
   
+  // Add state to track schedule type (yearly or monthly)
+  const [scheduleType, setScheduleType] = useState('yearly');
+  const [scheduledMonth, setScheduledMonth] = useState(null);
+  
+  // Function to get month name
+  const getMonthName = (monthNum) => {
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    return months[monthNum - 1];
+  };
+  
   // Update local data when schedule is generated but not when doctors/holidays change
   useEffect(() => {
     // Only update local state when a new schedule is generated (not when doctors change)
@@ -65,6 +78,26 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
       
       if (holidays && Object.keys(holidays).length > 0) {
         setLocalHolidays(JSON.parse(JSON.stringify(holidays)));
+      }
+      
+      // Determine if it's a yearly or monthly schedule by checking dates
+      const months = new Set();
+      Object.keys(schedule).forEach(dateStr => {
+        const month = new Date(dateStr).getMonth() + 1; // Get month as 1-12
+        months.add(month);
+      });
+      
+      if (months.size === 1) {
+        // It's a monthly schedule
+        setScheduleType('monthly');
+        setScheduledMonth(Array.from(months)[0]);
+        
+        // Update the current view month to match the scheduled month
+        setMonth(Array.from(months)[0]);
+      } else {
+        // It's a yearly schedule
+        setScheduleType('yearly');
+        setScheduledMonth(null);
       }
       
       setHasSchedule(true);
@@ -283,12 +316,21 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
                   
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                     <Typography variant="body2">Period:</Typography>
-                    <Typography variant="body1" fontWeight="bold">January - December 2025</Typography>
+                    <Typography variant="body1" fontWeight="bold">
+                      {scheduleType === 'yearly' ? 
+                        'January - December 2025' : 
+                        `${getMonthName(scheduledMonth)} 2025`}
+                    </Typography>
                   </Box>
                   
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                     <Typography variant="body2">Days Covered:</Typography>
-                    <Typography variant="body1" fontWeight="bold">365</Typography>
+                    <Typography variant="body1" fontWeight="bold">
+                      {scheduleType === 'yearly' ? 
+                        '365' : 
+                        // Get the number of days in the month (2025, month, 0) gives last day of the month
+                        `${new Date(2025, scheduledMonth, 0).getDate()}`}
+                    </Typography>
                   </Box>
                   
                   <Box sx={{ mt: 2 }}>
@@ -378,6 +420,7 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
                   schedule={localSchedule}
                   holidays={localHolidays}
                   onScheduleUpdate={handleScheduleUpdate}
+                  selectedMonth={month}
                 />
               )}
               {tabValue === 1 && (
