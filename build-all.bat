@@ -244,6 +244,7 @@ if exist "backend\dist\hospital_backend.exe" (
 :: Copy key Python files as fallback
 copy "backend\app.py" "bundled_backend\" >nul
 copy "backend\schedule_optimizer.py" "bundled_backend\" >nul
+copy "backend\monthly_schedule_optimizer.py" "bundled_backend\" >nul
 
 :: Create the Windows-optimized run_backend.bat file
 echo Creating Windows-optimized run_backend.bat...
