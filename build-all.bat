@@ -46,6 +46,15 @@ if exist "bundled_backend" rmdir /s /q bundled_backend
 mkdir dist
 mkdir bundled_backend
 
+:: Create build directory for icons if it doesn't exist
+echo Creating build directory for icons...
+if not exist "build" mkdir build
+
+:: Copy the icon.svg to the build directory
+echo Copying icon.svg to build directory...
+copy "icon.png" "build\icon.png" >nul
+copy "icon.ico" "build\icon.ico" >nul
+
 :: Install dependencies in root directory if needed
 echo Installing root directory dependencies...
 if not exist "node_modules" (
@@ -684,7 +693,7 @@ echo.
 echo ===== BUILD COMPLETED SUCCESSFULLY! =====
 echo.
 echo The application has been built with Windows path handling fixes and is in the "release" directory:
-echo    - Hospital Scheduler-Setup-1.0.0.exe (Installer)
+echo    - Doctor Scheduler-1.0.0.exe (Bundled App)
 echo.
 echo This build includes:
 echo    1. Fixed main.js with Windows path handling
