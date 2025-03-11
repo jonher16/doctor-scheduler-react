@@ -89,11 +89,12 @@ const theme = createTheme({
 
 // Menu items
 const menuItems = [
-  { text: 'Doctor Configuration', icon: <PersonIcon />, component: 'doctors' },
-  { text: 'Holiday Configuration', icon: <EventNoteIcon />, component: 'holidays' },
-  { text: 'Doctor Availability', icon: <CalendarTodayIcon />, component: 'availability' },
   { text: 'Generate Schedule', icon: <EventIcon />, component: 'generate' },
   { text: 'Dashboard', icon: <DashboardIcon />, component: 'dashboard' },
+  { text: 'Doctor Configuration', icon: <PersonIcon />, component: 'doctors' },
+  { text: 'Holiday Configuration', icon: <EventNoteIcon />, component: 'holidays' },
+  { text: 'Doctor Availability', icon: <CalendarTodayIcon />, component: 'availability' }
+  
 ];
 
 // Determine if we're running in Electron

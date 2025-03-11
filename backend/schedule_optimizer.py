@@ -7,6 +7,7 @@ This version implements the Tabu Search optimization with specific corrections f
 2. Tighter monthly workload balance (targeting 10h variance max)
 3. Better shift preference handling, especially for evening shifts
 4. Proper seniority-preference hierarchy
+5. Fixed duplicate doctor prevention in the same shift
 """
 
 import datetime
@@ -113,6 +114,7 @@ class ScheduleOptimizer:
         }
         self.w_senior_workload = 20  # New penalty for seniors working more than juniors
         self.w_preference_fairness = 5  # New penalty for unfair distribution among same-preference doctors
+        self.w_duplicate_penalty = 10000  # New severe penalty for duplicate doctor in same shift (must be severe)
         
         # Cache doctor availability status for improved performance
         self._availability_cache = {}
@@ -184,6 +186,7 @@ class ScheduleOptimizer:
         This modified version prioritizes appropriate allocation from the start:
         - Evening shifts prioritize doctors with Evening Only preference
         - Senior doctors get fewer weekend/holiday assignments initially
+        - Ensures no doctor appears more than once in the same shift
         """
         doctor_names = [doc["name"] for doc in self.doctors]
         schedule = {}
@@ -251,7 +254,13 @@ class ScheduleOptimizer:
                 # Take the required number of preferred doctors if available
                 preferred_selections = []
                 if preferred_docs:
-                    preferred_selections = preferred_docs[:required]
+                    # Ensure we don't add duplicates
+                    unique_preferred = []
+                    for doc in preferred_docs:
+                        if doc not in unique_preferred:
+                            unique_preferred.append(doc)
+                            
+                    preferred_selections = unique_preferred[:required]
                 
                 # If we need more doctors, get other available doctors
                 remaining_required = required - len(preferred_selections)
@@ -279,15 +288,29 @@ class ScheduleOptimizer:
                     
                     # Take what we need from other candidates
                     if len(other_candidates) <= remaining_required:
-                        other_selections = other_candidates
+                        # Ensure uniqueness
+                        other_selections = []
+                        for doc in other_candidates:
+                            if doc not in other_selections:
+                                other_selections.append(doc)
                     else:
-                        other_selections = other_candidates[:remaining_required]
+                        # Take the subset we need, ensuring uniqueness
+                        other_selections = []
+                        for doc in other_candidates:
+                            if len(other_selections) >= remaining_required:
+                                break
+                            if doc not in other_selections:
+                                other_selections.append(doc)
                 
-                # Combine and assign doctors to this shift
-                assigned = preferred_selections + other_selections
+                # Combine and assign doctors to this shift (ensuring no duplicates)
+                assigned = []
+                for doc in preferred_selections + other_selections:
+                    if doc not in assigned:  # Enforce no duplicates
+                        assigned.append(doc)
                 
                 # If we still don't have enough, try to relax "assigned today" constraint
-                if len(assigned) < required:
+                remaining_required = required - len(assigned)
+                if remaining_required > 0:
                     # Consider doctors already assigned today but available for this shift
                     additional_candidates = [
                         d for d in doctor_names
@@ -296,22 +319,32 @@ class ScheduleOptimizer:
                         self._is_doctor_available(d, date, shift)
                     ]
                     
-                    needed = required - len(assigned)
-                    if len(additional_candidates) <= needed:
-                        assigned.extend(additional_candidates)
-                    else:
-                        assigned.extend(random.sample(additional_candidates, needed))
+                    # Apply same uniqueness check
+                    additional_selections = []
+                    for doc in additional_candidates:
+                        if len(additional_selections) >= remaining_required:
+                            break
+                        if doc not in additional_selections:
+                            additional_selections.append(doc)
+                            
+                    assigned.extend(additional_selections)
+                
+                # Final check for uniqueness (belt and suspenders)
+                final_assigned = []
+                for doc in assigned:
+                    if doc not in final_assigned:
+                        final_assigned.append(doc)
                 
                 # If still not enough, log the issue but continue with best effort
-                if len(assigned) < required:
-                    logger.warning(f"Not enough available doctors for {date}, {shift}. Need {required}, have {len(assigned)}")
+                if len(final_assigned) < required:
+                    logger.warning(f"Not enough available doctors for {date}, {shift}. Need {required}, have {len(final_assigned)}")
                 
                 # Update the schedule
-                schedule[date][shift] = assigned
-                assigned_today.update(assigned)
+                schedule[date][shift] = final_assigned
+                assigned_today.update(final_assigned)
                 
                 # Update assignment tracking
-                for doctor in assigned:
+                for doctor in final_assigned:
                     month_assignments[doctor][month] += 1
                     if is_weekend_or_holiday:
                         weekend_holiday_assignments[doctor] += 1
@@ -328,6 +361,7 @@ class ScheduleOptimizer:
         2. Tighter monthly balance enforcement
         3. Better shift preference handling
         4. Preference fairness among doctors with same preference
+        5. Added severe penalty for duplicate doctors in the same shift
         """
         cost = 0.0
         doctor_names = [doc["name"] for doc in self.doctors]
@@ -359,7 +393,7 @@ class ScheduleOptimizer:
                     if not self._is_doctor_available(doctor, date, shift):
                         cost += self.w_avail
 
-        # 2. One shift per day penalty (hard constraint)
+        # 2a. One shift per day penalty (hard constraint)
         for date in self.all_dates:
             if date not in schedule:
                 continue
@@ -369,20 +403,33 @@ class ScheduleOptimizer:
                 if shift not in schedule[date]:
                     continue
 
-                shift_doctors = schedule[date][shift]
-                unique_doctors = set(shift_doctors)
-                
-                # If we have duplicates, penalize heavily
-                if len(shift_doctors) > len(unique_doctors):
-                    duplicate_count = len(shift_doctors) - len(unique_doctors)
-                    cost += self.w_one_shift * 2 * duplicate_count  # High penalty
-
                 for doctor in schedule[date][shift]:
                     assignments[doctor] = assignments.get(doctor, 0) + 1
                     
             for count in assignments.values():
                 if count > 1:
                     cost += self.w_one_shift * (count - 1)
+
+        # 2b. Check for duplicate doctors in the same shift (severe constraint violation)
+        for date in self.all_dates:
+            if date not in schedule:
+                continue
+                
+            for shift in self.shifts:
+                if shift not in schedule[date]:
+                    continue
+                    
+                # Check for duplicates in this shift
+                shift_doctors = schedule[date][shift]
+                unique_doctors = set(shift_doctors)
+                if len(shift_doctors) > len(unique_doctors):
+                    # Count duplicates and apply severe penalty
+                    duplicate_count = len(shift_doctors) - len(unique_doctors)
+                    cost += self.w_duplicate_penalty * duplicate_count
+                    
+                    # Log the issue for debugging
+                    duplicates = [d for d in shift_doctors if shift_doctors.count(d) > 1]
+                    logger.warning(f"Duplicate doctor(s) detected in {date}, {shift}: {duplicates}")
 
         # 3. Rest constraints: penalize a night shift followed by a day or evening shift (hard constraint)
         for i in range(len(self.all_dates) - 1):
@@ -419,7 +466,6 @@ class ScheduleOptimizer:
             senior_hours = {doc: monthly_hours[doc].get(month, 0) for doc in self.senior_doctors}
             
             # Calculate overall monthly variance across all doctors (should be ≤ 10h)
-            # FIX: Extract actual hour values for the current month, not the dictionaries
             all_hours = [hours.get(month, 0) for doctor, hours in monthly_hours.items()]
             active_hours = [h for h in all_hours if h > 0]
             
@@ -627,6 +673,7 @@ class ScheduleOptimizer:
         - Evening shift preference doctors getting more evening shifts
         - Seniors working fewer hours, especially on weekends/holidays
         - Monthly workload balance
+        - Checks for and prevents duplicate doctors in the same shift
         """
         neighbors = []
         attempts = 0
@@ -668,13 +715,84 @@ class ScheduleOptimizer:
             
             # Decide which type of move to prioritize based on issues
             move_type = random.choices(
-                ["evening_preference", "senior_workload", "monthly_balance", "weekend_holiday_balance","random"],
-                weights=[0.4, 0.3, 0.2, 0.2, 0.1],  # Prioritize evening preferences and senior workload
+                ["evening_preference", "senior_workload", "monthly_balance", "weekend_holiday_balance", "fix_duplicates", "random"],
+                weights=[0.3, 0.3, 0.2, 0.2, 0.5, 0.1],  # Added high priority for fixing duplicates
                 k=1
             )[0]
             
+            # New special mode: Look for and fix duplicate doctors in shifts
+            if move_type == "fix_duplicates":
+                duplicates_found = False
+                for date in self.all_dates:
+                    if date not in current_schedule:
+                        continue
+                    
+                    for shift in self.shifts:
+                        if shift not in current_schedule[date]:
+                            continue
+                            
+                        # Check for duplicates in this shift
+                        shift_doctors = current_schedule[date][shift]
+                        seen_doctors = set()
+                        duplicate_indices = []
+                        
+                        for i, doctor in enumerate(shift_doctors):
+                            if doctor in seen_doctors:
+                                duplicate_indices.append(i)
+                            else:
+                                seen_doctors.add(doctor)
+                        
+                        if duplicate_indices:
+                            duplicates_found = True
+                            # Get a duplicate doctor to replace
+                            idx = random.choice(duplicate_indices)
+                            old_doctor = shift_doctors[idx]
+                            
+                            # Find alternative doctors who aren't in this shift
+                            available_doctors = []
+                            for doctor in [doc["name"] for doc in self.doctors]:
+                                # Skip doctors already in this shift
+                                if doctor in shift_doctors:
+                                    continue
+                                    
+                                # Must be available for this shift
+                                if not self._is_doctor_available(doctor, date, shift):
+                                    continue
+                                    
+                                # Check if not already assigned to another shift today
+                                already_assigned = False
+                                for other_shift in self.shifts:
+                                    if other_shift == shift:
+                                        continue
+                                    if other_shift in current_schedule[date] and doctor in current_schedule[date][other_shift]:
+                                        already_assigned = True
+                                        break
+                                        
+                                if not already_assigned:
+                                    available_doctors.append(doctor)
+                            
+                            if available_doctors:
+                                new_doctor = random.choice(available_doctors)
+                                
+                                # Create new schedule with this replacement (fixing the duplicate)
+                                new_schedule = self._create_new_schedule(current_schedule, date, shift, idx, old_doctor, new_doctor)
+                                
+                                # Record the move
+                                move = (date, shift, old_doctor, new_doctor)
+                                neighbors.append((new_schedule, move))
+                                
+                                # Break after finding the first duplicate to fix
+                                break
+                    
+                    if duplicates_found and neighbors:
+                        break
+                        
+                # If we found and fixed a duplicate, continue to the next iteration
+                if duplicates_found and neighbors:
+                    continue
+                
             # 1. Target evening shift preference issues
-            if move_type == "evening_preference" and evening_pref_names:
+            elif move_type == "evening_preference" and evening_pref_names:
                 # Find an evening shift that doesn't have a preference doctor
                 potential_dates = []
                 for date in self.all_dates:
@@ -704,6 +822,14 @@ class ScheduleOptimizer:
                 # Find an evening preference doctor who's available and not already assigned
                 available_pref_docs = []
                 for doctor in evening_pref_names:
+                    # Skip if same as doctor being replaced (no-op)
+                    if doctor == old_doctor:
+                        continue
+                    
+                    # Check if already in this shift (would cause duplicate)
+                    if doctor in current_assignment:
+                        continue
+                        
                     # Check if available and not already assigned to another shift that day
                     if not self._is_doctor_available(doctor, date, shift):
                         continue
@@ -716,7 +842,7 @@ class ScheduleOptimizer:
                             already_assigned = True
                             break
                     
-                    if not already_assigned and doctor != old_doctor:
+                    if not already_assigned:
                         available_pref_docs.append(doctor)
                 
                 if not available_pref_docs:
@@ -761,6 +887,14 @@ class ScheduleOptimizer:
                 # Find a junior doctor to replace the senior
                 available_juniors = []
                 for doctor in self.junior_doctors:
+                    # Skip if same as doctor being replaced (no-op)
+                    if doctor == old_doctor:
+                        continue
+                    
+                    # Check if already in this shift (would cause duplicate)
+                    if doctor in current_schedule[date][shift]:
+                        continue
+                        
                     # Check if available and not already assigned
                     if not self._is_doctor_available(doctor, date, shift):
                         continue
@@ -773,7 +907,7 @@ class ScheduleOptimizer:
                             already_assigned = True
                             break
                     
-                    if not already_assigned and doctor != old_doctor:
+                    if not already_assigned:
                         available_juniors.append(doctor)
                 
                 if not available_juniors:
@@ -833,7 +967,7 @@ class ScheduleOptimizer:
                 old_doctor = highest_doc
                 
                 # Check if the lowest doctor is available for this slot
-                if self._is_doctor_available(lowest_doc, date, shift):
+                if lowest_doc != old_doctor and lowest_doc not in current_schedule[date][shift] and self._is_doctor_available(lowest_doc, date, shift):
                     # Check if they're not already assigned to another shift that day
                     already_assigned = False
                     for other_shift in self.shifts:
@@ -851,6 +985,9 @@ class ScheduleOptimizer:
                         for doctor, hours in sorted_docs[:len(sorted_docs)//2]:  # Consider lowest half
                             if doctor == old_doctor:
                                 continue
+                                
+                            if doctor in current_schedule[date][shift]:
+                                continue  # Skip if already in this shift
                                 
                             if not self._is_doctor_available(doctor, date, shift):
                                 continue
@@ -871,11 +1008,12 @@ class ScheduleOptimizer:
                             
                         new_doctor = random.choice(available_docs)
                 else:
-                    continue  # Lowest doctor not available
+                    continue  # Lowest doctor not available or would cause issues
+            
             # 4. Weekend/Holiday balance move
             elif move_type == "weekend_holiday_balance":
                 # Calculate current weekend/holiday hours for all doctors
-                wh_hours = self._calculate_weekend_holiday_hours(current_schedule)
+                wh_hours = weekend_holiday_hours
                 
                 # Sort doctors by weekend/holiday hours (within their seniority group)
                 junior_wh = [(doc, wh_hours.get(doc, 0)) for doc in self.junior_doctors]
@@ -976,6 +1114,10 @@ class ScheduleOptimizer:
                 # Choose one of the potential moves
                 date, shift, idx, old_doctor, new_doctor = random.choice(potential_moves)
                 
+                # Make sure we're not adding a duplicate doctor to the shift
+                if new_doctor in current_schedule[date][shift]:
+                    continue  # Skip this move to avoid duplicates
+                
                 # Check if the replacement doctor is available
                 if not self._is_doctor_available(new_doctor, date, shift):
                     continue  # Try another move if doctor not available
@@ -991,30 +1133,8 @@ class ScheduleOptimizer:
                 
                 if already_assigned:
                     continue  # Try another move if doctor already assigned
-                # Check that the new doctor isn't already in this shift
-                
-                current_doctors = current_schedule[date][shift]
-                if new_doctor in current_doctors and new_doctor != old_doctor:
-                    continue  # Skip this move
-                # Create new schedule with this move
-                new_schedule = {
-                    k: v if k != date else {
-                        s: list(doctors) if s != shift else [
-                            doc if i != idx else new_doctor
-                            for i, doc in enumerate(doctors)
-                        ]
-                        for s, doctors in v.items()
-                    }
-                    for k, v in current_schedule.items()
-                }
-                
-                # Record the move
-                move = (date, shift, old_doctor, new_doctor)
-                neighbors.append((new_schedule, move))
-                continue  # Move successful, go to next iteration
-        
-    # If we couldn't generate enough smart moves, fall back to random ones
-            # 4. Random move as fallback
+            
+            # 5. Random move as fallback
             else:
                 # Select a random date and shift
                 date = random.choice(self.all_dates)
@@ -1035,6 +1155,14 @@ class ScheduleOptimizer:
                 # Find all available doctors for this shift who aren't already assigned on this date
                 available_doctors = set()
                 for doctor in [doc["name"] for doc in self.doctors]:
+                    # Skip if same as doctor being replaced (no-op)
+                    if doctor == old_doctor:
+                        continue
+                        
+                    # Skip if already in this shift (would cause duplicate)
+                    if doctor in current_assignment:
+                        continue
+                        
                     # Check if doctor is available for this shift
                     if not self._is_doctor_available(doctor, date, shift):
                         continue
@@ -1051,10 +1179,6 @@ class ScheduleOptimizer:
                     if not already_assigned:
                         available_doctors.add(doctor)
                 
-                # Remove the doctor we're replacing from candidates list (no-op replacement)
-                if old_doctor in available_doctors:
-                    available_doctors.remove(old_doctor)
-                
                 # If no available replacements, try another move
                 if not available_doctors:
                     continue
@@ -1062,18 +1186,8 @@ class ScheduleOptimizer:
                 # Select a random available doctor as replacement
                 new_doctor = random.choice(list(available_doctors))
             
-            # PERFORMANCE: Create a more efficient schedule update
-            # Instead of deep copy, do a shallow copy with only the modified part changed
-            new_schedule = {
-                k: v if k != date else {
-                    s: list(doctors) if s != shift else [
-                        doc if i != idx else new_doctor
-                        for i, doc in enumerate(doctors)
-                    ]
-                    for s, doctors in v.items()
-                }
-                for k, v in current_schedule.items()
-            }
+            # Create a new schedule with the selected move (using helper function)
+            new_schedule = self._create_new_schedule(current_schedule, date, shift, idx, old_doctor, new_doctor)
             
             # Record the move
             move = (date, shift, old_doctor, new_doctor)
@@ -1087,6 +1201,48 @@ class ScheduleOptimizer:
                 neighbors.append(random_neighbor)
                 
         return neighbors
+
+    def _create_new_schedule(self, current_schedule, date, shift, idx, old_doctor, new_doctor):
+        """
+        Helper function to create a new schedule with a doctor replacement.
+        This carefully ensures no duplicates are created.
+        """
+        # Copy the current assignment and make the replacement
+        current_doctors = current_schedule[date][shift]
+        
+        # First verify the replacement won't create a duplicate
+        new_doctors = []
+        seen_doctors = set()
+        
+        # For each position in the shift
+        for i, doctor in enumerate(current_doctors):
+            # If this is the position we're changing
+            if i == idx:
+                # Make sure the new doctor isn't already in the list
+                if new_doctor not in seen_doctors:
+                    new_doctors.append(new_doctor)
+                    seen_doctors.add(new_doctor)
+                else:
+                    # If would create duplicate, keep old doctor
+                    new_doctors.append(old_doctor)
+                    seen_doctors.add(old_doctor)
+            else:
+                # Keep track of doctors we've seen
+                if doctor not in seen_doctors:
+                    new_doctors.append(doctor)
+                    seen_doctors.add(doctor)
+                # If we see a duplicate, skip it
+        
+        # Create a new schedule with the updated shift
+        new_schedule = {
+            k: v if k != date else {
+                s: list(doctors) if s != shift else new_doctors
+                for s, doctors in v.items()
+            }
+            for k, v in current_schedule.items()
+        }
+        
+        return new_schedule
 
     def _get_random_neighbor(self, current_schedule):
         """Helper function to get a random neighbor as fallback."""
@@ -1116,6 +1272,9 @@ class ScheduleOptimizer:
                 if doctor == old_doctor:
                     continue
                     
+                if doctor in current_assignment:
+                    continue  # Skip if already in this shift (would cause duplicate)
+                    
                 if not self._is_doctor_available(doctor, date, shift):
                     continue
                     
@@ -1137,16 +1296,7 @@ class ScheduleOptimizer:
             new_doctor = random.choice(available_doctors)
             
             # Create new schedule
-            new_schedule = {
-                k: v if k != date else {
-                    s: list(doctors) if s != shift else [
-                        doc if i != idx else new_doctor
-                        for i, doc in enumerate(doctors)
-                    ]
-                    for s, doctors in v.items()
-                }
-                for k, v in current_schedule.items()
-            }
+            new_schedule = self._create_new_schedule(current_schedule, date, shift, idx, old_doctor, new_doctor)
             
             return (new_schedule, (date, shift, old_doctor, new_doctor))
             
@@ -1391,6 +1541,21 @@ class ScheduleOptimizer:
                 if len(schedule[date][shift]) != self.shift_requirements[shift]:
                     coverage_errors += 1
 
+        # Check for duplicate doctors in shifts in final schedule
+        duplicate_count = 0
+        for date in self.all_dates:
+            if date not in schedule:
+                continue
+                
+            for shift in self.shifts:
+                if shift not in schedule[date]:
+                    continue
+                    
+                shift_doctors = schedule[date][shift]
+                unique_doctors = set(shift_doctors)
+                if len(shift_doctors) > len(unique_doctors):
+                    duplicate_count += len(shift_doctors) - len(unique_doctors)
+
         if progress_callback:
             progress_callback(100, "Optimization complete")
 
@@ -1430,6 +1595,7 @@ class ScheduleOptimizer:
             "objective_value": best_cost,
             "coverage_errors": coverage_errors,
             "availability_violations": availability_violations,
+            "duplicate_doctors": duplicate_count,
             "doctor_shift_counts": doctor_shift_counts,
             "preference_metrics": preference_metrics,
             "weekend_metrics": weekend_metrics,
