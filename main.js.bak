@@ -351,8 +351,25 @@ ipcMain.handle('get-app-paths', () => {
   };
 });
 
-// Quit the app when all windows are closed (Windows & Linux)
 app.on('window-all-closed', () => {
+  // Ensure backend process is terminated
+  if (backendProcess) {
+    logBackend('info', 'Terminating backend process on window close...');
+    try {
+      // Try more forceful termination
+      if (process.platform === 'win32') {
+        const { execSync } = require('child_process');
+        if (backendProcess.pid) {
+          execSync(`taskkill /pid ${backendProcess.pid} /T /F`);
+        }
+      } else {
+        backendProcess.kill('SIGKILL');
+      }
+    } catch (err) {
+      logBackend('error', `Error killing backend process: ${err.message}`);
+    }
+  }
+  
   if (process.platform !== 'darwin') {
     app.quit();
   }
@@ -362,7 +379,22 @@ app.on('window-all-closed', () => {
 app.on('will-quit', () => {
   if (backendProcess) {
     logBackend('info', 'Terminating backend process...');
-    backendProcess.kill();
-    backendProcess = null;
+    try {
+      // Try more forceful termination
+      if (process.platform === 'win32') {
+        // On Windows, use taskkill to force terminate the process tree
+        const { execSync } = require('child_process');
+        if (backendProcess.pid) {
+          execSync(`taskkill /pid ${backendProcess.pid} /T /F`);
+        }
+      } else {
+        // On Unix systems, send SIGKILL for more forceful termination
+        backendProcess.kill('SIGKILL');
+      }
+    } catch (err) {
+      logBackend('error', `Error killing backend process: ${err.message}`);
+    } finally {
+      backendProcess = null;
+    }
   }
 });

@@ -111,7 +111,7 @@ function App() {
   const [availability, setAvailabilityState] = useState({});
   const [schedule, setScheduleState] = useState({});
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [activeComponent, setActiveComponent] = useState('doctors');
+  const [activeComponent, setActiveComponent] = useState('generate');
   const [isLoading, setIsLoading] = useState(true);
   const [appPaths, setAppPaths] = useState(null);
   
