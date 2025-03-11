@@ -30,7 +30,6 @@ import {
 } from '@mui/icons-material';
 import MonthlyHours from './MonthlyHours';
 import WeekendHolidayBalance from './WeekendHolidayBalance';
-import YearlySchedule from './YearlySchedule';
 import YearlySummary from './YearlySummary';
 import MonthlyCalendarView from './MonthlyCalendarView';
 import ExcelExportButton from './ExcelExportButton';
@@ -388,7 +387,7 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
                 <DoctorShiftTypesChart doctors={localDoctors} schedule={localSchedule} selectedMonth={month} />
               )}
               {tabValue === 3 && (
-                <WeekendHolidayBalance doctors={localDoctors} schedule={localSchedule} holidays={localHolidays} />
+                <WeekendHolidayBalance doctors={localDoctors} schedule={localSchedule} holidays={localHolidays} selectedMonth={month} />
               )}
               {tabValue === 4 && (
                 <YearlySummary doctors={localDoctors} schedule={localSchedule} holidays={localHolidays} />

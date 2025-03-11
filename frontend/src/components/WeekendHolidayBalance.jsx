@@ -49,9 +49,7 @@ function WeekendHolidayBalance({ doctors, schedule, holidays, selectedMonth }) {
   };
   
   // Filter schedule data by selected month
-  const filterScheduleByMonth = () => {
-    if (!selectedMonth) return schedule; // If no month selected, return full schedule
-    
+  const getFilteredSchedule = () => {
     const filteredSchedule = {};
     
     Object.keys(schedule).forEach(dateStr => {
@@ -67,7 +65,20 @@ function WeekendHolidayBalance({ doctors, schedule, holidays, selectedMonth }) {
   };
   
   // Get filtered schedule based on selected month
-  const filteredSchedule = filterScheduleByMonth();
+  const filteredSchedule = getFilteredSchedule();
+  
+  // Check if the filtered schedule has any data
+  if (Object.keys(filteredSchedule).length === 0) {
+    return (
+      <Box sx={{ minHeight: '400px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <Alert severity="info" sx={{ width: '100%', maxWidth: 600 }}>
+          <Typography variant="body1">
+            No schedule data available for {getMonthName(selectedMonth)}.
+          </Typography>
+        </Alert>
+      </Box>
+    );
+  }
   
   // Create a set of all doctors that appear in the schedule
   const doctorsInSchedule = new Set();
@@ -145,7 +156,7 @@ function WeekendHolidayBalance({ doctors, schedule, holidays, selectedMonth }) {
       <Box sx={{ minHeight: '400px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
         <Alert severity="info" sx={{ width: '100%', maxWidth: 600 }}>
           <Typography variant="body1">
-            No weekend or holiday shifts found in the {selectedMonth ? `${getMonthName(selectedMonth)} ` : ''}schedule.
+            No weekend or holiday shifts found in {getMonthName(selectedMonth)} 2025.
           </Typography>
         </Alert>
       </Box>
@@ -175,9 +186,7 @@ function WeekendHolidayBalance({ doctors, schedule, holidays, selectedMonth }) {
       legend: { position: 'top' },
       title: { 
         display: true, 
-        text: selectedMonth 
-          ? `${getMonthName(selectedMonth)} 2025 Weekend and Holiday Shift Distribution`
-          : 'Weekend and Holiday Shift Distribution',
+        text: `${getMonthName(selectedMonth)} 2025 Weekend and Holiday Shift Distribution`,
         font: { size: 16 }
       },
     },
@@ -235,7 +244,7 @@ function WeekendHolidayBalance({ doctors, schedule, holidays, selectedMonth }) {
           <Card sx={{ height: '100%' }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>
-                {selectedMonth ? `${getMonthName(selectedMonth)} 2025` : ''} Weekend & Holiday Distribution
+                {getMonthName(selectedMonth)} 2025 Weekend & Holiday Distribution
               </Typography>
               <Divider sx={{ mb: 2 }} />
               
