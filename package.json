@@ -1,11 +1,11 @@
 {
   "name": "hospital-scheduler",
-  "productName": "Hospital Scheduler",
+  "productName": "Doctor Scheduler",
   "version": "1.0.0",
-  "description": "Hospital Staff Scheduler with optimized scheduling algorithms",
+  "description": "Hospital Doctor Scheduler with optimized scheduling algorithms",
   "author": {
-    "name": "Hospital Scheduler Team",
-    "email": "scheduler@example.com"
+    "name": "Jon Hernandez, SHL Lab",
+    "email": "jonher16@ssku.edu"
   },
   "main": "main.js",
   "private": true,
