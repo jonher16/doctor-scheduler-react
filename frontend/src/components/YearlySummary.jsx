@@ -28,6 +28,19 @@ import {
   Legend,
   ResponsiveContainer
 } from 'recharts';
+import { Bar as BarChart2D } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip as ChartTooltip,
+  Legend as ChartLegend
+} from 'chart.js';
+
+// Register ChartJS components
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, ChartTooltip, ChartLegend);
 
 function YearlySummary({ doctors, schedule, holidays }) {
   const [tabValue, setTabValue] = React.useState(0);
@@ -201,10 +214,79 @@ function YearlySummary({ doctors, schedule, holidays }) {
       holidays: juniorDoctors.reduce((sum, doc) => sum + weekendHolidayHours[doc].holidays, 0) / (juniorDoctors.length || 1)
     }
   ];
+
+  // Prepare data for ChartJS visualization (for the Weekend & Holiday tab)
+  const weekendHolidayChartData = {
+    labels: sortedDoctors,
+    datasets: [
+      {
+        label: 'Weekend Shifts',
+        data: sortedDoctors.map(doctor => weekendHolidayHours[doctor].weekends),
+        backgroundColor: 'rgba(75, 192, 192, 0.6)', // Teal color
+      },
+      {
+        label: 'Holiday Shifts',
+        data: sortedDoctors.map(doctor => weekendHolidayHours[doctor].holidays),
+        backgroundColor: 'rgba(255, 99, 132, 0.6)', // Pink color
+      }
+    ]
+  };
+  
+  const weekendHolidayChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'top' },
+      title: { 
+        display: true, 
+        text: 'Yearly Weekend and Holiday Shift Distribution',
+        font: { size: 16 }
+      },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        title: {
+          display: true,
+          text: 'Number of Shifts',
+          font: { weight: 'bold' }
+        }
+      },
+      x: {
+        title: {
+          display: true,
+          text: 'Doctors',
+          font: { weight: 'bold' }
+        }
+      }
+    }
+  };
   
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
   };
+
+  // Find the doctor with most weekend and holiday shifts
+  let maxWeekendShifts = 0;
+  let maxHolidayShifts = 0;
+  let maxWeekendDoctor = 'N/A';
+  let maxHolidayDoctor = 'N/A';
+  
+  Object.entries(weekendHolidayHours).forEach(([doctor, shifts]) => {
+    if (shifts.weekends > maxWeekendShifts) {
+      maxWeekendShifts = shifts.weekends;
+      maxWeekendDoctor = doctor;
+    }
+    
+    if (shifts.holidays > maxHolidayShifts) {
+      maxHolidayShifts = shifts.holidays;
+      maxHolidayDoctor = doctor;
+    }
+  });
+
+  // Calculate total shifts for all doctors
+  const totalWeekendShifts = Object.values(weekendHolidayHours).reduce((sum, shifts) => sum + shifts.weekends, 0);
+  const totalHolidayShifts = Object.values(weekendHolidayHours).reduce((sum, shifts) => sum + shifts.holidays, 0);
 
   return (
     <Box sx={{ minHeight: '400px' }}>
@@ -395,38 +477,74 @@ function YearlySummary({ doctors, schedule, holidays }) {
         </Grid>
       )}
       
-      {/* Tab 3: Weekend & Holiday Balance */}
+      {/* Tab 3: Weekend & Holiday Balance with ChartJS visualization */}
       {tabValue === 2 && (
         <Grid container spacing={3}>
           <Grid item xs={12} md={8}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>Weekend & Holiday Shift Distribution</Typography>
-                <Box sx={{ height: 400 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={weekendHolidayData}
-                      margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="group" />
-                      <YAxis />
-                      <Tooltip />
-                      <Legend />
-                      <Bar dataKey="weekends" name="Average Weekend Shifts" fill="#82ca9d" />
-                      <Bar dataKey="holidays" name="Average Holiday Shifts" fill="#ff7300" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </Box>
-              </CardContent>
+            <Card sx={{ height: '100%', p: 2 }}>
+              <Box sx={{ height: 400 }}>
+                <BarChart2D data={weekendHolidayChartData} options={weekendHolidayChartOptions} />
+              </Box>
             </Card>
           </Grid>
           
           <Grid item xs={12} md={4}>
-            <Card>
+            <Card sx={{ height: '100%' }}>
               <CardContent>
-                <Typography variant="h6" gutterBottom>Weekend & Holiday Details</Typography>
+                <Typography variant="h6" gutterBottom>
+                  Yearly Weekend & Holiday Distribution
+                </Typography>
                 <Divider sx={{ mb: 2 }} />
+                
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle1" gutterBottom>
+                    Weekend Coverage
+                  </Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="body2">Total weekend shifts:</Typography>
+                    <Typography variant="body1" fontWeight="bold">
+                      {totalWeekendShifts}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="body2">Highest weekend load:</Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <Chip 
+                        size="small" 
+                        label={`${maxWeekendShifts} shifts`} 
+                        color="primary"
+                        sx={{ mr: 1 }}
+                      />
+                      <Typography variant="body2">{maxWeekendDoctor}</Typography>
+                    </Box>
+                  </Box>
+                </Box>
+                
+                <Box>
+                  <Typography variant="subtitle1" gutterBottom>
+                    Holiday Coverage
+                  </Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="body2">Total holiday shifts:</Typography>
+                    <Typography variant="body1" fontWeight="bold">
+                      {totalHolidayShifts}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="body2">Highest holiday load:</Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <Chip 
+                        size="small" 
+                        label={`${maxHolidayShifts} shifts`} 
+                        color="secondary"
+                        sx={{ mr: 1 }}
+                      />
+                      <Typography variant="body2">{maxHolidayDoctor}</Typography>
+                    </Box>
+                  </Box>
+                </Box>
+                
+                <Divider sx={{ my: 2 }} />
                 
                 <TableContainer component={Paper} variant="outlined">
                   <Table size="small">
@@ -460,30 +578,6 @@ function YearlySummary({ doctors, schedule, holidays }) {
                     </TableBody>
                   </Table>
                 </TableContainer>
-                
-                <Box sx={{ mt: 2, p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
-                  <Typography variant="subtitle2" gutterBottom>
-                    Seniority Comparison
-                  </Typography>
-                  <Grid container spacing={1}>
-                    <Grid item xs={6}>
-                      <Typography variant="body2">Senior Weekend Avg:</Typography>
-                      <Typography variant="h6">{weekendHolidayData[0].weekends.toFixed(1)}</Typography>
-                    </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant="body2">Junior Weekend Avg:</Typography>
-                      <Typography variant="h6">{weekendHolidayData[1].weekends.toFixed(1)}</Typography>
-                    </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant="body2">Senior Holiday Avg:</Typography>
-                      <Typography variant="h6">{weekendHolidayData[0].holidays.toFixed(1)}</Typography>
-                    </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant="body2">Junior Holiday Avg:</Typography>
-                      <Typography variant="h6">{weekendHolidayData[1].holidays.toFixed(1)}</Typography>
-                    </Grid>
-                  </Grid>
-                </Box>
               </CardContent>
             </Card>
           </Grid>
