@@ -18,7 +18,14 @@ import {
   AccordionSummary,
   AccordionDetails,
   Switch,
+  FormControl,
+  FormLabel,
+  Radio,
+  RadioGroup,
   FormControlLabel,
+  InputLabel,
+  Select,
+  MenuItem,
   Table,
   TableBody,
   TableCell,
@@ -70,6 +77,8 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule, apiUrl
   const [statsTabValue, setStatsTabValue] = useState(0);
   const [optimizationProgress, setOptimizationProgress] = useState([]);
   const [optimizationStage, setOptimizationStage] = useState("initializing");
+  const [schedulingMode, setSchedulingMode] = useState("yearly");
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1); // Current month (1-12)
   
   // Time tracking states
   const [startTime, setStartTime] = useState(null);
@@ -200,6 +209,14 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule, apiUrl
     }
   }
 
+  const getMonthName = (monthNum) => {
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    return months[monthNum - 1];
+  };
+
   // Optimized schedule generation using the Python API.
   const generateOptimizedSchedule = async () => {
     try {
@@ -207,10 +224,21 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule, apiUrl
       setOptimizationProgress([]);
       setOptimizationStage("initializing");
       
-      setStatus("Connecting to optimization server...");
+      // Update the status to include month if in monthly mode
+      setStatus(schedulingMode === "monthly" 
+        ? `Connecting to optimization server for ${getMonthName(selectedMonth)}...` 
+        : "Connecting to optimization server...");
+      setProgress(5);
       setProgress(5);
       // Prepare input data for the optimizer.
-      const inputData = { doctors, holidays, availability };
+      const inputData = { 
+        doctors, 
+        holidays, 
+        availability,
+        scheduling_mode: schedulingMode,
+        // Only include month parameter for monthly scheduling
+        ...(schedulingMode === "monthly" && { month: selectedMonth })
+      };
   
       // Start the optimization by calling the /optimize endpoint.
       const optimizationResponse = await fetch(`${BACKEND_API_URL}/optimize`, {
@@ -458,7 +486,39 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule, apiUrl
                 Configuration Summary
               </Typography>
               <Divider sx={{ mb: 2 }} />
-              
+              {/* Add the scheduling mode controls */}
+                   <Box sx={{ mb: 3 }}>
+                  <FormControl component="fieldset">
+                    <FormLabel component="legend">Scheduling Mode</FormLabel>
+                    <RadioGroup
+                      row
+                      value={schedulingMode}
+                      onChange={(e) => setSchedulingMode(e.target.value)}
+                    >
+                      <FormControlLabel value="yearly" control={<Radio />} label="Full Year" />
+                      <FormControlLabel value="monthly" control={<Radio />} label="Single Month" />
+                    </RadioGroup>
+                  </FormControl>
+                  
+                  {/* Month selector only visible when in monthly mode */}
+                  {schedulingMode === "monthly" && (
+                    <FormControl fullWidth sx={{ mt: 2 }}>
+                      <InputLabel id="month-select-label">Month</InputLabel>
+                      <Select
+                        labelId="month-select-label"
+                        value={selectedMonth}
+                        label="Month"
+                        onChange={(e) => setSelectedMonth(e.target.value)}
+                      >
+                        {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
+                          <MenuItem key={month} value={month}>
+                            {getMonthName(month)}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  )}
+                </Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                 <Typography variant="body1">Doctors configured:</Typography>
                 <Typography variant="body1" fontWeight="bold">{doctors.length}</Typography>

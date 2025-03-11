@@ -18,8 +18,9 @@ from flask.logging import default_handler
 import werkzeug._internal as _werkzeug_internal
 
 
-# Import the relaxed optimizer
+# Import the optimizers
 from schedule_optimizer import optimize_schedule, ScheduleOptimizer
+from monthly_schedule_optimizer import optimize_monthly_schedule, MonthlyScheduleOptimizer
 
 # Configure logging
 logging.basicConfig(
@@ -27,10 +28,6 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger("SchedulerServer")
-
-# Completely disable Werkzeug logger before creating the Flask app
-#werkzeug_logger = logging.getLogger('werkzeug')
-#werkzeug_logger.setLevel(logging.ERROR)  # Belt and suspenders approach
 
 app = Flask(__name__)
 CORS(app)  # Enable Cross-Origin Resource Sharing
@@ -65,7 +62,9 @@ def optimize():
     {
         "doctors": [...],
         "holidays": {...},
-        "availability": {...}
+        "availability": {...},
+        "scheduling_mode": "yearly" or "monthly",
+        "month": <integer 1-12> (required when scheduling_mode is "monthly")
     }
     
     Returns:
@@ -95,16 +94,34 @@ def optimize():
             "message": "Initializing optimization"
         }
         
-        # Extract data for the optimizer
-        doctors = data.get("doctors", [])
-        holidays = data.get("holidays", {})
-        availability = data.get("availability", {})
+        # Check scheduling mode
+        scheduling_mode = data.get("scheduling_mode", "yearly")
         
-        # Run optimization with progress callback
-        result = optimize_schedule(
-            {"doctors": doctors, "holidays": holidays, "availability": availability}, 
-            progress_callback=update_progress
-        )
+        if scheduling_mode == "monthly":
+            month = data.get("month")
+            if month is None:
+                return jsonify({
+                    "error": "Month parameter is required for monthly scheduling"
+                }), 400
+                
+            try:
+                month = int(month)
+                if month < 1 or month > 12:
+                    return jsonify({
+                        "error": f"Invalid month: {month}. Month must be between 1 and 12."
+                    }), 400
+            except ValueError:
+                return jsonify({
+                    "error": f"Invalid month format: {month}. Month must be an integer."
+                }), 400
+                
+            optimization_progress["message"] = f"Initializing optimization for month {month}"
+            
+            # Run monthly optimization
+            result = optimize_monthly_schedule(data, progress_callback=update_progress)
+        else:
+            # Run yearly optimization
+            result = optimize_schedule(data, progress_callback=update_progress)
         
         # Check for errors from the optimizer
         if "error" in result and result["error"]:
@@ -126,7 +143,9 @@ def optimize():
         
         # Save result to file with timestamp
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"optimization_{timestamp}.json"
+        mode_prefix = "monthly" if scheduling_mode == "monthly" else "yearly"
+        month_suffix = f"_month{month}" if scheduling_mode == "monthly" else ""
+        filename = f"{mode_prefix}_optimization_{timestamp}{month_suffix}.json"
         filepath = os.path.join(RESULTS_DIR, filename)
         
         with open(filepath, 'w') as f:
@@ -186,9 +205,26 @@ def previous_runs():
         
         # List all optimization result files
         for filename in os.listdir(RESULTS_DIR):
-            if filename.startswith("optimization_") and filename.endswith(".json"):
+            if (filename.startswith("optimization_") or 
+                filename.startswith("yearly_optimization_") or
+                filename.startswith("monthly_optimization_")) and filename.endswith(".json"):
+                
                 filepath = os.path.join(RESULTS_DIR, filename)
-                timestamp = filename.split("_")[1].split(".")[0]
+                
+                # Extract timestamp and scheduling mode
+                scheduling_mode = "yearly"
+                if filename.startswith("monthly_optimization_"):
+                    scheduling_mode = "monthly"
+                    
+                timestamp_part = filename.split("_")[2] if scheduling_mode == "yearly" else filename.split("_")[2]
+                timestamp = timestamp_part.split(".")[0]
+                
+                # Get month for monthly optimizations
+                month = None
+                if scheduling_mode == "monthly" and "_month" in filename:
+                    month_part = filename.split("_month")[1]
+                    if month_part and month_part[0].isdigit():
+                        month = int(month_part[0])
                 
                 # Get basic statistics from file
                 try:
@@ -199,6 +235,8 @@ def previous_runs():
                         runs.append({
                             "id": filename,
                             "timestamp": timestamp,
+                            "scheduling_mode": scheduling_mode,
+                            "month": month,
                             "status": stats.get("status", "UNKNOWN"),
                             "solution_time": stats.get("solution_time_seconds", 0),
                             "objective_value": stats.get("objective_value", 0)
@@ -207,6 +245,8 @@ def previous_runs():
                     runs.append({
                         "id": filename,
                         "timestamp": timestamp,
+                        "scheduling_mode": scheduling_mode,
+                        "month": month,
                         "status": "ERROR",
                         "error": str(e)
                     })
