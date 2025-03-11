@@ -10,7 +10,7 @@ import {
   Alert,
   Chip
 } from '@mui/material';
-import { Bar } from 'react-chartjs-2';
+import { Bar } from 'recharts';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -20,11 +20,12 @@ import {
   Tooltip,
   Legend
 } from 'chart.js';
+import { Bar as BarChart } from 'react-chartjs-2';
 
 // Register ChartJS components
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
-function WeekendHolidayBalance({ doctors, schedule, holidays }) {
+function WeekendHolidayBalance({ doctors, schedule, holidays, selectedMonth }) {
   // Check if schedule and doctors are available
   if (!schedule || Object.keys(schedule).length === 0 || !doctors || doctors.length === 0) {
     return (
@@ -38,9 +39,39 @@ function WeekendHolidayBalance({ doctors, schedule, holidays }) {
     );
   }
   
+  // Function to get month name
+  const getMonthName = (monthNum) => {
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    return months[monthNum - 1];
+  };
+  
+  // Filter schedule data by selected month
+  const filterScheduleByMonth = () => {
+    if (!selectedMonth) return schedule; // If no month selected, return full schedule
+    
+    const filteredSchedule = {};
+    
+    Object.keys(schedule).forEach(dateStr => {
+      const date = new Date(dateStr);
+      const month = date.getMonth() + 1; // JavaScript months are 0-indexed
+      
+      if (month === selectedMonth) {
+        filteredSchedule[dateStr] = schedule[dateStr];
+      }
+    });
+    
+    return filteredSchedule;
+  };
+  
+  // Get filtered schedule based on selected month
+  const filteredSchedule = filterScheduleByMonth();
+  
   // Create a set of all doctors that appear in the schedule
   const doctorsInSchedule = new Set();
-  Object.values(schedule).forEach(daySchedule => {
+  Object.values(filteredSchedule).forEach(daySchedule => {
     if (!daySchedule || typeof daySchedule !== 'object') return;
     ["Day", "Evening", "Night"].forEach(shift => {
       const shiftArr = Array.isArray(daySchedule[shift]) ? daySchedule[shift] : [];
@@ -63,7 +94,7 @@ function WeekendHolidayBalance({ doctors, schedule, holidays }) {
       </Box>
     );
   }
-  
+
   // Initialize counters
   const weekendShifts = {};
   const holidayShifts = {};
@@ -78,8 +109,8 @@ function WeekendHolidayBalance({ doctors, schedule, holidays }) {
   const safeHolidays = holidays && typeof holidays === 'object' ? holidays : {};
 
   // Process schedule
-  Object.keys(schedule).forEach(dateStr => {
-    const daySchedule = schedule[dateStr];
+  Object.keys(filteredSchedule).forEach(dateStr => {
+    const daySchedule = filteredSchedule[dateStr];
     if (!daySchedule || typeof daySchedule !== 'object') return;
     
     const date = new Date(dateStr);
@@ -114,7 +145,7 @@ function WeekendHolidayBalance({ doctors, schedule, holidays }) {
       <Box sx={{ minHeight: '400px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
         <Alert severity="info" sx={{ width: '100%', maxWidth: 600 }}>
           <Typography variant="body1">
-            No weekend or holiday shifts found in the schedule.
+            No weekend or holiday shifts found in the {selectedMonth ? `${getMonthName(selectedMonth)} ` : ''}schedule.
           </Typography>
         </Alert>
       </Box>
@@ -144,7 +175,9 @@ function WeekendHolidayBalance({ doctors, schedule, holidays }) {
       legend: { position: 'top' },
       title: { 
         display: true, 
-        text: 'Weekend and Holiday Shift Distribution',
+        text: selectedMonth 
+          ? `${getMonthName(selectedMonth)} 2025 Weekend and Holiday Shift Distribution`
+          : 'Weekend and Holiday Shift Distribution',
         font: { size: 16 }
       },
     },
@@ -193,7 +226,7 @@ function WeekendHolidayBalance({ doctors, schedule, holidays }) {
         <Grid item xs={12} md={8}>
           <Card sx={{ height: '100%', p: 2 }}>
             <Box sx={{ height: 400 }}>
-              <Bar data={data} options={options} />
+              <BarChart data={data} options={options} />
             </Box>
           </Card>
         </Grid>
@@ -202,7 +235,7 @@ function WeekendHolidayBalance({ doctors, schedule, holidays }) {
           <Card sx={{ height: '100%' }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>
-                Weekend & Holiday Distribution
+                {selectedMonth ? `${getMonthName(selectedMonth)} 2025` : ''} Weekend & Holiday Distribution
               </Typography>
               <Divider sx={{ mb: 2 }} />
               

@@ -31,7 +31,7 @@ import {
 import MonthlyHours from './MonthlyHours';
 import WeekendHolidayBalance from './WeekendHolidayBalance';
 import YearlySchedule from './YearlySchedule';
-import ScheduleStatistics from './ScheduleStatistics';
+import YearlySummary from './YearlySummary';
 import MonthlyCalendarView from './MonthlyCalendarView';
 import ExcelExportButton from './ExcelExportButton';
 import DoctorShiftTypesChart from './DoctorShiftTypesChart'; // Import the new component
@@ -362,17 +362,12 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
               />
               <Tab 
                 icon={<TimelineIcon />} 
-                label="Yearly Weekends/Holidays" 
-                iconPosition="start" 
-              />
-              <Tab 
-                icon={<CalendarMonthIcon />} 
-                label="Yearly Shifts" 
+                label="Weekends/Holidays" 
                 iconPosition="start" 
               />
               <Tab 
                 icon={<AnalyticsIcon />} 
-                label="Yearly Hours Summary" 
+                label="Yearly Summary" 
                 iconPosition="start" 
               />
             </Tabs>
@@ -396,10 +391,7 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
                 <WeekendHolidayBalance doctors={localDoctors} schedule={localSchedule} holidays={localHolidays} />
               )}
               {tabValue === 4 && (
-                <YearlySchedule doctors={localDoctors} schedule={localSchedule} />
-              )}
-              {tabValue === 5 && (
-                <ScheduleStatistics doctors={localDoctors} schedule={localSchedule} />
+                <YearlySummary doctors={localDoctors} schedule={localSchedule} holidays={localHolidays} />
               )}
             </Box>
           </Paper>
