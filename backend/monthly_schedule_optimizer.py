@@ -392,6 +392,14 @@ class MonthlyScheduleOptimizer:
             for shift in self.shifts:
                 if shift not in schedule[date]:
                     continue
+
+                shift_doctors = schedule[date][shift]
+                unique_doctors = set(shift_doctors)
+                
+                # If we have duplicates, penalize heavily
+                if len(shift_doctors) > len(unique_doctors):
+                    duplicate_count = len(shift_doctors) - len(unique_doctors)
+                    cost += self.w_one_shift * 2 * duplicate_count  # High penalty
                     
                 for doctor in schedule[date][shift]:
                     assignments[doctor] = assignments.get(doctor, 0) + 1
@@ -1176,6 +1184,10 @@ class MonthlyScheduleOptimizer:
                 # Select a random available doctor as replacement
                 new_doctor = random.choice(list(available_doctors))
             
+            # Check that the new doctor isn't already in this shift
+            current_doctors = current_schedule[date][shift]
+            if new_doctor in current_doctors and new_doctor != old_doctor:
+                continue  # Skip this move
             # Create a more efficient schedule update
             new_schedule = {
                 k: v if k != date else {
