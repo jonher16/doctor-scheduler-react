@@ -97,19 +97,25 @@ class MonthlyScheduleOptimizer:
         
         # Since we're optimizing for a shorter period, we can increase weights
         # for better results in fewer iterations
-        self.w_avail = 100000    # Availability violations - hard constraint
-        self.w_one_shift = 500   # Multiple shifts per day - hard constraint
-        self.w_rest = 500        # Inadequate rest after night shift - hard constraint
+        # Weights for the objective function components
+        self.w_avail = 999999    # Availability violations - super hard constraint
+        self.w_one_shift = 999999    # Multiple shifts per day - super hard constraint
+        self.w_rest = 999999     # UPGRADED to super hard constraint (no shift after night)
+        self.w_consec_night = 999999  # NEW: Even higher penalty for consecutive night shifts
         self.w_senior_holiday = 1000  # Senior working on long holidays - hard constraint
-        self.w_balance = 40      # Increased for monthly (was 30 in yearly)
+        self.w_balance = 1000      # Increased for monthly (was 30 in yearly)
         self.w_wh = 40           # Increased for monthly (was 30 in yearly)
         self.w_pref = {          # Preference violations with seniors getting priority
-            "Junior": 15,        # For juniors (was 10 in yearly)
-            "Senior": 25         # For seniors (was 25 in yearly)
+            "Junior": 10000,     # UPGRADED to super hard constraint
+            "Senior": 20000      # UPGRADED to super hard constraint
         }
-        self.w_senior_workload = 30  # Higher penalty for seniors working more than juniors (was 20)
-        self.w_preference_fairness = 10  # Higher penalty for unfair distribution (was 5)
-        self.w_duplicate_penalty = 10000  # New severe penalty for duplicate doctor in same shift
+        self.w_wrong_pref_night = 999999  # NEW: Separate extreme penalty for evening/day pref assigned to night
+        self.w_senior_workload = 1000  # Higher penalty for seniors working more than juniors
+        self.w_preference_fairness = 1000  # Higher penalty for unfair distribution
+        self.w_duplicate_penalty = 999999  # super hard constraint for duplicate doctor in same shift
+        # New weights for additional constraints
+        self.w_night_day_gap = 999999   # Weight for night→off→day pattern (super hard constraint)
+        self.w_evening_day = 100000     # Weight for evening→day pattern (super hard constraint)
         
         # Cache doctor availability status for improved performance
         self._availability_cache = {}
@@ -153,6 +159,32 @@ class MonthlyScheduleOptimizer:
         """Check if a doctor is available for a specific date and shift (using cache)."""
         key = (doctor, date, shift)
         return self._availability_cache.get(key, True)  # Default to available if not in cache
+    
+    def _can_assign_to_shift(self, doctor: str, shift: str) -> bool:
+        """
+        Check if a doctor can be assigned to a shift based on their preferences.
+        Implements the super hard constraint that:
+        - Doctors with specific preferences should ONLY work those shifts
+        - Night shifts can ONLY be worked by doctors with night preference or no preference
+        
+        Args:
+            doctor: The doctor's name
+            shift: The shift to check
+            
+        Returns:
+            True if the doctor can be assigned to this shift, False otherwise
+        """
+        pref = self.doctor_info.get(doctor, {}).get("pref", "None")
+        
+        # No preference - can work any shift
+        if pref == "None":
+            return True
+        
+        # Specific preference - ONLY allow matching shifts
+        if pref != "None":
+            return pref == f"{shift} Only"
+        
+        return True
     
     def _generate_dates_for_month(self, month: int) -> List[str]:
         """Generate all dates for the specified month in 2025 in YYYY-MM-DD format."""
@@ -273,14 +305,16 @@ class MonthlyScheduleOptimizer:
                 # If we need more doctors, get other available doctors
                 remaining_required = required - len(preferred_selections)
                 other_selections = []
-                
+
                 if remaining_required > 0:
                     # Get available doctors who aren't already assigned today
                     other_candidates = [
                         d for d in doctor_names 
                         if d not in preferred_docs and 
                         d not in assigned_today and 
-                        self._is_doctor_available(d, date, shift)
+                        self._is_doctor_available(d, date, shift) and
+                        # NEW: Check preference compatibility with shift
+                        self._can_assign_to_shift(d, shift)
                     ]
                     
                     # Sort by consecutive days worked (prefer those with fewer consecutive days)
@@ -464,6 +498,63 @@ class MonthlyScheduleOptimizer:
                     doctor in schedule[next_date].get("Evening", [])):
                     cost += self.w_rest
 
+        # 3a. NEW: Explicitly check for consecutive night shifts (super hard constraint)
+        for i in range(len(self.all_dates) - 1):
+            current_date = self.all_dates[i]
+            next_date = self.all_dates[i + 1]
+            
+            if current_date not in schedule or "Night" not in schedule[current_date]:
+                continue
+                
+            if next_date not in schedule or "Night" not in schedule[next_date]:
+                continue
+                
+            for doctor in schedule[current_date].get("Night", []):
+                if doctor in schedule[next_date].get("Night", []):
+                    # Extremely severe penalty for consecutive night shifts
+                    cost += self.w_avail  # Using the highest weight (100000)
+
+        # 3b. NEW: Check for evening shift followed by day shift (soft constraint)
+        for i in range(len(self.all_dates) - 1):
+            current_date = self.all_dates[i]
+            next_date = self.all_dates[i + 1]
+            
+            if current_date not in schedule or "Evening" not in schedule[current_date]:
+                continue
+            
+            if next_date not in schedule or "Day" not in schedule[next_date]:
+                continue
+            
+            for doctor in schedule[current_date].get("Evening", []):
+                if doctor in schedule[next_date].get("Day", []):
+                    cost += self.w_evening_day
+
+        # 3c. NEW: Check for night shift followed by a day off then day shift (soft constraint)
+        for i in range(len(self.all_dates) - 2):
+            first_date = self.all_dates[i]
+            middle_date = self.all_dates[i + 1]
+            last_date = self.all_dates[i + 2]
+            
+            if first_date not in schedule or "Night" not in schedule[first_date]:
+                continue
+            
+            if last_date not in schedule or "Day" not in schedule[last_date]:
+                continue
+            
+            for doctor in schedule[first_date].get("Night", []):
+                # Check if doctor is not working on middle date
+                working_middle = False
+                if middle_date in schedule:
+                    for shift in self.shifts:
+                        if shift in schedule[middle_date] and doctor in schedule[middle_date][shift]:
+                            working_middle = True
+                            break
+                
+                if not working_middle:
+                    # Check if doctor is working day shift on last date
+                    if doctor in schedule[last_date].get("Day", []):
+                        cost += self.w_night_day_gap
+
         # 4. Long holiday constraint for seniors (hard constraint)
         for date in self.all_dates:
             if date in self.holidays and self.holidays[date] == "Long":
@@ -570,8 +661,6 @@ class MonthlyScheduleOptimizer:
             cost += self.w_wh * (ideal_senior_avg * 0.8 - avg_senior_wh)
         
         # 8. Preference Adherence Penalty
-        preference_counts = defaultdict(lambda: defaultdict(int))
-        
         for date in self.all_dates:
             if date not in schedule:
                 continue
@@ -582,39 +671,29 @@ class MonthlyScheduleOptimizer:
                 
                 shift_doctors = schedule[date][shift]
                 
-                # Count preferred vs non-preferred assignments
+                # Super strict preference checking
                 for doctor in shift_doctors:
-                    pref = self.doctor_info[doctor]["pref"]
-                    if pref == "None":
-                        continue
-                    
-                    if (pref == "Day Only" and shift == "Day") or \
-                       (pref == "Evening Only" and shift == "Evening") or \
-                       (pref == "Night Only" and shift == "Night"):
-                        preference_counts[pref]['preferred'] += 1
-                        preference_counts[pref][doctor] = preference_counts[pref].get(doctor, 0) + 1
-                    else:
-                        preference_counts[pref]['non_preferred'] += 1
-                
-                # Penalize non-preferred assignments
-                for doctor in doctor_names:
                     pref = self.doctor_info[doctor]["pref"]
                     seniority = self.doctor_info[doctor]["seniority"]
                     
-                    # Skip if no preference or doctor not in this shift
-                    if pref == "None" or doctor not in shift_doctors:
+                    # Skip if no preference
+                    if pref == "None":
                         continue
                     
-                    # Check if shift matches preference
-                    matches_pref = (
-                        (pref == "Day Only" and shift == "Day") or
-                        (pref == "Evening Only" and shift == "Evening") or
-                        (pref == "Night Only" and shift == "Night")
-                    )
+                    # Exact preference match check
+                    matches_pref = (pref == f"{shift} Only")
                     
-                    # Penalize if not matching preference
+                    # Apply extremely severe penalty for preference violations
                     if not matches_pref:
-                        cost += self.w_pref.get(seniority, self.w_pref["Junior"])
+                        cost += self.w_pref.get(seniority, self.w_pref["Junior"]) * 2  # Double penalty as extra enforcement
+                        
+                        # Extra penalty for evening pref doctors assigned to night shifts
+                        if pref == "Evening Only" and shift == "Night":
+                            cost += self.w_avail  # Apply availability-level penalty (100000)
+                            
+                        # Extra penalty for day pref doctors assigned to night shifts
+                        if pref == "Day Only" and shift == "Night":
+                            cost += self.w_avail  # Apply availability-level penalty (100000)
         
         # 9. Fairness between doctors with same preference
         for pref_type in ["Evening Only", "Day Only", "Night Only"]:
@@ -864,6 +943,24 @@ class MonthlyScheduleOptimizer:
                                 old_doctor = old_doc
                                 new_doctor = new_doc
                                 move_successful = True
+                                # Check that this move doesn't create consecutive night shifts
+                                if shift == "Night" and new_doctor is not None:
+                                    # Check if doctor worked night shift yesterday
+                                    date_idx = self.all_dates.index(date)
+                                    if date_idx > 0:
+                                        prev_date = self.all_dates[date_idx - 1]
+                                        if (prev_date in current_schedule and 
+                                            "Night" in current_schedule[prev_date] and 
+                                            new_doctor in current_schedule[prev_date]["Night"]):
+                                            move_successful = False  # Invalidate this move
+                                    
+                                    # Check if doctor would work night shift tomorrow
+                                    if date_idx < len(self.all_dates) - 1:
+                                        next_date = self.all_dates[date_idx + 1]
+                                        if (next_date in current_schedule and 
+                                            "Night" in current_schedule[next_date] and 
+                                            new_doctor in current_schedule[next_date]["Night"]):
+                                            move_successful = False  # Invalidate this move
                                 break
                     
                     if duplicates_found and move_successful:
@@ -924,6 +1021,24 @@ class MonthlyScheduleOptimizer:
                             available_pref_docs.sort(key=lambda d: preference_satisfaction.get(d, 0))
                             new_doctor = available_pref_docs[0]
                             move_successful = True
+                            # Check that this move doesn't create consecutive night shifts
+                            if shift == "Night" and new_doctor is not None:
+                                # Check if doctor worked night shift yesterday
+                                date_idx = self.all_dates.index(date)
+                                if date_idx > 0:
+                                    prev_date = self.all_dates[date_idx - 1]
+                                    if (prev_date in current_schedule and 
+                                        "Night" in current_schedule[prev_date] and 
+                                        new_doctor in current_schedule[prev_date]["Night"]):
+                                        move_successful = False  # Invalidate this move
+                                
+                                # Check if doctor would work night shift tomorrow
+                                if date_idx < len(self.all_dates) - 1:
+                                    next_date = self.all_dates[date_idx + 1]
+                                    if (next_date in current_schedule and 
+                                        "Night" in current_schedule[next_date] and 
+                                        new_doctor in current_schedule[next_date]["Night"]):
+                                        move_successful = False  # Invalidate this move
             
             # 2. Target senior workload issues
             elif move_type == "senior_workload":
@@ -983,6 +1098,24 @@ class MonthlyScheduleOptimizer:
                         available_juniors.sort(key=lambda d: weekend_holiday_hours.get(d, 0))
                         new_doctor = available_juniors[0] 
                         move_successful = True
+                        # Check that this move doesn't create consecutive night shifts
+                        if shift == "Night" and new_doctor is not None:
+                            # Check if doctor worked night shift yesterday
+                            date_idx = self.all_dates.index(date)
+                            if date_idx > 0:
+                                prev_date = self.all_dates[date_idx - 1]
+                                if (prev_date in current_schedule and 
+                                    "Night" in current_schedule[prev_date] and 
+                                    new_doctor in current_schedule[prev_date]["Night"]):
+                                    move_successful = False  # Invalidate this move
+                            
+                            # Check if doctor would work night shift tomorrow
+                            if date_idx < len(self.all_dates) - 1:
+                                next_date = self.all_dates[date_idx + 1]
+                                if (next_date in current_schedule and 
+                                    "Night" in current_schedule[next_date] and 
+                                    new_doctor in current_schedule[next_date]["Night"]):
+                                    move_successful = False  # Invalidate this move
             
             # 3. Target monthly balance issues
             elif move_type == "monthly_balance":
@@ -1067,6 +1200,24 @@ class MonthlyScheduleOptimizer:
                                             if available_docs:
                                                 new_doctor = random.choice(available_docs)
                                                 move_successful = True
+                                                # Check that this move doesn't create consecutive night shifts
+                                                if shift == "Night" and new_doctor is not None:
+                                                    # Check if doctor worked night shift yesterday
+                                                    date_idx = self.all_dates.index(date)
+                                                    if date_idx > 0:
+                                                        prev_date = self.all_dates[date_idx - 1]
+                                                        if (prev_date in current_schedule and 
+                                                            "Night" in current_schedule[prev_date] and 
+                                                            new_doctor in current_schedule[prev_date]["Night"]):
+                                                            move_successful = False  # Invalidate this move
+                                                    
+                                                    # Check if doctor would work night shift tomorrow
+                                                    if date_idx < len(self.all_dates) - 1:
+                                                        next_date = self.all_dates[date_idx + 1]
+                                                        if (next_date in current_schedule and 
+                                                            "Night" in current_schedule[next_date] and 
+                                                            new_doctor in current_schedule[next_date]["Night"]):
+                                                            move_successful = False  # Invalidate this move
                     
             # 4. Weekend/Holiday balance move
             elif move_type == "weekend_holiday_balance":
@@ -1187,6 +1338,24 @@ class MonthlyScheduleOptimizer:
                         
                         if not already_assigned:
                             move_successful = True
+                            # Check that this move doesn't create consecutive night shifts
+                            if shift == "Night" and new_doctor is not None:
+                                # Check if doctor worked night shift yesterday
+                                date_idx = self.all_dates.index(date)
+                                if date_idx > 0:
+                                    prev_date = self.all_dates[date_idx - 1]
+                                    if (prev_date in current_schedule and 
+                                        "Night" in current_schedule[prev_date] and 
+                                        new_doctor in current_schedule[prev_date]["Night"]):
+                                        move_successful = False  # Invalidate this move
+                                
+                                # Check if doctor would work night shift tomorrow
+                                if date_idx < len(self.all_dates) - 1:
+                                    next_date = self.all_dates[date_idx + 1]
+                                    if (next_date in current_schedule and 
+                                        "Night" in current_schedule[next_date] and 
+                                        new_doctor in current_schedule[next_date]["Night"]):
+                                        move_successful = False  # Invalidate this move
             
             # 5. Consecutive days move - try to fix doctors working too many consecutive days
             elif move_type == "consecutive_days":
@@ -1267,13 +1436,36 @@ class MonthlyScheduleOptimizer:
                         # Find all available doctors for this shift who aren't already assigned on this date
                         available_doctors = set()
                         for doctor in [doc["name"] for doc in self.doctors]:
-                            # Skip if same as doctor being replaced (no-op)
-                            if doctor == old_doctor:
-                                continue
-                                
                             # Skip if already in this shift (would cause duplicate)
                             if doctor in current_assignment:
                                 continue
+                                
+                            # Check if doctor is available for this shift
+                            if not self._is_doctor_available(doctor, date, shift):
+                                continue
+                            
+                            # Check preference compatibility with shift
+                            if not self._can_assign_to_shift(doctor, shift):
+                                continue
+                                
+                            # CRUCIAL: For Night shifts, check for consecutive assignments
+                            if shift == "Night":
+                                # Check if doctor worked night shift yesterday
+                                date_idx = self.all_dates.index(date)
+                                if date_idx > 0:
+                                    prev_date = self.all_dates[date_idx - 1]
+                                    if (prev_date in current_schedule and 
+                                        "Night" in current_schedule[prev_date] and 
+                                        doctor in current_schedule[prev_date]["Night"]):
+                                        continue  # Skip this doctor
+                                
+                                # Also check if doctor is already scheduled for tomorrow's night shift
+                                if date_idx < len(self.all_dates) - 1:
+                                    next_date = self.all_dates[date_idx + 1]
+                                    if (next_date in current_schedule and 
+                                        "Night" in current_schedule[next_date] and 
+                                        doctor in current_schedule[next_date]["Night"]):
+                                        continue  # Skip this doctor
                             
                             # Check if doctor is available for this shift
                             if not self._is_doctor_available(doctor, date, shift):
@@ -1296,6 +1488,43 @@ class MonthlyScheduleOptimizer:
                             # Select a random available doctor as replacement
                             new_doctor = random.choice(list(available_doctors))
                             move_successful = True
+                            # Check that this move doesn't create consecutive night shifts
+                            if shift == "Night" and new_doctor is not None:
+                                # Check if doctor worked night shift yesterday
+                                date_idx = self.all_dates.index(date)
+                                if date_idx > 0:
+                                    prev_date = self.all_dates[date_idx - 1]
+                                    if (prev_date in current_schedule and 
+                                        "Night" in current_schedule[prev_date] and 
+                                        new_doctor in current_schedule[prev_date]["Night"]):
+                                        move_successful = False  # Invalidate this move
+                                
+                                # Check if doctor would work night shift tomorrow
+                                if date_idx < len(self.all_dates) - 1:
+                                    next_date = self.all_dates[date_idx + 1]
+                                    if (next_date in current_schedule and 
+                                        "Night" in current_schedule[next_date] and 
+                                        new_doctor in current_schedule[next_date]["Night"]):
+                                        move_successful = False  # Invalidate this move
+
+                            # Check that this move doesn't create consecutive night shifts
+                            if shift == "Night" and new_doctor is not None:
+                                # Check if doctor worked night shift yesterday
+                                date_idx = self.all_dates.index(date)
+                                if date_idx > 0:
+                                    prev_date = self.all_dates[date_idx - 1]
+                                    if (prev_date in current_schedule and 
+                                        "Night" in current_schedule[prev_date] and 
+                                        new_doctor in current_schedule[prev_date]["Night"]):
+                                        move_successful = False  # Invalidate this move
+                                
+                                # Check if doctor would work night shift tomorrow
+                                if date_idx < len(self.all_dates) - 1:
+                                    next_date = self.all_dates[date_idx + 1]
+                                    if (next_date in current_schedule and 
+                                        "Night" in current_schedule[next_date] and 
+                                        new_doctor in current_schedule[next_date]["Night"]):
+                                        move_successful = False  # Invalidate this move
             
             # Create a new schedule only if all variables are properly set and the move was successful
             if move_successful and date is not None and shift is not None and idx is not None and old_doctor is not None and new_doctor is not None:
@@ -1440,6 +1669,10 @@ class MonthlyScheduleOptimizer:
                     continue
                     
                 if not self._is_doctor_available(doctor, date, shift):
+                    continue
+                    
+                # NEW: Check preference compatibility with shift
+                if not self._can_assign_to_shift(doctor, shift):
                     continue
                     
                 already_assigned = False
