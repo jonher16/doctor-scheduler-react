@@ -26,7 +26,8 @@ import {
   Analytics as AnalyticsIcon,
   Search as SearchIcon,
   CalendarViewMonth as CalendarViewMonthIcon,
-  WbSunny as DayIcon
+  WbSunny as DayIcon,
+  ErrorOutline as ErrorIcon
 } from '@mui/icons-material';
 import MonthlyHours from './MonthlyHours';
 import WeekendHolidayBalance from './WeekendHolidayBalance';
@@ -34,6 +35,7 @@ import YearlySummary from './YearlySummary';
 import MonthlyCalendarView from './MonthlyCalendarView';
 import ExcelExportButton from './ExcelExportButton';
 import DoctorShiftTypesChart from './DoctorShiftTypesChart';
+import ConstraintViolations from './ConstraintViolations';
 
 function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
   const [tabValue, setTabValue] = useState(0);
@@ -411,6 +413,11 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
                 label="Yearly Summary" 
                 iconPosition="start" 
               />
+              <Tab 
+                icon={<ErrorIcon />} 
+                label="Constraint Violations" 
+                iconPosition="start" 
+              />
             </Tabs>
             
             <Box sx={{ p: 3 }}>
@@ -434,6 +441,9 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
               )}
               {tabValue === 4 && (
                 <YearlySummary doctors={localDoctors} schedule={localSchedule} holidays={localHolidays} />
+              )}
+              {tabValue === 5 && (
+                <ConstraintViolations doctors={localDoctors} schedule={localSchedule} holidays={localHolidays} selectedMonth={month} />
               )}
             </Box>
           </Paper>
