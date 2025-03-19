@@ -428,6 +428,20 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth }) {
           <Alert severity="warning">
             <AlertTitle>Violations Found</AlertTitle>
             {totalViolations} constraint violation(s) detected in the schedule.
+            <Box sx={{ mt: 1, display: 'flex', gap: 2 }}>
+              <Chip 
+                size="small" 
+                color="error" 
+                label="Hard Constraints" 
+                sx={{ fontWeight: 'bold' }}
+              />
+              <Chip 
+                size="small" 
+                color="warning" 
+                label="Soft Constraints" 
+                sx={{ fontWeight: 'bold' }}
+              />
+            </Box>
           </Alert>
         )}
       </Box>
@@ -488,7 +502,7 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth }) {
                     <Chip 
                       icon={violations.preferenceViolations.count > 0 ? <ErrorIcon /> : <CheckIcon />}
                       label={`Preferences: ${violations.preferenceViolations.count}`}
-                      color={violations.preferenceViolations.count > 0 ? "error" : "success"}
+                      color={violations.preferenceViolations.count > 0 ? "warning" : "success"}
                       sx={{ width: '100%', justifyContent: 'flex-start' }}
                     />
                   </Box>
@@ -519,7 +533,7 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth }) {
                   <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                     <Chip 
                       icon={violations.monthlyVariance.count > 0 ? <ErrorIcon /> : <CheckIcon />}
-                      label={`Monthly Variance +10h: ${violations.monthlyVariance.count}`}
+                      label={`Monthly Variance > 10h: ${violations.monthlyVariance.count}`}
                       color={violations.monthlyVariance.count > 0 ? "error" : "success"}
                       sx={{ width: '100%', justifyContent: 'flex-start' }}
                     />
@@ -555,11 +569,23 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth }) {
       <Box sx={{ mt: 4 }}>
         <Typography variant="h6" gutterBottom>Detailed Violations</Typography>
         
-        <Accordion disabled={violations.nightShiftFollowedByWork.count === 0}>
+        <Accordion 
+          disabled={violations.nightShiftFollowedByWork.count === 0}
+          sx={{
+            borderLeft: violations.nightShiftFollowedByWork.count > 0 ? '4px solid' : 'none',
+            borderColor: 'error.main',
+          }}
+        >
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Typography>Night Shift Followed By Work ({violations.nightShiftFollowedByWork.count})</Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+              <Typography sx={{ flexGrow: 1 }}>Night Shift Followed By Work ({violations.nightShiftFollowedByWork.count})</Typography>
+              <Chip size="small" color="error" label="Hard Constraint" sx={{ ml: 2 }} />
+            </Box>
           </AccordionSummary>
           <AccordionDetails>
+            <Typography variant="body2" sx={{ mb: 2, fontStyle: 'italic', color: 'error.main' }}>
+              Critical violation: Doctors must have adequate rest after night shifts.
+            </Typography>
             {violations.nightShiftFollowedByWork.details.length > 0 ? (
               <List>
                 {violations.nightShiftFollowedByWork.details.map((violation, index) => (
@@ -577,11 +603,23 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth }) {
           </AccordionDetails>
         </Accordion>
         
-        <Accordion disabled={violations.eveningToDayShift.count === 0}>
+        <Accordion 
+          disabled={violations.eveningToDayShift.count === 0}
+          sx={{
+            borderLeft: violations.eveningToDayShift.count > 0 ? '4px solid' : 'none',
+            borderColor: 'error.main',
+          }}
+        >
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Typography>Evening to Day Shift ({violations.eveningToDayShift.count})</Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+              <Typography sx={{ flexGrow: 1 }}>Evening to Day Shift ({violations.eveningToDayShift.count})</Typography>
+              <Chip size="small" color="error" label="Hard Constraint" sx={{ ml: 2 }} />
+            </Box>
           </AccordionSummary>
           <AccordionDetails>
+            <Typography variant="body2" sx={{ mb: 2, fontStyle: 'italic', color: 'error.main' }}>
+              Critical violation: Evening shifts should not be followed by day shifts.
+            </Typography>
             {violations.eveningToDayShift.details.length > 0 ? (
               <List>
                 {violations.eveningToDayShift.details.map((violation, index) => (
@@ -599,11 +637,23 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth }) {
           </AccordionDetails>
         </Accordion>
         
-        <Accordion disabled={violations.nightOffDayPattern.count === 0}>
+        <Accordion 
+          disabled={violations.nightOffDayPattern.count === 0}
+          sx={{
+            borderLeft: violations.nightOffDayPattern.count > 0 ? '4px solid' : 'none',
+            borderColor: 'error.main',
+          }}
+        >
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Typography>Night → Off → Day Pattern ({violations.nightOffDayPattern.count})</Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+              <Typography sx={{ flexGrow: 1 }}>Night → Off → Day Pattern ({violations.nightOffDayPattern.count})</Typography>
+              <Chip size="small" color="error" label="Hard Constraint" sx={{ ml: 2 }} />
+            </Box>
           </AccordionSummary>
           <AccordionDetails>
+            <Typography variant="body2" sx={{ mb: 2, fontStyle: 'italic', color: 'error.main' }}>
+              Critical violation: Doctors working night shifts need adequate recovery time before day shifts.
+            </Typography>
             {violations.nightOffDayPattern.details.length > 0 ? (
               <List>
                 {violations.nightOffDayPattern.details.map((violation, index) => (
@@ -621,11 +671,23 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth }) {
           </AccordionDetails>
         </Accordion>
         
-        <Accordion disabled={violations.preferenceViolations.count === 0}>
+        <Accordion 
+          disabled={violations.preferenceViolations.count === 0}
+          sx={{
+            borderLeft: violations.preferenceViolations.count > 0 ? '4px solid' : 'none',
+            borderColor: 'warning.main',
+          }}
+        >
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Typography>Preference Violations ({violations.preferenceViolations.count})</Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+              <Typography sx={{ flexGrow: 1 }}>Preference Violations ({violations.preferenceViolations.count})</Typography>
+              <Chip size="small" color="warning" label="Soft Constraint" sx={{ ml: 2 }} />
+            </Box>
           </AccordionSummary>
           <AccordionDetails>
+            <Typography variant="body2" sx={{ mb: 2, fontStyle: 'italic' }}>
+              Preference violations are considered soft constraints and do not severely impact schedule quality.
+            </Typography>
             {violations.preferenceViolations.details.length > 0 ? (
               <List>
                 {violations.preferenceViolations.details.map((violation, index) => (
@@ -643,11 +705,23 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth }) {
           </AccordionDetails>
         </Accordion>
         
-        <Accordion disabled={violations.seniorOnLongHoliday.count === 0}>
+        <Accordion 
+          disabled={violations.seniorOnLongHoliday.count === 0}
+          sx={{
+            borderLeft: violations.seniorOnLongHoliday.count > 0 ? '4px solid' : 'none',
+            borderColor: 'error.main',
+          }}
+        >
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Typography>Senior on Long Holiday ({violations.seniorOnLongHoliday.count})</Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+              <Typography sx={{ flexGrow: 1 }}>Senior on Long Holiday ({violations.seniorOnLongHoliday.count})</Typography>
+              <Chip size="small" color="error" label="Hard Constraint" sx={{ ml: 2 }} />
+            </Box>
           </AccordionSummary>
           <AccordionDetails>
+            <Typography variant="body2" sx={{ mb: 2, fontStyle: 'italic', color: 'error.main' }}>
+              Critical violation: Senior doctors should not work on long holidays.
+            </Typography>
             {violations.seniorOnLongHoliday.details.length > 0 ? (
               <List>
                 {violations.seniorOnLongHoliday.details.map((violation, index) => (
@@ -665,11 +739,23 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth }) {
           </AccordionDetails>
         </Accordion>
         
-        <Accordion disabled={violations.monthlyVariance.count === 0}>
+        <Accordion 
+          disabled={violations.monthlyVariance.count === 0}
+          sx={{
+            borderLeft: violations.monthlyVariance.count > 0 ? '4px solid' : 'none',
+            borderColor: 'error.main',
+          }}
+        >
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Typography>Monthly Variance +10h ({violations.monthlyVariance.count})</Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+              <Typography sx={{ flexGrow: 1 }}>Monthly Variance + 10h ({violations.monthlyVariance.count})</Typography>
+              <Chip size="small" color="error" label="Hard Constraint" sx={{ ml: 2 }} />
+            </Box>
           </AccordionSummary>
           <AccordionDetails>
+            <Typography variant="body2" sx={{ mb: 2, fontStyle: 'italic', color: 'error.main' }}>
+              Critical violation: Monthly workload variance must not exceed 10 hours.
+            </Typography>
             {violations.monthlyVariance.details.length > 0 ? (
               <Box>
                 {violations.monthlyVariance.details.map((violation, index) => (
@@ -691,11 +777,23 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth }) {
           </AccordionDetails>
         </Accordion>
         
-        <Accordion disabled={violations.seniorMoreHoursThanJunior.count === 0}>
+        <Accordion 
+          disabled={violations.seniorMoreHoursThanJunior.count === 0}
+          sx={{
+            borderLeft: violations.seniorMoreHoursThanJunior.count > 0 ? '4px solid' : 'none',
+            borderColor: 'error.main',
+          }}
+        >
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Typography>Senior Working More Hours Than Junior ({violations.seniorMoreHoursThanJunior.count})</Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+              <Typography sx={{ flexGrow: 1 }}>Senior Working More Hours Than Junior ({violations.seniorMoreHoursThanJunior.count})</Typography>
+              <Chip size="small" color="error" label="Hard Constraint" sx={{ ml: 2 }} />
+            </Box>
           </AccordionSummary>
           <AccordionDetails>
+            <Typography variant="body2" sx={{ mb: 2, fontStyle: 'italic', color: 'error.main' }}>
+              Critical violation: Senior doctors should work fewer hours than junior doctors.
+            </Typography>
             {violations.seniorMoreHoursThanJunior.details.length > 0 ? (
               <Box>
                 {violations.seniorMoreHoursThanJunior.details.map((violation, index) => (
@@ -712,11 +810,23 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth }) {
           </AccordionDetails>
         </Accordion>
         
-        <Accordion disabled={violations.seniorMoreWeekendHoliday.count === 0}>
+        <Accordion 
+          disabled={violations.seniorMoreWeekendHoliday.count === 0}
+          sx={{
+            borderLeft: violations.seniorMoreWeekendHoliday.count > 0 ? '4px solid' : 'none',
+            borderColor: 'error.main',
+          }}
+        >
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Typography>Senior More Weekend/Holiday Than Junior ({violations.seniorMoreWeekendHoliday.count})</Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+              <Typography sx={{ flexGrow: 1 }}>Senior More Weekend/Holiday Than Junior ({violations.seniorMoreWeekendHoliday.count})</Typography>
+              <Chip size="small" color="error" label="Hard Constraint" sx={{ ml: 2 }} />
+            </Box>
           </AccordionSummary>
           <AccordionDetails>
+            <Typography variant="body2" sx={{ mb: 2, fontStyle: 'italic', color: 'error.main' }}>
+              Critical violation: Senior doctors should work fewer weekend/holiday hours than junior doctors.
+            </Typography>
             {violations.seniorMoreWeekendHoliday.details.length > 0 ? (
               <Box>
                 {violations.seniorMoreWeekendHoliday.details.map((violation, index) => (
