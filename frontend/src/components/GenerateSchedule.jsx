@@ -1,229 +1,339 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  Typography,
   Box,
-  Paper,
+  Typography,
   Button,
-  CircularProgress,
+  Paper,
+  FormControl,
+  FormControlLabel,
+  RadioGroup,
+  Radio,
+  Checkbox,
+  TextField,
+  MenuItem,
   Grid,
-  Card,
-  CardContent,
   LinearProgress,
   Alert,
   AlertTitle,
   Divider,
-  IconButton,
+  Card,
+  CardContent,
   Tooltip,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  Switch,
-  FormControl,
-  FormLabel,
-  Radio,
-  RadioGroup,
-  FormControlLabel,
-  InputLabel,
-  Select,
-  MenuItem,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Chip,
-  Tabs,
-  Tab,
-  Slider,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions
+  IconButton,
 } from '@mui/material';
 import {
-  PlayArrow as PlayArrowIcon,
-  Dashboard as DashboardIcon,
-  Error as ErrorIcon,
+  CalendarMonth as CalendarIcon,
   Info as InfoIcon,
-  ExpandMore as ExpandMoreIcon,
-  Psychology as PsychologyIcon,
-  CheckCircle as CheckCircleIcon,
-  Cancel as CancelIcon,
-  WeekendOutlined as WeekendIcon,
-  EventOutlined as HolidayIcon,
-  AccessTime as AccessTimeIcon,
-  HelpOutline as HelpOutlineIcon
+  Settings as SettingsIcon,
+  PlayArrow as StartIcon,
+  Dashboard as DashboardIcon,
 } from '@mui/icons-material';
 
-import {
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as RechartsTooltip,
-  Legend,
-  ResponsiveContainer
-} from 'recharts';
-
-// Update the function signature to accept apiUrl prop
-function GenerateSchedule({ doctors, holidays, availability, setSchedule, apiUrl }) {
-  // States to store progress and status messages
-  const [status, setStatus] = useState("");
+const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl }) => {
+  // Change default to 'monthly' instead of 'yearly'
+  const [scheduleType, setScheduleType] = useState('monthly');
+  const [month, setMonth] = useState(new Date().getMonth() + 1); // Current month (1-12)
+  const [optimizing, setOptimizing] = useState(false);
+  const [taskId, setTaskId] = useState(null);
   const [progress, setProgress] = useState(0);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [error, setError] = useState("");
-  const [generationStats, setGenerationStats] = useState(null);
-  const [useOptimizedAlgorithm, setUseOptimizedAlgorithm] = useState(true);
-  const [serverAvailable, setServerAvailable] = useState(false);
-  const [optimizationResult, setOptimizationResult] = useState(null);
-  const [statsTabValue, setStatsTabValue] = useState(0);
-  const [optimizationProgress, setOptimizationProgress] = useState([]);
-  const [optimizationStage, setOptimizationStage] = useState("initializing");
-  const [schedulingMode, setSchedulingMode] = useState("yearly");
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1); // Current month (1-12)
-  const [progressMessage, setProgressMessage] = useState("");
+  const [progressMessage, setProgressMessage] = useState('');
+  const [generatedSchedule, setGeneratedSchedule] = useState(null);
+  const [error, setError] = useState(null);
+  const [advancedOptions, setAdvancedOptions] = useState(false);
   
-  // Weight optimization states
+  // Weight optimization options - only available for monthly scheduling
   const [useWeightOptimization, setUseWeightOptimization] = useState(false);
-  const [maxIterations, setMaxIterations] = useState(20);
-  const [timeLimit, setTimeLimit] = useState(10); // minutes
-  const [parallelJobs, setParallelJobs] = useState(1);
-  const [showWeightResults, setShowWeightResults] = useState(false);
-  const [weightResults, setWeightResults] = useState(null);
+  const [weightMaxIterations, setWeightMaxIterations] = useState(20);
+  const [weightParallelJobs, setWeightParallelJobs] = useState(1);
+  const [weightTimeLimit, setWeightTimeLimit] = useState(10);
   
-  // Time tracking states
-  const [startTime, setStartTime] = useState(null);
-  const [elapsedTime, setElapsedTime] = useState(0);
+  // For polling task progress
+  const pollingInterval = useRef(null);
+  const abortControllerRef = useRef(null);
 
-  // Use the provided API URL or fall back to default
-  const BACKEND_API_URL = apiUrl || 'http://localhost:5000/api';
-
-  // Check server availability on mount
+  // Clean up polling when component unmounts
   useEffect(() => {
-    checkServerStatus().then(isAvailable => {
-      setServerAvailable(isAvailable);
-      if (!isAvailable) {
-        setUseOptimizedAlgorithm(false);
+    return () => {
+      if (pollingInterval.current) {
+        clearInterval(pollingInterval.current);
       }
-    });
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
   }, []);
 
-  // useEffect to track elapsed time
-  useEffect(() => {
-    let timer;
+  // Handle schedule type change
+  const handleScheduleTypeChange = (event) => {
+    const newType = event.target.value;
+    setScheduleType(newType);
     
-    if (isGenerating) {
-      // Set the start time when generation begins
-      if (!startTime) {
-        setStartTime(Date.now());
-      }
-      
-      // Update elapsed time every second
-      timer = setInterval(() => {
-        const elapsed = Math.floor((Date.now() - startTime) / 1000); // in seconds
-        setElapsedTime(elapsed);
-      }, 1000);
-    } else {
-      // Reset start time when not generating
-      setStartTime(null);
+    // If switching to yearly, disable weight optimization
+    if (newType === 'yearly') {
+      setUseWeightOptimization(false);
     }
-    
-    return () => {
-      if (timer) clearInterval(timer);
-    };
-  }, [isGenerating, startTime]);
-
-  // useEffect to poll the /optimize/progress endpoint while optimization is running
-  useEffect(() => {
-    if (!isGenerating) return;
-
-    const interval = setInterval(async () => {
-      try {
-        const response = await fetch(`${BACKEND_API_URL}/optimize/progress`);
-        if (response.ok) {
-          const data = await response.json();
-          
-          // Directly use the backend's progress percentage
-          setProgress(data.current);
-          setStatus(data.message || "Optimizing schedule...");
-          
-          // Update the optimization stage based on the message content
-          let stage = optimizationStage;
-          if (data.message.includes("Initializing")) {
-            stage = "initializing";
-          } else if (data.message.includes("Checking constraints") || data.message.includes("Building model")) {
-            stage = "building";
-          } else if (data.message.includes("Iteration")) {
-            stage = "optimizing";
-            
-            // Add the current progress point to our chart data
-            const iterationMatch = data.message.match(/Iteration (\d+)/);
-            if (iterationMatch && iterationMatch[1]) {
-              const iteration = parseInt(iterationMatch[1]);
-              const costMatch = data.message.match(/cost = ([\d.]+)/);
-              const cost = costMatch ? parseFloat(costMatch[1]) : null;
-              
-              if (cost !== null) {
-                setOptimizationProgress(prev => {
-                  // Don't add duplicate iterations
-                  if (!prev.find(p => p.iteration === iteration)) {
-                    return [...prev, { iteration, cost }];
-                  }
-                  return prev;
-                });
-              }
-            }
-          } else if (data.message.includes("complete")) {
-            stage = "finalizing";
-          }
-          
-          setOptimizationStage(stage);
-          
-          if (data.status === "completed" || data.status === "error") {
-            setIsGenerating(false);
-            clearInterval(interval);
-          }
-        } else {
-          console.warn("Progress endpoint returned an error.");
-        }
-      } catch (err) {
-        console.error("Error polling progress:", err);
-      }
-    }, 3000); // Poll every 3 seconds instead of every second to reduce server load
-
-    return () => clearInterval(interval);
-  }, [isGenerating, BACKEND_API_URL, optimizationStage]);
-
-  // Function to format time in mm:ss or hh:mm:ss format
-  const formatTime = (seconds) => {
-    if (seconds === null || isNaN(seconds)) return '--:--';
-    
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    
-    if (hours > 0) {
-      return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    }
-    
-    return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Function to check if the server is available.
-  async function checkServerStatus() {
-    try {
-      const response = await fetch(`${BACKEND_API_URL}/status`);
-      return response.ok;
-    } catch (error) {
-      console.error("Server status check failed:", error);
-      return false;
-    }
-  }
+  // Handle month change
+  const handleMonthChange = (event) => {
+    setMonth(parseInt(event.target.value, 10));
+  };
 
+  // Toggle advanced options
+  const toggleAdvancedOptions = () => {
+    setAdvancedOptions(!advancedOptions);
+  };
+
+  // Start generation process
+  const generate = async () => {
+    try {
+      setOptimizing(true);
+      setProgress(0);
+      setProgressMessage('Preparing optimization...');
+      setError(null);
+      setGeneratedSchedule(null);
+      
+      if (useWeightOptimization && scheduleType === 'monthly') {
+        await generateWithWeightOptimization();
+      } else if (scheduleType === 'monthly') {
+        await generateMonthlySchedule();
+      } else {
+        await generateYearlySchedule();
+      }
+    } catch (error) {
+      console.error('Error generating schedule:', error);
+      setError(error.toString());
+      setOptimizing(false);
+      setProgress(0);
+      setProgressMessage('');
+    }
+  };
+
+  // Generate yearly schedule
+  const generateYearlySchedule = async () => {
+    try {
+      const result = await generateOptimizedSchedule('/optimize', {
+        doctors,
+        holidays,
+        availability,
+        scheduling_mode: 'yearly'
+      });
+      
+      handleScheduleResult(result);
+    } catch (error) {
+      console.error('Yearly optimization API error:', error);
+      setError(error.toString());
+      setOptimizing(false);
+    }
+  };
+
+  // Generate monthly schedule
+  const generateMonthlySchedule = async () => {
+    try {
+      const result = await generateOptimizedSchedule('/optimize', {
+        doctors,
+        holidays,
+        availability,
+        scheduling_mode: 'monthly',
+        month
+      });
+      
+      handleScheduleResult(result);
+    } catch (error) {
+      console.error('Monthly optimization API error:', error);
+      setError(error.toString());
+      setOptimizing(false);
+    }
+  };
+
+  // Generate with weight optimization
+  const generateWithWeightOptimization = async () => {
+    try {
+      const result = await generateOptimizedSchedule('/optimize-weights', {
+        doctors,
+        holidays,
+        availability,
+        month,
+        max_iterations: weightMaxIterations,
+        parallel_jobs: weightParallelJobs,
+        time_limit_minutes: weightTimeLimit
+      });
+      
+      handleScheduleResult(result);
+    } catch (error) {
+      console.error('Weight optimization API error:', error);
+      setError(error.toString());
+      setOptimizing(false);
+    }
+  };
+
+  // Generic function to handle API calls with progress tracking
+  const generateOptimizedSchedule = async (endpoint, data) => {
+    try {
+      // Create a new AbortController for this request
+      abortControllerRef.current = new AbortController();
+      const { signal } = abortControllerRef.current;
+      
+      // Start the optimization task
+      const response = await fetch(`${apiUrl}${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+        signal
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`API request failed: ${response.status} ${errorText}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      
+      if (result.task_id) {
+        // Task started, begin polling for progress
+        setTaskId(result.task_id);
+        return await pollTaskProgress(result.task_id);
+      } else {
+        // Task completed immediately
+        return result;
+      }
+    } catch (error) {
+      // Re-throw the error to be handled by the caller
+      throw error;
+    }
+  };
+
+  // Poll task progress
+  const pollTaskProgress = (task_id) => {
+    return new Promise((resolve, reject) => {
+      // Clear any existing polling interval
+      if (pollingInterval.current) {
+        clearInterval(pollingInterval.current);
+      }
+      
+      // Start polling
+      pollingInterval.current = setInterval(async () => {
+        try {
+          // Use the correct endpoint as shown in the backend code
+          const response = await fetch(`${apiUrl}/task/${task_id}`, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+            }
+          });
+          
+          if (!response.ok) {
+            clearInterval(pollingInterval.current);
+            reject(new Error(`Failed to fetch task progress: ${response.status}`));
+            return;
+          }
+          
+          const taskInfo = await response.json();
+          
+          // Update progress
+          if (taskInfo.progress !== undefined) {
+            setProgress(taskInfo.progress);
+          }
+          
+          if (taskInfo.message) {
+            setProgressMessage(taskInfo.message);
+          }
+          
+          // Check if task is complete
+          if (taskInfo.status === "COMPLETED") {
+            clearInterval(pollingInterval.current);
+            pollingInterval.current = null;
+            
+            // The result is already included in the taskInfo for completed tasks
+            if (taskInfo.result) {
+              resolve(taskInfo.result);
+            } else {
+              reject(new Error("Task completed but no result was returned"));
+            }
+          } else if (taskInfo.status === "ERROR") {
+            clearInterval(pollingInterval.current);
+            pollingInterval.current = null;
+            reject(new Error(taskInfo.message || 'Task failed'));
+          }
+          // Otherwise, continue polling
+          
+        } catch (error) {
+          console.error('Error polling task progress:', error);
+          // Don't clear the interval or reject here - allow it to retry
+          // unless the error is because we aborted the request
+          if (error.name === 'AbortError') {
+            clearInterval(pollingInterval.current);
+            pollingInterval.current = null;
+            reject(new Error('Request aborted'));
+          }
+        }
+      }, 1000); // Poll every second
+    });
+  };
+
+  // Handle schedule result
+  const handleScheduleResult = (result) => {
+    if (result.error) {
+      setError(result.error);
+      setOptimizing(false);
+      return;
+    }
+    
+    if (result.schedule) {
+      setGeneratedSchedule(result.schedule);
+      // Set the schedule in parent component to update global state
+      setSchedule(result.schedule);
+    } else if (result.weights && result.schedule) {
+      // Weight optimization result
+      setGeneratedSchedule(result.schedule);
+      // Set the schedule in parent component to update global state
+      setSchedule(result.schedule);
+    }
+    
+    // Clear task polling
+    if (pollingInterval.current) {
+      clearInterval(pollingInterval.current);
+      pollingInterval.current = null;
+    }
+    
+    setOptimizing(false);
+    setProgress(100);
+    setProgressMessage('Schedule generation complete!');
+  };
+
+  // Cancel optimization
+  const cancelOptimization = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    
+    if (pollingInterval.current) {
+      clearInterval(pollingInterval.current);
+      pollingInterval.current = null;
+    }
+    
+    setOptimizing(false);
+    setProgress(0);
+    setProgressMessage('');
+    setTaskId(null);
+  };
+
+  // Go to dashboard - should only be enabled when schedule is generated
+  const goToDashboard = () => {
+    if (generatedSchedule) {
+      // This will use the schedule already set in parent component
+      // Additional call to ensure the parent state is updated
+      setSchedule(generatedSchedule);
+    }
+  };
+
+  // Get month name from number
   const getMonthName = (monthNum) => {
     const months = [
       'January', 'February', 'March', 'April', 'May', 'June',
@@ -232,319 +342,9 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule, apiUrl
     return months[monthNum - 1];
   };
 
-  // Helper function to monitor a task
-  const monitorTask = async (taskId, callback) => {
-    let completed = false;
-    let attempts = 0;
-    const maxAttempts = 600; // 10 minutes max (polling every second)
-    
-    while (!completed && attempts < maxAttempts) {
-      try {
-        const response = await fetch(`${BACKEND_API_URL}/task/${taskId}`);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch task status: ${response.status}`);
-        }
-        
-        const taskInfo = await response.json();
-        if (callback) callback(taskInfo);
-        
-        if (taskInfo.status === "COMPLETED" || taskInfo.status === "ERROR") {
-          completed = true;
-          if (taskInfo.status === "ERROR") {
-            throw new Error(taskInfo.message || "Task failed");
-          }
-        } else {
-          // Wait before checking again
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-      } catch (error) {
-        console.error("Error monitoring task:", error);
-        attempts++;
-        
-        // Wait a bit longer on error
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      }
-      
-      attempts++;
-    }
-    
-    if (!completed) {
-      throw new Error("Task monitoring timed out");
-    }
-  };
-
-  // Optimized schedule generation using the Python API.
-  const generateOptimizedSchedule = async () => {
-    try {
-      // Reset optimization progress chart data
-      setOptimizationProgress([]);
-      setOptimizationStage("initializing");
-      
-      // Update the status to include month if in monthly mode
-      setStatus(schedulingMode === "monthly" 
-        ? `Connecting to optimization server for ${getMonthName(selectedMonth)}...` 
-        : "Connecting to optimization server...");
-      setProgress(5);
-      
-      // Prepare input data for the optimizer
-      let requestData = { 
-        doctors, 
-        holidays, 
-        availability
-      };
-
-      // Choose endpoint based on whether we're using weight optimization
-      let endpoint;
-      if (useWeightOptimization) {
-        endpoint = `/optimize-weights`;
-        requestData = {
-          ...requestData,
-          max_iterations: maxIterations,
-          time_limit_minutes: timeLimit,
-          parallel_jobs: parallelJobs
-        };
-      } else {
-        endpoint = `/generate-schedule`;
-      }
-
-      // Add scheduling mode data
-      if (schedulingMode === "monthly") {
-        requestData.month = selectedMonth;
-      }
-  
-      // Start the task
-      const response = await fetch(`${BACKEND_API_URL}${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestData),
-      });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`API request failed: ${errorText}`);
-      }
-      
-      // Get the task ID
-      const { task_id } = await response.json();
-      
-      // Monitor the task
-      await monitorTask(task_id, (taskInfo) => {
-        setProgress(taskInfo.progress || 0);
-        setStatus(taskInfo.message || "Processing...");
-        
-        if (taskInfo.status === "COMPLETED" && taskInfo.result) {
-          if (useWeightOptimization) {
-            // For weight optimization, we need to extract both weights and schedule
-            setWeightResults(taskInfo.result);
-            setSchedule(taskInfo.result.schedule);
-            return taskInfo.result;
-          } else {
-            // Regular schedule generation
-            setSchedule(taskInfo.result.schedule);
-            return taskInfo.result;
-          }
-        }
-      });
-      
-      setProgress(100);
-      setStatus("Schedule generated successfully!");
-      
-      // Return the result to be used by the generate function
-      if (useWeightOptimization) {
-        return { 
-          schedule: weightResults.schedule, 
-          optimizationStats: weightResults.statistics 
-        };
-      } else {
-        return { 
-          schedule: optimizationResult?.schedule, 
-          optimizationStats: optimizationResult?.statistics 
-        };
-      }
-    } catch (error) {
-      console.error("Optimization API error:", error);
-      throw error;
-    }
-  };
-
-  // Simple schedule generation (fallback algorithm)
-  const generateSimpleSchedule = () => {
-    // Use a more detailed progress simulation for the simple algorithm
-    let progressTimer;
-    const startProgress = () => {
-      let simProgress = 0;
-      progressTimer = setInterval(() => {
-        simProgress += 3;
-        // Only go up to 90% in simulation, leave last 10% for actual completion
-        setProgress(Math.min(90, simProgress));
-        
-        if (simProgress < 30) {
-          setStatus("Initializing schedule generation...");
-        } else if (simProgress < 60) {
-          setStatus("Assigning doctors to shifts...");
-        } else if (simProgress < 90) {
-          setStatus("Finalizing schedule...");
-        }
-        
-        if (simProgress >= 90) {
-          clearInterval(progressTimer);
-        }
-      }, 300);
-    };
-      
-    // Start the progress simulation
-    startProgress();
-    
-    // Generate the schedule
-    const schedule = {};
-    const daysInYear = 365;
-    const startDate = new Date("2025-01-01");
-    const shifts = ["Day", "Evening", "Night"];
-    const shiftCoverage = { "Day": 2, "Evening": 1, "Night": 2 };
-  
-    let doctorIndex = 0;
-    for (let d = 0; d < daysInYear; d++) {
-      const currentDate = new Date(startDate);
-      currentDate.setDate(startDate.getDate() + d);
-      const dateStr = currentDate.toISOString().split('T')[0];
-      schedule[dateStr] = { "Day": [], "Evening": [], "Night": [] };
-  
-      shifts.forEach(shift => {
-        for (let i = 0; i < shiftCoverage[shift]; i++) {
-          // Round-robin assignment (simple logic for demonstration)
-          schedule[dateStr][shift].push(doctors[doctorIndex].name);
-          doctorIndex = (doctorIndex + 1) % doctors.length;
-        }
-      });
-    }
-    
-    // Clean up timer
-    clearInterval(progressTimer);
-    setProgress(100);
-    setStatus("Schedule generated successfully!");
-
-    return schedule;
-  };
-
-  // Main function to generate schedule
-  const generate = async () => {
-    if (doctors.length === 0) {
-      setError("No doctors configured! Please add doctors before generating a schedule.");
-      return;
-    }
-  
-    // Reset all relevant states.
-    setIsGenerating(true);
-    setStatus("Initializing schedule generation...");
-    setProgress(0);
-    setError("");
-    setOptimizationResult(null);
-    setGenerationStats(null);
-    setOptimizationProgress([]);
-    setWeightResults(null);
-    
-    // Reset time tracking
-    setStartTime(Date.now());
-    setElapsedTime(0);
-  
-    try {
-      let schedule;
-      let stats = {};
-
-      if (useOptimizedAlgorithm && serverAvailable) {
-        // Start the optimization request.
-        const result = await generateOptimizedSchedule();
-        schedule = result.schedule;
-        stats.optimized = true;
-        stats.optimizationMetrics = result.optimizationStats;
-        stats.preferenceMetrics = result.optimizationStats.preference_metrics;
-        stats.weekendMetrics = result.optimizationStats.weekend_metrics;
-        stats.holidayMetrics = result.optimizationStats.holiday_metrics;
-      } else {
-        // Fallback to simple algorithm if optimization server is not available.
-        schedule = generateSimpleSchedule();
-        stats.optimized = false;
-      }
-      
-      // Calculate additional statistics
-      let totalShifts = 0;
-      const doctorShifts = {};
-      doctors.forEach(doc => { doctorShifts[doc.name] = 0; });
-      Object.keys(schedule).forEach(date => {
-        Object.keys(schedule[date]).forEach(shift => {
-          const assignedDoctors = schedule[date][shift];
-          totalShifts += assignedDoctors.length;
-          assignedDoctors.forEach(name => {
-            doctorShifts[name] += 1;
-          });
-        });
-      });
-      stats.totalShifts = totalShifts;
-      stats.doctorShifts = doctorShifts;
-      
-      // Update state with final schedule and stats.
-      setGenerationStats(stats);
-      setSchedule(schedule);
-      setStatus("Schedule generated successfully!");
-      setProgress(100);
-    } catch (err) {
-      console.error("Error generating schedule:", err);
-      setError(`An error occurred while generating the schedule: ${err.message}`);
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  // Helper function to calculate preference adherence percentage
-  const calculatePreferenceAdherence = (doctor) => {
-    if (!generationStats?.preferenceMetrics) return null;
-    
-    const metrics = generationStats.preferenceMetrics[doctor];
-    if (!metrics) return null;
-    
-    // If no preference is set, return null
-    if (metrics.preference === "None") return null;
-    
-    const preferredShifts = metrics.preferred_shifts || 0;
-    const totalShifts = preferredShifts + (metrics.other_shifts || 0);
-    
-    if (totalShifts === 0) return 0;
-    return Math.round((preferredShifts / totalShifts) * 100);
-  };
-
-  // Function to get senior doctor names
-  const getSeniorDoctors = () => {
-    return doctors
-      .filter(doc => doc.seniority === "Senior")
-      .map(doc => doc.name);
-  };
-  
-  // Function to get junior doctor names
-  const getJuniorDoctors = () => {
-    return doctors
-      .filter(doc => doc.seniority !== "Senior")
-      .map(doc => doc.name);
-  };
-
-  const handleTabChange = (event, newValue) => {
-    setStatsTabValue(newValue);
-  };
-  
-  // Function to get a friendly description of the current optimization stage
-  const getStageDescription = () => {
-    switch (optimizationStage) {
-      case "initializing":
-        return "Setting up the optimization problem";
-      case "building":
-        return "Building constraints and variables";
-      case "optimizing":
-        return "Running main optimization algorithm";
-      case "finalizing":
-        return "Finalizing and validating results";
-      default:
-        return "Processing";
-    }
-  };
+  // Prevent optimization if required data is missing
+  const canOptimize = doctors && doctors.length > 0 && 
+                     holidays && Object.keys(holidays).length > 0;
 
   return (
     <Box>
@@ -553,880 +353,270 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule, apiUrl
       </Typography>
       
       <Box sx={{ mb: 3 }}>
-        <Typography variant="body1" color="text.secondary" paragraph>
-          Generate an optimized yearly schedule for all doctors based on your configurations.
+        <Typography variant="body1" color="text.secondary">
+          Generate an optimized schedule for hospital staff based on doctor availability,
+          preferences, and constraints.
         </Typography>
       </Box>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 3 }}
-          action={
-            <IconButton aria-label="close" color="inherit" size="small" onClick={() => setError("")}>
-              <ErrorIcon fontSize="inherit" />
-            </IconButton>
-          }
-        >
-          <AlertTitle>Error</AlertTitle>
-          {error}
+      {!canOptimize && (
+        <Alert severity="warning" sx={{ mb: 4 }}>
+          <AlertTitle>Missing Data</AlertTitle>
+          You need to have doctors and holidays configured before generating a schedule.
+          Please go to the Doctor Configuration and Holiday Configuration sections to add the necessary data.
         </Alert>
       )}
 
-      {!serverAvailable && useOptimizedAlgorithm && (
-        <Alert severity="warning" sx={{ mb: 3 }}>
-          <AlertTitle>Optimization Server Unavailable</AlertTitle>
-          The optimization server is not responding. The application will use the simple scheduling algorithm instead.
-        </Alert>
-      )}
-
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={4}>
-          <Card sx={{ height: '100%' }}>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Configuration Summary
+      <Paper sx={{ p: 3, mb: 4 }}>
+        <Typography variant="h6" gutterBottom>
+          Schedule Options
+        </Typography>
+        
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={6}>
+            <FormControl component="fieldset" sx={{ mb: 2 }}>
+              <Typography variant="subtitle2" gutterBottom>
+                Schedule Type
               </Typography>
-              <Divider sx={{ mb: 2 }} />
-              {/* Add the scheduling mode controls */}
-              <Box sx={{ mb: 3 }}>
-                <FormControl component="fieldset">
-                  <FormLabel component="legend">Scheduling Mode</FormLabel>
-                  <RadioGroup
-                    row
-                    value={schedulingMode}
-                    onChange={(e) => setSchedulingMode(e.target.value)}
-                  >
-                    <FormControlLabel value="yearly" control={<Radio />} label="Full Year" />
-                    <FormControlLabel value="monthly" control={<Radio />} label="Single Month" />
-                  </RadioGroup>
-                </FormControl>
-                
-                {/* Month selector only visible when in monthly mode */}
-                {schedulingMode === "monthly" && (
-                  <FormControl fullWidth sx={{ mt: 2 }}>
-                    <InputLabel id="month-select-label">Month</InputLabel>
-                    <Select
-                      labelId="month-select-label"
-                      value={selectedMonth}
-                      label="Month"
-                      onChange={(e) => setSelectedMonth(e.target.value)}
-                    >
-                      {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
-                        <MenuItem key={month} value={month}>
-                          {getMonthName(month)}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                )}
-              </Box>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                <Typography variant="body1">Doctors configured:</Typography>
-                <Typography variant="body1" fontWeight="bold">{doctors.length}</Typography>
-              </Box>
+              <RadioGroup
+                name="schedule-type"
+                value={scheduleType}
+                onChange={handleScheduleTypeChange}
+              >
+                <FormControlLabel 
+                  value="monthly" 
+                  control={<Radio />} 
+                  label="Monthly Schedule (Recommended)" 
+                />
+                <FormControlLabel 
+                  value="yearly" 
+                  control={<Radio />} 
+                  label="Yearly Schedule (Full Year)" 
+                />
+              </RadioGroup>
+            </FormControl>
+          </Grid>
+          
+          {scheduleType === 'monthly' && (
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" gutterBottom>
+                Select Month
+              </Typography>
+              <FormControl fullWidth>
+                <TextField
+                  select
+                  value={month}
+                  onChange={handleMonthChange}
+                  variant="outlined"
+                  fullWidth
+                >
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                    <MenuItem key={m} value={m}>
+                      {getMonthName(m)} 2025
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </FormControl>
               
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                <Typography variant="body1">Holidays configured:</Typography>
-                <Typography variant="body1" fontWeight="bold">{Object.keys(holidays).length}</Typography>
-              </Box>
-              
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                <Typography variant="body1">Availability constraints:</Typography>
-                <Typography variant="body1" fontWeight="bold">{Object.keys(availability).length}</Typography>
-              </Box>
-              
-              <Divider sx={{ my: 2 }} />
-              
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <PsychologyIcon color="primary" sx={{ mr: 1 }} />
-                  <Typography variant="body1">Use Optimization Algorithm</Typography>
-                </Box>
-                <Switch
-                  checked={useOptimizedAlgorithm}
-                  onChange={(e) => setUseOptimizedAlgorithm(e.target.checked)}
-                  color="primary"
-                  disabled={!serverAvailable}
+              {/* Only show weight optimization for monthly scheduling */}
+              <Box sx={{ mt: 2 }}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={useWeightOptimization}
+                      onChange={(e) => setUseWeightOptimization(e.target.checked)}
+                    />
+                  }
+                  label={
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <Typography variant="body2">Use Weight Optimization</Typography>
+                      <Tooltip title="Weight optimization tries different constraint weights to find the best schedule. This takes longer but may produce better results.">
+                        <IconButton size="small">
+                          <InfoIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                  }
                 />
               </Box>
-              
-              <Tooltip title={useOptimizedAlgorithm ? 
-                "Using TabuSearch optimization algorithm" : "Using simple scheduling algorithm"}>
-                <Alert severity={useOptimizedAlgorithm && serverAvailable ? "info" : "warning"} sx={{ mb: 2 }}>
-                  {useOptimizedAlgorithm && serverAvailable
-                    ? "TabuSearch optimization will be used to generate an optimal schedule" 
-                    : "Simple scheduling will be used (no optimization)"}
-                </Alert>
-              </Tooltip>
-              
-              {/* Weight Optimization Section */}
-              {useOptimizedAlgorithm && serverAvailable && (
-                <Box sx={{ mt: 3, border: '1px solid #e0e0e0', borderRadius: 1, p: 2 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                    <Typography variant="subtitle1" component="div">
-                      Advanced Optimization
-                    </Typography>
-                    <Tooltip title="Enable weight optimization to search for the best constraint weights">
-                      <IconButton size="small" sx={{ ml: 1 }}>
-                        <HelpOutlineIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </Box>
-                  
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={useWeightOptimization}
-                        onChange={(e) => setUseWeightOptimization(e.target.checked)}
-                        color="primary"
-                      />
-                    }
-                    label="Use Weight Optimization"
-                  />
-                  
-                  {useWeightOptimization && (
-                    <Box sx={{ mt: 2, pl: 1 }}>
-                      <Typography variant="body2" color="text.secondary" gutterBottom sx={{ mb: 2 }}>
-                        The weight optimizer will try multiple constraint configurations to find the best schedule.
-                        This process takes longer but may produce better results.
-                      </Typography>
-                      
-                      <Box sx={{ mb: 2 }}>
-                        <Typography gutterBottom variant="body2">
-                          Maximum Iterations: {maxIterations}
-                        </Typography>
-                        <Slider
-                          value={maxIterations}
-                          onChange={(_, newValue) => setMaxIterations(newValue)}
-                          step={5}
-                          min={10}
-                          max={50}
-                          valueLabelDisplay="auto"
-                          size="small"
-                        />
-                      </Box>
-                      
-                      <Box sx={{ mb: 2 }}>
-                        <Typography gutterBottom variant="body2">
-                          Time Limit (minutes): {timeLimit}
-                        </Typography>
-                        <Slider
-                          value={timeLimit}
-                          onChange={(_, newValue) => setTimeLimit(newValue)}
-                          step={1}
-                          min={5}
-                          max={30}
-                          valueLabelDisplay="auto"
-                          size="small"
-                        />
-                      </Box>
-                      
-                      <Box sx={{ mb: 2 }}>
-                        <Typography gutterBottom variant="body2">
-                          Parallel Jobs: {parallelJobs}
-                        </Typography>
-                        <Slider
-                          value={parallelJobs}
-                          onChange={(_, newValue) => setParallelJobs(newValue)}
-                          step={1}
-                          min={1}
-                          max={4}
-                          valueLabelDisplay="auto"
-                          size="small"
-                        />
-                      </Box>
-                      
-                      {weightResults && (
-                        <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
-                          <InfoIcon color="info" sx={{ mr: 1 }} />
-                          <Typography variant="body2">
-                            Best score: {weightResults.score?.toFixed(2)}
-                          </Typography>
-                          <Button 
-                            size="small" 
-                            sx={{ ml: 2 }}
-                            onClick={() => setShowWeightResults(true)}
-                          >
-                            View Results
-                          </Button>
-                        </Box>
-                      )}
-                    </Box>
-                  )}
-                </Box>
-              )}
-              
-              <Box sx={{ mt: 2 }}>
-                <Button
-                  variant="contained"
-                  color="primary"
-                  startIcon={<PlayArrowIcon />}
-                  onClick={generate}
-                  disabled={isGenerating}
-                  fullWidth
-                  size="large"
-                  sx={{ py: 1.5 }}
-                >
-                  {isGenerating ? "Generating..." : "Generate Schedule"}
-                </Button>
-              </Box>
-            </CardContent>
-          </Card>
+            </Grid>
+          )}
         </Grid>
         
-        <Grid item xs={12} md={8}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Generation Status
-              </Typography>
-              <Divider sx={{ mb: 2 }} />
-              
-              {isGenerating ? (
-                <Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                    <CircularProgress size={24} sx={{ mr: 2 }} />
-                    <Box>
-                      <Typography variant="body1">
-                        {status || "Preparing to generate schedule..."}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {getStageDescription()}
-                      </Typography>
-                    </Box>
-                  </Box>
-                  
-                  <Box sx={{ width: '100%', mb: 1 }}>
-                    <LinearProgress variant="determinate" value={progress} sx={{ height: 10, borderRadius: 5 }} />
-                  </Box>
-                  
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      {optimizationStage.charAt(0).toUpperCase() + optimizationStage.slice(1)}
-                    </Typography>
-                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                      {progress}% complete
-                    </Typography>
-                  </Box>
-                  
-                  {/* Time tracking display - Simplified to only show elapsed time */}
-                  <Box sx={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    mt: 2,
-                    p: 1.5,
-                    bgcolor: 'background.paper',
-                    borderRadius: 1,
-                    border: '1px solid',
-                    borderColor: 'divider'
-                  }}>
-                    <AccessTimeIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
-                    <Typography variant="body2">
-                      Time Elapsed: <strong>{formatTime(elapsedTime)}</strong>
-                    </Typography>
-                  </Box>
-                  
-                  {/* Show optimization progress chart if we have data */}
-                  {optimizationProgress.length > 2 && useOptimizedAlgorithm && serverAvailable && (
-                    <Box sx={{ mt: 3, height: 300 }}>
-                      <Typography variant="subtitle1" gutterBottom>
-                        Optimization Progress
-                      </Typography>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart
-                          data={optimizationProgress}
-                          margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                        >
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis 
-                            dataKey="iteration" 
-                            label={{ value: 'Iteration', position: 'insideBottomRight', offset: -10 }} 
-                          />
-                          <YAxis 
-                            label={{ value: 'Objective Cost', angle: -90, position: 'insideLeft' }}
-                          />
-                          <RechartsTooltip 
-                            formatter={(value) => [`Cost: ${value.toFixed(2)}`, 'Objective']}
-                            labelFormatter={(value) => `Iteration ${value}`}
-                          />
-                          <Line 
-                            type="monotone" 
-                            dataKey="cost" 
-                            stroke="#8884d8" 
-                            name="Objective Cost"
-                            strokeWidth={2} 
-                            dot={{ r: 2 }}
-                            activeDot={{ r: 5 }}
-                          />
-                        </LineChart>
-                      </ResponsiveContainer>
-                      <Typography variant="caption" color="text.secondary" align="center" display="block">
-                        Lower objective cost values indicate a better schedule (fewer constraint violations)
-                      </Typography>
-                    </Box>
-                  )}
-                </Box>
-              ) : progress === 100 ?  (
-                <Box>
-                  <Alert severity="success" sx={{ mb: 2 }}>
-                    <AlertTitle>Success</AlertTitle>
-                    Schedule generated successfully!
-                  </Alert>
-                  
-                  {/* Show elapsed time for completed generation */}
-                  {elapsedTime > 0 && (
-                    <Box sx={{ 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      mt: 2, 
-                      mb: 3,
-                      p: 1,
-                      bgcolor: 'background.paper',
-                      borderRadius: 1,
-                      border: '1px solid',
-                      borderColor: 'divider'
-                    }}>
-                      <AccessTimeIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                      <Typography variant="body2">
-                        Total generation time: <strong>{formatTime(elapsedTime)}</strong>
-                      </Typography>
-                    </Box>
-                  )}
-                  
-                  {generationStats && (
-                    <Accordion sx={{ mt: 2 }} defaultExpanded>
-                      <AccordionSummary
-                        expandIcon={<ExpandMoreIcon />}
-                        aria-controls="panel1a-content"
-                        id="panel1a-header"
-                      >
-                        <Typography>Schedule Statistics</Typography>
-                      </AccordionSummary>
-                      <AccordionDetails>
-                        <Typography variant="body2" paragraph>
-                          Total shifts scheduled: <strong>{generationStats.totalShifts}</strong>
-                        </Typography>
-                        
-                        {generationStats.optimized && (
-                          <Box sx={{ width: '100%', mb: 3 }}>
-                            <Tabs
-                              value={statsTabValue}
-                              onChange={handleTabChange}
-                              variant="scrollable"
-                              scrollButtons="auto"
-                              aria-label="schedule statistics tabs"
-                            >
-                              <Tab icon={<PsychologyIcon />} label="Preferences" iconPosition="start" />
-                              <Tab icon={<WeekendIcon />} label="Weekends" iconPosition="start" />
-                              <Tab icon={<HolidayIcon />} label="Holidays" iconPosition="start" />
-                            </Tabs>
-                            
-                            <Box sx={{ mt: 2 }}>
-                              {/* Preferences Tab */}
-                              {statsTabValue === 0 && generationStats.preferenceMetrics && (
-                                <TableContainer component={Paper} variant="outlined">
-                                  <Table size="small">
-                                    <TableHead>
-                                      <TableRow>
-                                        <TableCell>Doctor</TableCell>
-                                        <TableCell>Preference</TableCell>
-                                        <TableCell align="center">Preferred Shifts</TableCell>
-                                        <TableCell align="center">Other Shifts</TableCell>
-                                        <TableCell align="center">Adherence %</TableCell>
-                                      </TableRow>
-                                    </TableHead>
-                                    <TableBody>
-                                      {Object.entries(generationStats.preferenceMetrics)
-                                        .filter(([_, metrics]) => metrics.preference !== "None")
-                                        .sort(([, a], [, b]) => {
-                                          const aPerc = a.preferred_shifts / (a.preferred_shifts + a.other_shifts) || 0;
-                                          const bPerc = b.preferred_shifts / (b.preferred_shifts + b.other_shifts) || 0;
-                                          return bPerc - aPerc; // Sort by adherence percentage descending
-                                        })
-                                        .map(([doctor, metrics]) => {
-                                          const adherencePercentage = calculatePreferenceAdherence(doctor);
-                                          
-                                          return (
-                                            <TableRow key={doctor} hover>
-                                              <TableCell>{doctor}</TableCell>
-                                              <TableCell>
-                                                <Chip 
-                                                  size="small" 
-                                                  label={metrics.preference} 
-                                                  color="primary"
-                                                />
-                                              </TableCell>
-                                              <TableCell align="center">{metrics.preferred_shifts}</TableCell>
-                                              <TableCell align="center">{metrics.other_shifts}</TableCell>
-                                              <TableCell align="center">
-                                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                  {adherencePercentage >= 75 ? (
-                                                    <CheckCircleIcon fontSize="small" sx={{ color: 'success.main', mr: 0.5 }} />
-                                                  ) : adherencePercentage < 50 ? (
-                                                    <CancelIcon fontSize="small" sx={{ color: 'error.main', mr: 0.5 }} />
-                                                  ) : null}
-                                                  <Typography 
-                                                    variant="body2" 
-                                                    color={
-                                                      adherencePercentage >= 75 ? 'success.main' : 
-                                                      adherencePercentage < 50 ? 'error.main' : 
-                                                      'text.primary'
-                                                    }
-                                                  >
-                                                    {adherencePercentage}%
-                                                  </Typography>
-                                                </Box>
-                                              </TableCell>
-                                            </TableRow>
-                                          );
-                                        })}
-                                    </TableBody>
-                                  </Table>
-                                </TableContainer>
-                              )}
-                              
-                              {/* Weekend Shifts Tab */}
-                              {statsTabValue === 1 && generationStats.weekendMetrics && (
-                                <Box>
-                                  {/* Senior Weekend Stats */}
-                                  <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>
-                                    Senior Doctors - Weekend Shifts
-                                  </Typography>
-                                  <TableContainer component={Paper} variant="outlined" sx={{ mb: 3 }}>
-                                    <Table size="small">
-                                      <TableHead>
-                                        <TableRow>
-                                          <TableCell>Doctor</TableCell>
-                                          <TableCell align="center">Weekend Shifts</TableCell>
-                                          <TableCell align="right">Total Shifts</TableCell>
-                                          <TableCell align="right">Weekend %</TableCell>
-                                        </TableRow>
-                                      </TableHead>
-                                      <TableBody>
-                                        {getSeniorDoctors().map(doctorName => {
-                                          const weekendShifts = generationStats.weekendMetrics[doctorName] || 0;
-                                          const totalShifts = generationStats.doctorShifts[doctorName] || 0;
-                                          const weekendPercentage = totalShifts === 0 ? 0 : 
-                                            Math.round((weekendShifts / totalShifts) * 100);
-                                            
-                                          return (
-                                            <TableRow key={doctorName} hover>
-                                              <TableCell>{doctorName}</TableCell>
-                                              <TableCell align="center">
-                                                <Chip 
-                                                  size="small"
-                                                  label={weekendShifts}
-                                                  color="primary"
-                                                />
-                                              </TableCell>
-                                              <TableCell align="right">{totalShifts}</TableCell>
-                                              <TableCell align="right">
-                                                <Typography 
-                                                  variant="body2" 
-                                                  color={
-                                                    weekendPercentage <= 15 ? 'success.main' : 
-                                                    weekendPercentage > 25 ? 'error.main' : 
-                                                    'text.primary'
-                                                  }
-                                                >
-                                                  {weekendPercentage}%
-                                                </Typography>
-                                              </TableCell>
-                                            </TableRow>
-                                          );
-                                        })}
-                                      </TableBody>
-                                    </Table>
-                                  </TableContainer>
-                                  
-                                  {/* Junior Weekend Stats */}
-                                  <Typography variant="subtitle2" gutterBottom>
-                                    Junior Doctors - Weekend Shifts
-                                  </Typography>
-                                  <TableContainer component={Paper} variant="outlined">
-                                    <Table size="small">
-                                      <TableHead>
-                                        <TableRow>
-                                          <TableCell>Doctor</TableCell>
-                                          <TableCell align="center">Weekend Shifts</TableCell>
-                                          <TableCell align="right">Total Shifts</TableCell>
-                                          <TableCell align="right">Weekend %</TableCell>
-                                        </TableRow>
-                                      </TableHead>
-                                      <TableBody>
-                                        {getJuniorDoctors().map(doctorName => {
-                                          const weekendShifts = generationStats.weekendMetrics[doctorName] || 0;
-                                          const totalShifts = generationStats.doctorShifts[doctorName] || 0;
-                                          const weekendPercentage = totalShifts === 0 ? 0 : 
-                                            Math.round((weekendShifts / totalShifts) * 100);
-                                            
-                                          return (
-                                            <TableRow key={doctorName} hover>
-                                              <TableCell>{doctorName}</TableCell>
-                                              <TableCell align="center">
-                                                <Chip 
-                                                  size="small"
-                                                  label={weekendShifts}
-                                                  color="primary"
-                                                />
-                                              </TableCell>
-                                              <TableCell align="right">{totalShifts}</TableCell>
-                                              <TableCell align="right">
-                                                <Typography 
-                                                  variant="body2" 
-                                                  color={
-                                                    Math.abs(weekendPercentage - 20) <= 3 ? 'success.main' : 
-                                                    Math.abs(weekendPercentage - 20) > 7 ? 'error.main' : 
-                                                    'text.primary'
-                                                  }
-                                                >
-                                                  {weekendPercentage}%
-                                                </Typography>
-                                              </TableCell>
-                                            </TableRow>
-                                          );
-                                        })}
-                                      </TableBody>
-                                    </Table>
-                                  </TableContainer>
-                                </Box>
-                              )}
-                              
-                              {/* Holiday Shifts Tab */}
-                              {statsTabValue === 2 && generationStats.holidayMetrics && (
-                                <Box>
-                                  {/* Senior Holiday Stats */}
-                                  <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>
-                                    Senior Doctors - Holiday Shifts
-                                  </Typography>
-                                  <TableContainer component={Paper} variant="outlined" sx={{ mb: 3 }}>
-                                    <Table size="small">
-                                      <TableHead>
-                                        <TableRow>
-                                          <TableCell>Doctor</TableCell>
-                                          <TableCell align="center">Holiday Shifts</TableCell>
-                                          <TableCell align="right">Total Shifts</TableCell>
-                                          <TableCell align="right">Holiday %</TableCell>
-                                        </TableRow>
-                                      </TableHead>
-                                      <TableBody>
-                                        {getSeniorDoctors().map(doctorName => {
-                                          const holidayShifts = generationStats.holidayMetrics[doctorName] || 0;
-                                          const totalShifts = generationStats.doctorShifts[doctorName] || 0;
-                                          const holidayPercentage = totalShifts === 0 ? 0 : 
-                                            Math.round((holidayShifts / totalShifts) * 100);
-                                            
-                                          return (
-                                            <TableRow key={doctorName} hover>
-                                              <TableCell>{doctorName}</TableCell>
-                                              <TableCell align="center">
-                                                <Chip 
-                                                  size="small"
-                                                  label={holidayShifts}
-                                                  color="secondary"
-                                                />
-                                              </TableCell>
-                                              <TableCell align="right">{totalShifts}</TableCell>
-                                              <TableCell align="right">
-                                                <Typography 
-                                                  variant="body2" 
-                                                  color={
-                                                    holidayPercentage <= 3 ? 'success.main' : 
-                                                    holidayPercentage > 6 ? 'error.main' : 
-                                                    'text.primary'
-                                                  }
-                                                >
-                                                  {holidayPercentage}%
-                                                </Typography>
-                                              </TableCell>
-                                            </TableRow>
-                                          );
-                                        })}
-                                      </TableBody>
-                                    </Table>
-                                  </TableContainer>
-                                  
-                                  {/* Junior Holiday Stats */}
-                                  <Typography variant="subtitle2" gutterBottom>
-                                    Junior Doctors - Holiday Shifts
-                                  </Typography>
-                                  <TableContainer component={Paper} variant="outlined">
-                                    <Table size="small">
-                                      <TableHead>
-                                        <TableRow>
-                                          <TableCell>Doctor</TableCell>
-                                          <TableCell align="center">Holiday Shifts</TableCell>
-                                          <TableCell align="right">Total Shifts</TableCell>
-                                          <TableCell align="right">Holiday %</TableCell>
-                                        </TableRow>
-                                      </TableHead>
-                                      <TableBody>
-                                        {getJuniorDoctors().map(doctorName => {
-                                          const holidayShifts = generationStats.holidayMetrics[doctorName] || 0;
-                                          const totalShifts = generationStats.doctorShifts[doctorName] || 0;
-                                          const holidayPercentage = totalShifts === 0 ? 0 : 
-                                            Math.round((holidayShifts / totalShifts) * 100);
-                                            
-                                          return (
-                                            <TableRow key={doctorName} hover>
-                                              <TableCell>{doctorName}</TableCell>
-                                              <TableCell align="center">
-                                                <Chip 
-                                                  size="small"
-                                                  label={holidayShifts}
-                                                  color="secondary"
-                                                />
-                                              </TableCell>
-                                              <TableCell align="right">{totalShifts}</TableCell>
-                                              <TableCell align="right">
-                                                <Typography 
-                                                  variant="body2" 
-                                                  color={
-                                                    Math.abs(holidayPercentage - 5) <= 1 ? 'success.main' : 
-                                                    Math.abs(holidayPercentage - 5) > 3 ? 'error.main' : 
-                                                    'text.primary'
-                                                  }
-                                                >
-                                                  {holidayPercentage}%
-                                                </Typography>
-                                              </TableCell>
-                                            </TableRow>
-                                          );
-                                        })}
-                                      </TableBody>
-                                    </Table>
-                                  </TableContainer>
-                                </Box>
-                              )}
-                            </Box>
-                          </Box>
-                        )}
-                        
-                        <Typography variant="subtitle2" gutterBottom sx={{ mt: 3 }}>
-                          Doctor Workload Summary
-                        </Typography>
-                        <TableContainer component={Paper} variant="outlined">
-                          <Table size="small">
-                            <TableHead>
-                              <TableRow>
-                                <TableCell>Doctor</TableCell>
-                                <TableCell>Seniority</TableCell>
-                                <TableCell align="right">Total Shifts</TableCell>
-                              </TableRow>
-                            </TableHead>
-                            <TableBody>
-                              {Object.entries(generationStats.doctorShifts)
-                                .sort((a, b) => b[1] - a[1])
-                                .map(([doctor, shifts]) => {
-                                  const doctorInfo = doctors.find(d => d.name === doctor);
-                                  const seniority = doctorInfo ? doctorInfo.seniority : 'Unknown';
-                                  
-                                  return (
-                                    <TableRow key={doctor} hover>
-                                      <TableCell>{doctor}</TableCell>
-                                      <TableCell>
-                                        <Chip
-                                          size="small"
-                                          label={seniority}
-                                          color={seniority === 'Senior' ? 'primary' : 'default'}
-                                          variant={seniority === 'Senior' ? 'filled' : 'outlined'}
-                                        />
-                                      </TableCell>
-                                      <TableCell align="right">{shifts}</TableCell>
-                                    </TableRow>
-                                  );
-                                })}
-                            </TableBody>
-                          </Table>
-                        </TableContainer>
-                        
-                        {generationStats.optimized && generationStats.optimizationMetrics && (
-                          <Box sx={{ mt: 3, p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
-                            <Typography variant="subtitle2" gutterBottom>
-                              Optimization Metrics
-                            </Typography>
-                            <Grid container spacing={1}>
-                              <Grid item xs={6}>
-                                <Typography variant="body2">
-                                  Objective value: <strong>{generationStats.optimizationMetrics.objective_value?.toFixed(2) || 'N/A'}</strong>
-                                </Typography>
-                              </Grid>
-                              <Grid item xs={6}>
-                                <Typography variant="body2">
-                                  Solution time: <strong>{generationStats.optimizationMetrics.solution_time_seconds?.toFixed(2) || 'N/A'} seconds</strong>
-                                </Typography>
-                              </Grid>
-                              <Grid item xs={6}>
-                                <Typography variant="body2">
-                                  Constraints: <strong>{generationStats.optimizationMetrics.constraints || 'N/A'}</strong>
-                                </Typography>
-                              </Grid>
-                              <Grid item xs={6}>
-                                <Typography variant="body2">
-                                  Variables: <strong>{generationStats.optimizationMetrics.variables || 'N/A'}</strong>
-                                </Typography>
-                              </Grid>
-                              <Grid item xs={12}>
-                                <Typography variant="body2">
-                                  Status: <strong>{generationStats.optimizationMetrics.status || 'N/A'}</strong>
-                                </Typography>
-                              </Grid>
-                            </Grid>
-                          </Box>
-                        )}
-                      </AccordionDetails>
-                    </Accordion>
-                  )}
-                </Box>
-              ) : (
-                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 4 }}>
-                  <InfoIcon color="primary" sx={{ fontSize: 48, mb: 2 }} />
-                  <Typography variant="body1" align="center">
-                    Click the "Generate Schedule" button to create a new schedule.
+        {/* Advanced options - only show for monthly with weight optimization */}
+        {scheduleType === 'monthly' && useWeightOptimization && (
+          <Box sx={{ mt: 2 }}>
+            <Button
+              startIcon={<SettingsIcon />}
+              onClick={toggleAdvancedOptions}
+              variant="outlined"
+              size="small"
+              sx={{ mb: 2 }}
+            >
+              {advancedOptions ? 'Hide Advanced Options' : 'Show Advanced Options'}
+            </Button>
+            
+            {advancedOptions && (
+              <Grid container spacing={2} sx={{ mt: 1 }}>
+                <Grid item xs={12} sm={4}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Max Iterations
                   </Typography>
-                </Box>
-              )}
-            </CardContent>
-          </Card>
-
-          {progress === 100 && (
+                  <TextField
+                    type="number"
+                    value={weightMaxIterations}
+                    onChange={(e) => setWeightMaxIterations(parseInt(e.target.value, 10))}
+                    InputProps={{ inputProps: { min: 5, max: 100 } }}
+                    variant="outlined"
+                    fullWidth
+                  />
+                  <Typography variant="caption" color="text.secondary">
+                    Number of weight configurations to try (5-100)
+                  </Typography>
+                </Grid>
+                
+                <Grid item xs={12} sm={4}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Parallel Jobs
+                  </Typography>
+                  <TextField
+                    type="number"
+                    value={weightParallelJobs}
+                    onChange={(e) => setWeightParallelJobs(parseInt(e.target.value, 10))}
+                    InputProps={{ inputProps: { min: 1, max: 4 } }}
+                    variant="outlined"
+                    fullWidth
+                  />
+                  <Typography variant="caption" color="text.secondary">
+                    Number of parallel optimization jobs (1-4)
+                  </Typography>
+                </Grid>
+                
+                <Grid item xs={12} sm={4}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Time Limit (minutes)
+                  </Typography>
+                  <TextField
+                    type="number"
+                    value={weightTimeLimit}
+                    onChange={(e) => setWeightTimeLimit(parseInt(e.target.value, 10))}
+                    InputProps={{ inputProps: { min: 1, max: 30 } }}
+                    variant="outlined"
+                    fullWidth
+                  />
+                  <Typography variant="caption" color="text.secondary">
+                    Maximum optimization time (1-30 minutes)
+                  </Typography>
+                </Grid>
+              </Grid>
+            )}
+          </Box>
+        )}
+        
+        <Box sx={{ mt: 3, display: 'flex', justifyContent: 'space-between' }}>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<StartIcon />}
+            onClick={generate}
+            disabled={optimizing || !canOptimize}
+          >
+            {optimizing ? 'Optimizing...' : 'Generate Schedule'}
+          </Button>
+          
+          {generatedSchedule && !optimizing && (
             <Button
               variant="outlined"
               color="primary"
               startIcon={<DashboardIcon />}
-              sx={{ mt: 2, float: 'right' }}
-              onClick={() => window.scrollTo(0, 0)}
+              onClick={goToDashboard}
             >
-              View in Dashboard
+              Go to Dashboard
             </Button>
           )}
-        </Grid>
-      </Grid>
-
-      {/* Weight Results Dialog */}
-      <Dialog 
-        open={showWeightResults} 
-        onClose={() => setShowWeightResults(false)}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>Weight Optimization Results</DialogTitle>
-        <DialogContent>
-          {weightResults && (
-            <>
-              <Typography variant="h6" gutterBottom>Best Weights Found</Typography>
-              <TableContainer component={Paper} sx={{ mb: 3 }}>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Weight Parameter</TableCell>
-                      <TableCell align="right">Value</TableCell>
-                      <TableCell>Description</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {Object.entries(weightResults.weights).map(([key, value]) => {
-                      if (key === 'w_pref') {
-                        return [
-                          <TableRow key={`${key}-junior`}>
-                            <TableCell>w_pref (Junior)</TableCell>
-                            <TableCell align="right">{value.Junior}</TableCell>
-                            <TableCell>Junior preference penalty</TableCell>
-                          </TableRow>,
-                          <TableRow key={`${key}-senior`}>
-                            <TableCell>w_pref (Senior)</TableCell>
-                            <TableCell align="right">{value.Senior}</TableCell>
-                            <TableCell>Senior preference penalty</TableCell>
-                          </TableRow>
-                        ];
-                      }
-                      
-                      // Skip fixed weights
-                      const isFixed = ['w_avail', 'w_one_shift', 'w_rest', 'w_senior_holiday', 'w_duplicate_penalty'].includes(key);
-                      if (isFixed) return null;
-                      
-                      const descriptions = {
-                        'w_balance': 'Monthly balance penalty',
-                        'w_wh': 'Weekend/holiday distribution penalty',
-                        'w_senior_workload': 'Senior workload difference penalty',
-                        'w_preference_fairness': 'Preference fairness penalty'
-                      };
-                      
-                      return (
-                        <TableRow key={key}>
-                          <TableCell>{key}</TableCell>
-                          <TableCell align="right">{value}</TableCell>
-                          <TableCell>{descriptions[key] || key}</TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-              
-              <Typography variant="h6" gutterBottom>Optimization Summary</Typography>
-              <Grid container spacing={2}>
-                <Grid item xs={12} md={4}>
-                  <Paper sx={{ p: 2 }}>
-                    <Typography variant="subtitle2">Total Iterations</Typography>
-                    <Typography variant="h6">{weightResults.iterations_completed}</Typography>
-                  </Paper>
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <Paper sx={{ p: 2 }}>
-                    <Typography variant="subtitle2">Best Score</Typography>
-                    <Typography variant="h6">{weightResults.score?.toFixed(2)}</Typography>
-                  </Paper>
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <Paper sx={{ p: 2 }}>
-                    <Typography variant="subtitle2">Time Taken</Typography>
-                    <Typography variant="h6">{(weightResults.solution_time_seconds / 60).toFixed(1)} minutes</Typography>
-                  </Paper>
-                </Grid>
-              </Grid>
-              
-              {weightResults.all_results && weightResults.all_results.length > 0 && (
-                <>
-                  <Typography variant="h6" sx={{ mt: 3 }}>Top Results Comparison</Typography>
-                  <TableContainer component={Paper}>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Rank</TableCell>
-                          <TableCell align="right">Score</TableCell>
-                          <TableCell align="right">w_balance</TableCell>
-                          <TableCell align="right">w_wh</TableCell>
-                          <TableCell align="right">w_senior_workload</TableCell>
-                          <TableCell align="right">w_pref (Jr/Sr)</TableCell>
-                          <TableCell align="right">w_preference_fairness</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {weightResults.all_results.map((result, index) => (
-                          <TableRow key={index}>
-                            <TableCell>{index + 1}</TableCell>
-                            <TableCell align="right">{result.score?.toFixed(2)}</TableCell>
-                            <TableCell align="right">{result.weights.w_balance}</TableCell>
-                            <TableCell align="right">{result.weights.w_wh}</TableCell>
-                            <TableCell align="right">{result.weights.w_senior_workload}</TableCell>
-                            <TableCell align="right">{result.weights.w_pref.Junior}/{result.weights.w_pref.Senior}</TableCell>
-                            <TableCell align="right">{result.weights.w_preference_fairness}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                </>
-              )}
-            </>
+          
+          {optimizing && (
+            <Button
+              variant="outlined"
+              color="error"
+              onClick={cancelOptimization}
+            >
+              Cancel
+            </Button>
           )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowWeightResults(false)}>Close</Button>
-        </DialogActions>
-      </Dialog>
+        </Box>
+      </Paper>
+      
+      {/* Progress Section */}
+      {optimizing && (
+        <Card sx={{ mb: 4 }}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Optimization Progress
+            </Typography>
+            
+            <LinearProgress 
+              variant="determinate" 
+              value={progress} 
+              sx={{ height: 10, borderRadius: 5, mb: 2 }} 
+            />
+            
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+              <Typography variant="body2" color="text.secondary">
+                {progressMessage}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {`${Math.round(progress)}%`}
+              </Typography>
+            </Box>
+            
+            <Typography variant="caption" color="text.secondary">
+              This process may take several minutes depending on the complexity of the schedule.
+              {scheduleType === 'yearly' && ' Yearly schedules take longer to generate than monthly schedules.'}
+              {useWeightOptimization && ' Weight optimization requires additional processing time.'}
+            </Typography>
+          </CardContent>
+        </Card>
+      )}
+      
+      {/* Result Section */}
+      {!optimizing && generatedSchedule && (
+        <Card sx={{ mb: 4, bgcolor: 'success.light' }}>
+          <CardContent>
+            <Typography variant="h6" color="white" gutterBottom>
+              Schedule Generated Successfully!
+            </Typography>
+            
+            <Typography variant="body2" color="white" sx={{ mb: 2 }}>
+              {scheduleType === 'monthly' 
+                ? `Monthly schedule for ${getMonthName(month)} 2025 has been generated.`
+                : 'Yearly schedule for 2025 has been generated.'}
+            </Typography>
+            
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<DashboardIcon />}
+              onClick={goToDashboard}
+              sx={{ mt: 1 }}
+            >
+              View Schedule in Dashboard
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+      
+      {/* Error Section */}
+      {error && (
+        <Alert severity="error" sx={{ mb: 4 }}>
+          <AlertTitle>Error</AlertTitle>
+          <Typography variant="body2">
+            {error}
+          </Typography>
+        </Alert>
+      )}
     </Box>
   );
-}
+};
 
 export default GenerateSchedule;
