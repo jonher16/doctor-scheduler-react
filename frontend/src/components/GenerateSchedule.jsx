@@ -34,7 +34,12 @@ import {
   TableRow,
   Chip,
   Tabs,
-  Tab
+  Tab,
+  Slider,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions
 } from '@mui/material';
 import {
   PlayArrow as PlayArrowIcon,
@@ -47,7 +52,8 @@ import {
   Cancel as CancelIcon,
   WeekendOutlined as WeekendIcon,
   EventOutlined as HolidayIcon,
-  AccessTime as AccessTimeIcon
+  AccessTime as AccessTimeIcon,
+  HelpOutline as HelpOutlineIcon
 } from '@mui/icons-material';
 
 import {
@@ -79,6 +85,15 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule, apiUrl
   const [optimizationStage, setOptimizationStage] = useState("initializing");
   const [schedulingMode, setSchedulingMode] = useState("yearly");
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1); // Current month (1-12)
+  const [progressMessage, setProgressMessage] = useState("");
+  
+  // Weight optimization states
+  const [useWeightOptimization, setUseWeightOptimization] = useState(false);
+  const [maxIterations, setMaxIterations] = useState(20);
+  const [timeLimit, setTimeLimit] = useState(10); // minutes
+  const [parallelJobs, setParallelJobs] = useState(1);
+  const [showWeightResults, setShowWeightResults] = useState(false);
+  const [weightResults, setWeightResults] = useState(null);
   
   // Time tracking states
   const [startTime, setStartTime] = useState(null);
@@ -217,6 +232,47 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule, apiUrl
     return months[monthNum - 1];
   };
 
+  // Helper function to monitor a task
+  const monitorTask = async (taskId, callback) => {
+    let completed = false;
+    let attempts = 0;
+    const maxAttempts = 600; // 10 minutes max (polling every second)
+    
+    while (!completed && attempts < maxAttempts) {
+      try {
+        const response = await fetch(`${BACKEND_API_URL}/task/${taskId}`);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch task status: ${response.status}`);
+        }
+        
+        const taskInfo = await response.json();
+        if (callback) callback(taskInfo);
+        
+        if (taskInfo.status === "COMPLETED" || taskInfo.status === "ERROR") {
+          completed = true;
+          if (taskInfo.status === "ERROR") {
+            throw new Error(taskInfo.message || "Task failed");
+          }
+        } else {
+          // Wait before checking again
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      } catch (error) {
+        console.error("Error monitoring task:", error);
+        attempts++;
+        
+        // Wait a bit longer on error
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+      
+      attempts++;
+    }
+    
+    if (!completed) {
+      throw new Error("Task monitoring timed out");
+    }
+  };
+
   // Optimized schedule generation using the Python API.
   const generateOptimizedSchedule = async () => {
     try {
@@ -229,39 +285,82 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule, apiUrl
         ? `Connecting to optimization server for ${getMonthName(selectedMonth)}...` 
         : "Connecting to optimization server...");
       setProgress(5);
-      setProgress(5);
-      // Prepare input data for the optimizer.
-      const inputData = { 
+      
+      // Prepare input data for the optimizer
+      let requestData = { 
         doctors, 
         holidays, 
-        availability,
-        scheduling_mode: schedulingMode,
-        // Only include month parameter for monthly scheduling
-        ...(schedulingMode === "monthly" && { month: selectedMonth })
+        availability
       };
+
+      // Choose endpoint based on whether we're using weight optimization
+      let endpoint;
+      if (useWeightOptimization) {
+        endpoint = `/optimize-weights`;
+        requestData = {
+          ...requestData,
+          max_iterations: maxIterations,
+          time_limit_minutes: timeLimit,
+          parallel_jobs: parallelJobs
+        };
+      } else {
+        endpoint = `/generate-schedule`;
+      }
+
+      // Add scheduling mode data
+      if (schedulingMode === "monthly") {
+        requestData.month = selectedMonth;
+      }
   
-      // Start the optimization by calling the /optimize endpoint.
-      const optimizationResponse = await fetch(`${BACKEND_API_URL}/optimize`, {
+      // Start the task
+      const response = await fetch(`${BACKEND_API_URL}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(inputData),
+        body: JSON.stringify(requestData),
       });
       
-      if (!optimizationResponse.ok) {
-        const errorText = await optimizationResponse.text();
+      if (!response.ok) {
+        const errorText = await response.text();
         throw new Error(`API request failed: ${errorText}`);
       }
       
-      // Parse the final optimization result.
-      const responseData = await optimizationResponse.json();
-      setOptimizationResult(responseData);
+      // Get the task ID
+      const { task_id } = await response.json();
+      
+      // Monitor the task
+      await monitorTask(task_id, (taskInfo) => {
+        setProgress(taskInfo.progress || 0);
+        setStatus(taskInfo.message || "Processing...");
+        
+        if (taskInfo.status === "COMPLETED" && taskInfo.result) {
+          if (useWeightOptimization) {
+            // For weight optimization, we need to extract both weights and schedule
+            setWeightResults(taskInfo.result);
+            setSchedule(taskInfo.result.schedule);
+            return taskInfo.result;
+          } else {
+            // Regular schedule generation
+            setSchedule(taskInfo.result.schedule);
+            return taskInfo.result;
+          }
+        }
+      });
+      
       setProgress(100);
       setStatus("Schedule generated successfully!");
-
-      return { 
-        schedule: responseData.schedule, 
-        optimizationStats: responseData.statistics 
-      };
+      
+      // Return the result to be used by the generate function
+      if (useWeightOptimization) {
+        return { 
+          schedule: weightResults.schedule, 
+          optimizationStats: weightResults.statistics 
+        };
+      } else {
+        return { 
+          schedule: optimizationResult?.schedule, 
+          optimizationStats: optimizationResult?.statistics 
+        };
+      }
     } catch (error) {
       console.error("Optimization API error:", error);
       throw error;
@@ -342,6 +441,7 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule, apiUrl
     setOptimizationResult(null);
     setGenerationStats(null);
     setOptimizationProgress([]);
+    setWeightResults(null);
     
     // Reset time tracking
     setStartTime(Date.now());
@@ -487,38 +587,38 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule, apiUrl
               </Typography>
               <Divider sx={{ mb: 2 }} />
               {/* Add the scheduling mode controls */}
-                   <Box sx={{ mb: 3 }}>
-                  <FormControl component="fieldset">
-                    <FormLabel component="legend">Scheduling Mode</FormLabel>
-                    <RadioGroup
-                      row
-                      value={schedulingMode}
-                      onChange={(e) => setSchedulingMode(e.target.value)}
+              <Box sx={{ mb: 3 }}>
+                <FormControl component="fieldset">
+                  <FormLabel component="legend">Scheduling Mode</FormLabel>
+                  <RadioGroup
+                    row
+                    value={schedulingMode}
+                    onChange={(e) => setSchedulingMode(e.target.value)}
+                  >
+                    <FormControlLabel value="yearly" control={<Radio />} label="Full Year" />
+                    <FormControlLabel value="monthly" control={<Radio />} label="Single Month" />
+                  </RadioGroup>
+                </FormControl>
+                
+                {/* Month selector only visible when in monthly mode */}
+                {schedulingMode === "monthly" && (
+                  <FormControl fullWidth sx={{ mt: 2 }}>
+                    <InputLabel id="month-select-label">Month</InputLabel>
+                    <Select
+                      labelId="month-select-label"
+                      value={selectedMonth}
+                      label="Month"
+                      onChange={(e) => setSelectedMonth(e.target.value)}
                     >
-                      <FormControlLabel value="yearly" control={<Radio />} label="Full Year" />
-                      <FormControlLabel value="monthly" control={<Radio />} label="Single Month" />
-                    </RadioGroup>
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
+                        <MenuItem key={month} value={month}>
+                          {getMonthName(month)}
+                        </MenuItem>
+                      ))}
+                    </Select>
                   </FormControl>
-                  
-                  {/* Month selector only visible when in monthly mode */}
-                  {schedulingMode === "monthly" && (
-                    <FormControl fullWidth sx={{ mt: 2 }}>
-                      <InputLabel id="month-select-label">Month</InputLabel>
-                      <Select
-                        labelId="month-select-label"
-                        value={selectedMonth}
-                        label="Month"
-                        onChange={(e) => setSelectedMonth(e.target.value)}
-                      >
-                        {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
-                          <MenuItem key={month} value={month}>
-                            {getMonthName(month)}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  )}
-                </Box>
+                )}
+              </Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                 <Typography variant="body1">Doctors configured:</Typography>
                 <Typography variant="body1" fontWeight="bold">{doctors.length}</Typography>
@@ -557,6 +657,103 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule, apiUrl
                     : "Simple scheduling will be used (no optimization)"}
                 </Alert>
               </Tooltip>
+              
+              {/* Weight Optimization Section */}
+              {useOptimizedAlgorithm && serverAvailable && (
+                <Box sx={{ mt: 3, border: '1px solid #e0e0e0', borderRadius: 1, p: 2 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                    <Typography variant="subtitle1" component="div">
+                      Advanced Optimization
+                    </Typography>
+                    <Tooltip title="Enable weight optimization to search for the best constraint weights">
+                      <IconButton size="small" sx={{ ml: 1 }}>
+                        <HelpOutlineIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                  
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={useWeightOptimization}
+                        onChange={(e) => setUseWeightOptimization(e.target.checked)}
+                        color="primary"
+                      />
+                    }
+                    label="Use Weight Optimization"
+                  />
+                  
+                  {useWeightOptimization && (
+                    <Box sx={{ mt: 2, pl: 1 }}>
+                      <Typography variant="body2" color="text.secondary" gutterBottom sx={{ mb: 2 }}>
+                        The weight optimizer will try multiple constraint configurations to find the best schedule.
+                        This process takes longer but may produce better results.
+                      </Typography>
+                      
+                      <Box sx={{ mb: 2 }}>
+                        <Typography gutterBottom variant="body2">
+                          Maximum Iterations: {maxIterations}
+                        </Typography>
+                        <Slider
+                          value={maxIterations}
+                          onChange={(_, newValue) => setMaxIterations(newValue)}
+                          step={5}
+                          min={10}
+                          max={50}
+                          valueLabelDisplay="auto"
+                          size="small"
+                        />
+                      </Box>
+                      
+                      <Box sx={{ mb: 2 }}>
+                        <Typography gutterBottom variant="body2">
+                          Time Limit (minutes): {timeLimit}
+                        </Typography>
+                        <Slider
+                          value={timeLimit}
+                          onChange={(_, newValue) => setTimeLimit(newValue)}
+                          step={1}
+                          min={5}
+                          max={30}
+                          valueLabelDisplay="auto"
+                          size="small"
+                        />
+                      </Box>
+                      
+                      <Box sx={{ mb: 2 }}>
+                        <Typography gutterBottom variant="body2">
+                          Parallel Jobs: {parallelJobs}
+                        </Typography>
+                        <Slider
+                          value={parallelJobs}
+                          onChange={(_, newValue) => setParallelJobs(newValue)}
+                          step={1}
+                          min={1}
+                          max={4}
+                          valueLabelDisplay="auto"
+                          size="small"
+                        />
+                      </Box>
+                      
+                      {weightResults && (
+                        <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
+                          <InfoIcon color="info" sx={{ mr: 1 }} />
+                          <Typography variant="body2">
+                            Best score: {weightResults.score?.toFixed(2)}
+                          </Typography>
+                          <Button 
+                            size="small" 
+                            sx={{ ml: 2 }}
+                            onClick={() => setShowWeightResults(true)}
+                          >
+                            View Results
+                          </Button>
+                        </Box>
+                      )}
+                    </Box>
+                  )}
+                </Box>
+              )}
               
               <Box sx={{ mt: 2 }}>
                 <Button
@@ -1104,6 +1301,130 @@ function GenerateSchedule({ doctors, holidays, availability, setSchedule, apiUrl
           )}
         </Grid>
       </Grid>
+
+      {/* Weight Results Dialog */}
+      <Dialog 
+        open={showWeightResults} 
+        onClose={() => setShowWeightResults(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Weight Optimization Results</DialogTitle>
+        <DialogContent>
+          {weightResults && (
+            <>
+              <Typography variant="h6" gutterBottom>Best Weights Found</Typography>
+              <TableContainer component={Paper} sx={{ mb: 3 }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Weight Parameter</TableCell>
+                      <TableCell align="right">Value</TableCell>
+                      <TableCell>Description</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {Object.entries(weightResults.weights).map(([key, value]) => {
+                      if (key === 'w_pref') {
+                        return [
+                          <TableRow key={`${key}-junior`}>
+                            <TableCell>w_pref (Junior)</TableCell>
+                            <TableCell align="right">{value.Junior}</TableCell>
+                            <TableCell>Junior preference penalty</TableCell>
+                          </TableRow>,
+                          <TableRow key={`${key}-senior`}>
+                            <TableCell>w_pref (Senior)</TableCell>
+                            <TableCell align="right">{value.Senior}</TableCell>
+                            <TableCell>Senior preference penalty</TableCell>
+                          </TableRow>
+                        ];
+                      }
+                      
+                      // Skip fixed weights
+                      const isFixed = ['w_avail', 'w_one_shift', 'w_rest', 'w_senior_holiday', 'w_duplicate_penalty'].includes(key);
+                      if (isFixed) return null;
+                      
+                      const descriptions = {
+                        'w_balance': 'Monthly balance penalty',
+                        'w_wh': 'Weekend/holiday distribution penalty',
+                        'w_senior_workload': 'Senior workload difference penalty',
+                        'w_preference_fairness': 'Preference fairness penalty'
+                      };
+                      
+                      return (
+                        <TableRow key={key}>
+                          <TableCell>{key}</TableCell>
+                          <TableCell align="right">{value}</TableCell>
+                          <TableCell>{descriptions[key] || key}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              
+              <Typography variant="h6" gutterBottom>Optimization Summary</Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={4}>
+                  <Paper sx={{ p: 2 }}>
+                    <Typography variant="subtitle2">Total Iterations</Typography>
+                    <Typography variant="h6">{weightResults.iterations_completed}</Typography>
+                  </Paper>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <Paper sx={{ p: 2 }}>
+                    <Typography variant="subtitle2">Best Score</Typography>
+                    <Typography variant="h6">{weightResults.score?.toFixed(2)}</Typography>
+                  </Paper>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <Paper sx={{ p: 2 }}>
+                    <Typography variant="subtitle2">Time Taken</Typography>
+                    <Typography variant="h6">{(weightResults.solution_time_seconds / 60).toFixed(1)} minutes</Typography>
+                  </Paper>
+                </Grid>
+              </Grid>
+              
+              {weightResults.all_results && weightResults.all_results.length > 0 && (
+                <>
+                  <Typography variant="h6" sx={{ mt: 3 }}>Top Results Comparison</Typography>
+                  <TableContainer component={Paper}>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Rank</TableCell>
+                          <TableCell align="right">Score</TableCell>
+                          <TableCell align="right">w_balance</TableCell>
+                          <TableCell align="right">w_wh</TableCell>
+                          <TableCell align="right">w_senior_workload</TableCell>
+                          <TableCell align="right">w_pref (Jr/Sr)</TableCell>
+                          <TableCell align="right">w_preference_fairness</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {weightResults.all_results.map((result, index) => (
+                          <TableRow key={index}>
+                            <TableCell>{index + 1}</TableCell>
+                            <TableCell align="right">{result.score?.toFixed(2)}</TableCell>
+                            <TableCell align="right">{result.weights.w_balance}</TableCell>
+                            <TableCell align="right">{result.weights.w_wh}</TableCell>
+                            <TableCell align="right">{result.weights.w_senior_workload}</TableCell>
+                            <TableCell align="right">{result.weights.w_pref.Junior}/{result.weights.w_pref.Senior}</TableCell>
+                            <TableCell align="right">{result.weights.w_preference_fairness}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </>
+              )}
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowWeightResults(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

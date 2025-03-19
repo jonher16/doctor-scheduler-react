@@ -16,11 +16,15 @@ from flask import Flask, request, jsonify, Response, stream_with_context
 from flask_cors import CORS
 from flask.logging import default_handler
 import werkzeug._internal as _werkzeug_internal
+import threading
+import time
 
 
 # Import the optimizers
 from schedule_optimizer import optimize_schedule, ScheduleOptimizer
 from monthly_schedule_optimizer import optimize_monthly_schedule, MonthlyScheduleOptimizer
+from weight_optimizer import optimize_weights
+
 
 # Configure logging
 logging.basicConfig(
@@ -36,6 +40,7 @@ CORS(app)  # Enable Cross-Origin Resource Sharing
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), 'results')
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
+tasks = {}
 
 # Global variable to store optimization progress
 optimization_progress = {
@@ -52,6 +57,60 @@ def update_progress(progress, message=""):
     optimization_progress["message"] = message
     optimization_progress["status"] = "running" if progress < 100 else "completed"
     logger.info(f"Progress: {progress}% - {message}")
+
+# Add this new route to your Flask application
+@app.route('/api/optimize-weights', methods=['POST'])
+def api_optimize_weights():
+    """API endpoint for running weight optimization to find the best constraint weights."""
+    data = request.json
+    
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
+        
+    # Check for required fields
+    if 'doctors' not in data or 'holidays' not in data:
+        return jsonify({"error": "Missing required data (doctors or holidays)"}), 400
+    
+    # Get weight optimization parameters
+    max_iterations = data.get('max_iterations', 20)
+    parallel_jobs = data.get('parallel_jobs', 1)
+    time_limit_minutes = data.get('time_limit_minutes', 10)
+    month = data.get('month')
+    
+    # Prepare data for optimizer
+    optimization_data = {
+        "doctors": data.get('doctors', []),
+        "holidays": data.get('holidays', {}),
+        "availability": data.get('availability', {}),
+        "month": month,
+        "max_iterations": max_iterations,
+        "parallel_jobs": parallel_jobs,
+        "time_limit_minutes": time_limit_minutes
+    }
+    
+    # Create a socket for progress updates
+    task_id = f"optimize_weights_{int(time.time())}"
+    tasks[task_id] = {"status": "PENDING", "progress": 0, "message": "Initializing..."}
+    
+    # Define progress callback
+    def progress_callback(progress, message):
+        tasks[task_id] = {"status": "RUNNING", "progress": progress, "message": message}
+    
+    # Start optimization in a thread
+    def run_optimization():
+        try:
+            tasks[task_id] = {"status": "RUNNING", "progress": 0, "message": "Starting weight optimization..."}
+            result = optimize_weights(optimization_data, progress_callback=progress_callback)
+            tasks[task_id] = {"status": "COMPLETED", "progress": 100, "message": "Complete", "result": result}
+        except Exception as e:
+            logger.exception("Error in weight optimization")
+            tasks[task_id] = {"status": "ERROR", "progress": 0, "message": str(e)}
+    
+    thread = threading.Thread(target=run_optimization)
+    thread.daemon = True
+    thread.start()
+    
+    return jsonify({"task_id": task_id})
 
 @app.route('/api/optimize', methods=['POST'])
 def optimize():
@@ -292,6 +351,21 @@ def get_run(run_id):
         return jsonify({
             "error": str(e)
         }), 500
+    
+@app.route('/api/task/<task_id>', methods=['GET'])
+def get_task_status(task_id):
+    """Get the status of a running task."""
+    if task_id not in tasks:
+        return jsonify({"error": "Task not found"}), 404
+        
+    task_info = tasks[task_id]
+    
+    # If the task is complete and has a result, return it
+    if task_info.get("status") == "COMPLETED" and "result" in task_info:
+        return jsonify(task_info)
+    
+    # Otherwise just return the status information
+    return jsonify(task_info)
 
 
 if __name__ == "__main__":

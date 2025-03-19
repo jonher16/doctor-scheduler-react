@@ -110,7 +110,7 @@ class MonthlyScheduleOptimizer:
             "Senior": 20000      # UPGRADED to super hard constraint
         }
         self.w_wrong_pref_night = 999999  # NEW: Separate extreme penalty for evening/day pref assigned to night
-        self.w_senior_workload = 1000  # Higher penalty for seniors working more than juniors
+        self.w_senior_workload = 10000  # Higher penalty for seniors working more than juniors
         self.w_preference_fairness = 1000  # Higher penalty for unfair distribution
         self.w_duplicate_penalty = 999999  # super hard constraint for duplicate doctor in same shift
         # New weights for additional constraints
