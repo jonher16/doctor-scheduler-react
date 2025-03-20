@@ -69,13 +69,13 @@ class WeightOptimizer:
         # Define weight parameter ranges
         # Format: (min, max, step)
         self.weight_ranges = {
-            "w_balance": (100, 1000, 10000),           # Monthly balance weight
-            "w_wh": (10, 40, 100),                # Weekend/holiday weight
-            "w_senior_workload": (100, 1000, 10000),   # Senior workload difference
-            "w_pref_junior": (50, 300, 10000),        # Junior preference weight
-            "w_pref_senior": (100, 500, 20000),       # Senior preference weight
-            "w_preference_fairness": (10, 100, 1000), # Preference fairness weight
-            "w_senior_holiday": (100,1000,999999)    # Senior working on long holidays
+            "w_balance": (100, 10000, 500),           # Monthly balance weight
+            "w_wh": (10, 100, 10),                # Weekend/holiday weight
+            "w_senior_workload": (500, 10000, 1000),   # Senior workload difference
+            "w_pref_junior": (50, 10000, 200),        # Junior preference weight
+            "w_pref_senior": (100, 20000, 400),       # Senior preference weight
+            "w_preference_fairness": (10, 1000, 100), # Preference fairness weight
+            "w_senior_holiday": (100,999999,1000)    # Senior working on long holidays
         }
         
         # Fixed weights (not optimized - hard constraints)
@@ -85,10 +85,10 @@ class WeightOptimizer:
             "w_rest": 999999,               # Inadequate rest after night shift
             "w_duplicate_penalty": 999999, # Duplicate doctor penalty
             "w_night_day_gap": 999999,
-            "w_night_gap": 100000, 
+            "w_night_gap": 999999, 
             "w_wrong_pref_night": 999999, # evening/day pref assigned to night
             "w_consec_night": 9999999, #consecutive night shifts
-            "w_evening_day": 100000
+            "w_evening_day": 999999
 
         }
 

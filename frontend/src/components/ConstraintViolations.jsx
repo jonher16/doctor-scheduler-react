@@ -534,7 +534,7 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth }) {
                     <Chip 
                       icon={violations.monthlyVariance.count > 0 ? <ErrorIcon /> : <CheckIcon />}
                       label={`Monthly Variance > 10h: ${violations.monthlyVariance.count}`}
-                      color={violations.monthlyVariance.count > 0 ? "error" : "success"}
+                      color={violations.monthlyVariance.count > 0 ? "warning" : "success"}
                       sx={{ width: '100%', justifyContent: 'flex-start' }}
                     />
                   </Box>
@@ -743,24 +743,24 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth }) {
           disabled={violations.monthlyVariance.count === 0}
           sx={{
             borderLeft: violations.monthlyVariance.count > 0 ? '4px solid' : 'none',
-            borderColor: 'error.main',
+            borderColor: 'warning.main',
           }}
         >
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
             <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
               <Typography sx={{ flexGrow: 1 }}>Monthly Variance + 10h ({violations.monthlyVariance.count})</Typography>
-              <Chip size="small" color="error" label="Hard Constraint" sx={{ ml: 2 }} />
+              <Chip size="small" color="warning" label="Soft Constraint" sx={{ ml: 2 }} />
             </Box>
           </AccordionSummary>
           <AccordionDetails>
-            <Typography variant="body2" sx={{ mb: 2, fontStyle: 'italic', color: 'error.main' }}>
-              Critical violation: Monthly workload variance must not exceed 10 hours.
+            <Typography variant="body2" sx={{ mb: 2, fontStyle: 'italic', color: 'warning.main' }}>
+              Soft violation: Monthly workload variance must not exceed 10 hours.
             </Typography>
             {violations.monthlyVariance.details.length > 0 ? (
               <Box>
                 {violations.monthlyVariance.details.map((violation, index) => (
                   <Box key={`variance-${index}`}>
-                    <Typography variant="subtitle1" color="error">Variance: {violation.variance}h</Typography>
+                    <Typography variant="subtitle1" color="warning">Variance: {violation.variance}h</Typography>
                     <Typography variant="body2" sx={{ mt: 1 }}>
                       <strong>Note</strong>: The dashboard shows variance in shifts (1 shift = 8h). 
                       The constraint requires monthly hours variance to be ≤ 10h.
