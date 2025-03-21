@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Typography,
   Box,
@@ -16,7 +16,18 @@ import {
   ListItemText,
   Chip,
   Tooltip,
-  IconButton
+  IconButton,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  LinearProgress,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow
 } from '@mui/material';
 import {
   CloudDownload as CloudDownloadIcon,
@@ -24,7 +35,10 @@ import {
   PersonOutline as DoctorIcon,
   CalendarMonth as CalendarIcon,
   Info as InfoIcon,
-  Check as CheckIcon
+  Check as CheckIcon,
+  Warning as WarningIcon,
+  Refresh as RefreshIcon,
+  ErrorOutline as ErrorIcon
 } from '@mui/icons-material';
 import { CloudSyncService } from '../services/CloudSyncService';
 
@@ -32,7 +46,8 @@ const SyncPage = ({ doctors, setDoctors, availability, setAvailability }) => {
   // State for tracking sync operations
   const [loading, setLoading] = useState({
     doctors: false,
-    availability: false
+    availability: false,
+    completion: false
   });
   const [results, setResults] = useState({
     doctors: null,
@@ -40,12 +55,20 @@ const SyncPage = ({ doctors, setDoctors, availability, setAvailability }) => {
   });
   const [errors, setErrors] = useState({
     doctors: null,
-    availability: null
+    availability: null,
+    completion: null
   });
   const [lastSynced, setLastSynced] = useState({
     doctors: localStorage.getItem('lastDoctorSync') ? new Date(localStorage.getItem('lastDoctorSync')) : null,
-    availability: localStorage.getItem('lastAvailabilitySync') ? new Date(localStorage.getItem('lastAvailabilitySync')) : null
+    availability: localStorage.getItem('lastAvailabilitySync') ? new Date(localStorage.getItem('lastAvailabilitySync')) : null,
+    completion: localStorage.getItem('lastCompletionSync') ? new Date(localStorage.getItem('lastCompletionSync')) : null
   });
+  
+  // State for month selection and completion status
+  const currentDate = new Date();
+  const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(2025); // Hard-coded to 2025 as per your application
+  const [completionStatus, setCompletionStatus] = useState(null);
 
   // Function to sync doctor data
   const syncDoctors = async () => {
@@ -127,7 +150,44 @@ const SyncPage = ({ doctors, setDoctors, availability, setAvailability }) => {
   const syncAll = async () => {
     await syncDoctors();
     await syncAvailability();
+    await checkMonthCompletion();
   };
+  
+  // Function to check month completion status
+  const checkMonthCompletion = async () => {
+    setLoading(prev => ({ ...prev, completion: true }));
+    setErrors(prev => ({ ...prev, completion: null }));
+    setCompletionStatus(null);
+    
+    try {
+      // Fetch month completion status
+      const monthStatus = await CloudSyncService.checkMonthCompletionForAllDoctors(
+        selectedYear, 
+        selectedMonth
+      );
+      
+      // Update completion status
+      setCompletionStatus(monthStatus);
+      
+      // Save timestamp to localStorage
+      const now = new Date();
+      localStorage.setItem('lastCompletionSync', now.toISOString());
+      setLastSynced(prev => ({ ...prev, completion: now }));
+      
+    } catch (error) {
+      console.error('Error checking month completion:', error);
+      setErrors(prev => ({ ...prev, completion: error.toString() }));
+    } finally {
+      setLoading(prev => ({ ...prev, completion: false }));
+    }
+  };
+  
+  // Check month completion when month/year changes
+  useEffect(() => {
+    if (doctors.length > 0) {
+      checkMonthCompletion();
+    }
+  }, [selectedMonth, selectedYear]);
 
   // Format time to human-readable
   const formatTime = (date) => {
@@ -150,6 +210,15 @@ const SyncPage = ({ doctors, setDoctors, availability, setAvailability }) => {
     if (diffMin < 60) return `${diffMin} minute${diffMin !== 1 ? 's' : ''} ago`;
     if (diffHrs < 24) return `${diffHrs} hour${diffHrs !== 1 ? 's' : ''} ago`;
     return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
+  };
+  
+  // Get month name
+  const getMonthName = (monthNum) => {
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    return months[monthNum - 1]; // monthNum is 1-based (1=January, 12=December)
   };
 
   return (
@@ -182,7 +251,7 @@ const SyncPage = ({ doctors, setDoctors, availability, setAvailability }) => {
             color="primary"
             startIcon={<CloudDownloadIcon />}
             onClick={syncAll}
-            disabled={loading.doctors || loading.availability}
+            disabled={loading.doctors || loading.availability || loading.completion}
             sx={{ m: 1 }}
             size="large"
           >
@@ -291,6 +360,170 @@ const SyncPage = ({ doctors, setDoctors, availability, setAvailability }) => {
             </Card>
           </Grid>
         </Grid>
+      </Paper>
+      
+      {/* Month Completion Status Card - NEW SECTION */}
+      <Paper sx={{ p: 3, mb: 4 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+          <Typography variant="h6">
+            <CalendarIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+            Doctor Schedule Completion Status
+          </Typography>
+          
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <FormControl variant="outlined" size="small" sx={{ minWidth: 120 }}>
+              <InputLabel id="month-select-label">Month</InputLabel>
+              <Select
+                labelId="month-select-label"
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                label="Month"
+              >
+                {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => (
+                  <MenuItem key={month} value={month}>
+                    {getMonthName(month)}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            
+            <IconButton
+              color="primary"
+              onClick={checkMonthCompletion}
+              disabled={loading.completion}
+              size="small"
+              sx={{ ml: 1 }}
+              aria-label="Refresh completion status"
+            >
+              <RefreshIcon />
+            </IconButton>
+          </Box>
+        </Box>
+        
+        <Typography variant="body2" color="text.secondary" paragraph>
+          Check which doctors have completed their availability settings for the selected month.
+          Incomplete schedules may affect the accuracy of the scheduling algorithm.
+        </Typography>
+        
+        <Divider sx={{ my: 2 }} />
+        
+        {loading.completion ? (
+          <Box sx={{ py: 3 }}>
+            <Typography variant="body2" align="center" sx={{ mb: 2 }}>
+              Checking completion status for {getMonthName(selectedMonth - 1)} {selectedYear}...
+            </Typography>
+            <LinearProgress />
+          </Box>
+        ) : errors.completion ? (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            Error checking completion status: {errors.completion}
+          </Alert>
+        ) : completionStatus ? (
+          <Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                              <Typography variant="subtitle1">
+                {getMonthName(selectedMonth)} {selectedYear} Completion Status:
+              </Typography>
+              
+              <Chip 
+                icon={completionStatus.isComplete ? <CheckIcon /> : <WarningIcon />}
+                label={completionStatus.isComplete ? "All Complete" : "Incomplete"}
+                color={completionStatus.isComplete ? "success" : "warning"}
+                variant="outlined"
+              />
+            </Box>
+            
+            <Box sx={{ mb: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                <Typography variant="body2" sx={{ flexGrow: 1 }}>
+                  {completionStatus.stats.completed} of {completionStatus.stats.total} doctors have completed their schedule
+                </Typography>
+                
+                <Typography variant="body2" color="text.secondary">
+                  {Math.round((completionStatus.stats.completed / completionStatus.stats.total) * 100)}% Complete
+                </Typography>
+              </Box>
+              
+              <LinearProgress 
+                variant="determinate" 
+                value={(completionStatus.stats.completed / completionStatus.stats.total) * 100}
+                color={completionStatus.isComplete ? "success" : "warning"}
+                sx={{ height: 8, borderRadius: 4 }}
+              />
+            </Box>
+            
+            {!completionStatus.isComplete && (
+              <Alert 
+                severity="warning" 
+                icon={<InfoIcon />}
+                sx={{ mb: 3 }}
+              >
+                The scheduling algorithm may not produce optimal results until all doctors have completed
+                their availability for this month.
+              </Alert>
+            )}
+            
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="subtitle2" gutterBottom>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <ErrorIcon fontSize="small" color="error" sx={{ mr: 1 }} />
+                  Doctors with incomplete schedules:
+                </Box>
+              </Typography>
+              
+              {completionStatus.stats.incomplete.length === 0 ? (
+                <Typography variant="body2" color="success.main" sx={{ fontWeight: 500 }}>
+                  All doctors have completed their schedules for this month!
+                </Typography>
+              ) : (
+                <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 300 }}>
+                  <Table size="small" stickyHeader>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell width="70%">Doctor Name</TableCell>
+                        <TableCell align="center">Status</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {completionStatus.stats.incomplete.map((doctorName, index) => (
+                        <TableRow key={index} hover>
+                          <TableCell>{doctorName}</TableCell>
+                          <TableCell align="center">
+                            <Chip 
+                              label="Not Completed" 
+                              size="small" 
+                              color="error"
+                            />
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </Box>
+            
+            <Box sx={{ textAlign: 'center', mt: 3 }}>
+              <Typography variant="caption" color="text.secondary">
+                Last checked: {lastSynced.completion ? formatTime(lastSynced.completion) : 'Never'}
+              </Typography>
+            </Box>
+          </Box>
+        ) : (
+          <Box sx={{ py: 3, textAlign: 'center' }}>
+            <Typography variant="body2" sx={{ mb: 2 }}>
+              No completion data available. Sync the doctor data to check completion status.
+            </Typography>
+            <Button
+              variant="outlined"
+              color="primary"
+              startIcon={<RefreshIcon />}
+              onClick={checkMonthCompletion}
+            >
+              Check Completion Status
+            </Button>
+          </Box>
+        )}
       </Paper>
 
       {/* Sync Results */}
