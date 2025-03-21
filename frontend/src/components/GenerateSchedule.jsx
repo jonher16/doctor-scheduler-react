@@ -388,11 +388,11 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
                   control={<Radio />} 
                   label="Monthly Schedule (Recommended)" 
                 />
-                <FormControlLabel 
+                {/* <FormControlLabel 
                   value="yearly" 
                   control={<Radio />} 
                   label="Yearly Schedule (Full Year)" 
-                />
+                /> */}
               </RadioGroup>
             </FormControl>
           </Grid>

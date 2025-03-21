@@ -33,6 +33,8 @@ import {
   Save as SaveIcon
 } from '@mui/icons-material';
 
+import CloudSyncButton from './CloudSyncButton';
+
 function DoctorConfig({ doctors, setDoctors }) {
   const [localDoctors, setLocalDoctors] = useState(doctors);
   const [openDialog, setOpenDialog] = useState(false);
@@ -118,6 +120,18 @@ function DoctorConfig({ doctors, setDoctors }) {
     });
   };
 
+  const handleSyncComplete = (cloudDoctors) => {
+    if (!cloudDoctors || cloudDoctors.length === 0) {
+      return;
+    }
+    
+    // Merge cloud doctors with local doctors
+    const mergedDoctors = CloudSyncService.mergeDoctors(doctors, cloudDoctors);
+    
+    // Update the state
+    setDoctors(mergedDoctors);
+  };
+
   // Save configuration back to parent component
   const saveConfig = () => {
     setDoctors(localDoctors);
@@ -176,6 +190,10 @@ function DoctorConfig({ doctors, setDoctors }) {
         >
           Add Doctor
         </Button>
+        <CloudSyncButton
+        onSyncComplete={handleSyncComplete}
+        syncType="doctors"
+        />
         <Button
           variant="outlined"
           startIcon={<SaveIcon />}
