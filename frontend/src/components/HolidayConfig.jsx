@@ -26,15 +26,20 @@ import {
   DialogContent,
   DialogActions,
   Switch,
-  FormControlLabel
+  FormControlLabel,
+  Tabs,
+  Tab
 } from '@mui/material';
 import {
   Add as AddIcon,
   Delete as DeleteIcon,
   Save as SaveIcon,
-  EventNote as EventNoteIcon
+  EventNote as EventNoteIcon,
+  ViewList as ViewListIcon,
+  CalendarViewMonth as CalendarViewMonthIcon
 } from '@mui/icons-material';
 import EnhancedCalendar from './EnhancedCalendar';
+import HolidayCalendar from './HolidayCalendar';
 
 function HolidayConfig({ holidays, setHolidays }) {
   const [localHolidays, setLocalHolidays] = useState(holidays);
@@ -47,6 +52,9 @@ function HolidayConfig({ holidays, setHolidays }) {
   
   // Add state for range mode toggle
   const [isRangeMode, setIsRangeMode] = useState(false);
+  
+  // Add state for view mode (table or calendar)
+  const [viewMode, setViewMode] = useState('calendar'); // Default to calendar view
 
   // Update local state when holidays prop changes
   useEffect(() => {
@@ -80,6 +88,13 @@ function HolidayConfig({ holidays, setHolidays }) {
     // Default to "Long" holiday type when in range mode
     if (rangeEnabled) {
       setHolidayType('Long');
+    }
+  };
+
+  // Handle view mode change
+  const handleViewModeChange = (event, newMode) => {
+    if (newMode) {
+      setViewMode(newMode);
     }
   };
 
@@ -206,6 +221,16 @@ function HolidayConfig({ holidays, setHolidays }) {
     date,
     type
   })).sort((a, b) => a.date.localeCompare(b.date));
+  
+  // Handle updates from the calendar view
+  const handleCalendarUpdate = (updatedHolidays) => {
+    setLocalHolidays(updatedHolidays);
+    setSnackbar({
+      open: true,
+      message: 'Holiday updated. Don\'t forget to save your changes!',
+      severity: 'info'
+    });
+  };
 
   return (
     <Box>
@@ -219,15 +244,28 @@ function HolidayConfig({ holidays, setHolidays }) {
         </Typography>
       </Box>
 
-      <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
-        <Button
-          variant="contained"
-          startIcon={<EventNoteIcon />}
-          onClick={handleOpenDialog}
-          sx={{ mr: 2 }}
+      <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Tabs 
+          value={viewMode} 
+          onChange={handleViewModeChange}
+          variant="standard"
+          aria-label="View mode tabs"
+          sx={{ borderBottom: 1, borderColor: 'divider' }}
         >
-          Add Holiday
-        </Button>
+          <Tab 
+            value="calendar" 
+            label="Calendar View" 
+            icon={<CalendarViewMonthIcon />} 
+            iconPosition="start"
+          />
+          <Tab 
+            value="table" 
+            label="Table View" 
+            icon={<ViewListIcon />} 
+            iconPosition="start"
+          />
+        </Tabs>
+
         <Button
           variant="outlined"
           startIcon={<SaveIcon />}
@@ -238,56 +276,80 @@ function HolidayConfig({ holidays, setHolidays }) {
         </Button>
       </Box>
 
-      <TableContainer component={Paper} sx={{ mb: 4 }}>
-        <Table sx={{ minWidth: 650 }}>
-          <TableHead>
-            <TableRow sx={{ backgroundColor: 'primary.light' }}>
-              <TableCell sx={{ fontWeight: 'bold', color: 'white' }}>Date</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', color: 'white' }}>Type</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', color: 'white' }}>Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {holidaysArray.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={3} align="center">
-                  <Typography variant="body1" sx={{ py: 2 }}>
-                    No holidays configured. Add a holiday to get started.
-                  </Typography>
-                </TableCell>
-              </TableRow>
-            ) : (
-              holidaysArray.map((holiday) => (
-                <TableRow key={holiday.date} hover>
-                  <TableCell>
-                    <Typography variant="body1">
-                      {holiday.date}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Chip 
-                      label={holiday.type} 
-                      color={getHolidayTypeColor(holiday.type)}
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Tooltip title="Remove">
-                      <IconButton 
-                        color="error" 
-                        onClick={() => removeHoliday(holiday.date)}
-                        size="small"
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </Tooltip>
-                  </TableCell>
+      {/* Calendar View */}
+      {viewMode === 'calendar' && (
+        <HolidayCalendar 
+          holidays={localHolidays} 
+          setHolidays={handleCalendarUpdate} 
+        />
+      )}
+
+      {/* Table View */}
+      {viewMode === 'table' && (
+        <>
+          <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
+            <Button
+              variant="contained"
+              startIcon={<EventNoteIcon />}
+              onClick={handleOpenDialog}
+              sx={{ mr: 2 }}
+            >
+              Add Holiday
+            </Button>
+          </Box>
+
+          <TableContainer component={Paper} sx={{ mb: 4 }}>
+            <Table sx={{ minWidth: 650 }}>
+              <TableHead>
+                <TableRow sx={{ backgroundColor: 'primary.light' }}>
+                  <TableCell sx={{ fontWeight: 'bold', color: 'white' }}>Date</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', color: 'white' }}>Type</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', color: 'white' }}>Actions</TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+              </TableHead>
+              <TableBody>
+                {holidaysArray.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={3} align="center">
+                      <Typography variant="body1" sx={{ py: 2 }}>
+                        No holidays configured. Add a holiday to get started.
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  holidaysArray.map((holiday) => (
+                    <TableRow key={holiday.date} hover>
+                      <TableCell>
+                        <Typography variant="body1">
+                          {holiday.date}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={holiday.type} 
+                          color={getHolidayTypeColor(holiday.type)}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Tooltip title="Remove">
+                          <IconButton 
+                            color="error" 
+                            onClick={() => removeHoliday(holiday.date)}
+                            size="small"
+                          >
+                            <DeleteIcon />
+                          </IconButton>
+                        </Tooltip>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </>
+      )}
 
       {/* Add Holiday Dialog */}
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>

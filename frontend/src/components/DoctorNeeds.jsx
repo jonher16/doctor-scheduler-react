@@ -36,9 +36,12 @@ import {
   Delete as DeleteIcon,
   Save as SaveIcon,
   Event as EventIcon,
-  CalendarToday as CalendarTodayIcon
+  CalendarToday as CalendarTodayIcon,
+  ViewList as ViewListIcon,
+  CalendarViewMonth as CalendarViewMonthIcon
 } from '@mui/icons-material';
 import EnhancedCalendar from './EnhancedCalendar';
+import DoctorAvailabilityCalendar from './DoctorAvailabilityCalendar';
 
 function DoctorNeeds({ doctors, setAvailability, availability }) {
   // Store constraints with support for date ranges
@@ -53,6 +56,9 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
   
   // Add state for range mode toggle
   const [isRangeMode, setIsRangeMode] = useState(false);
+  
+  // Add state for view mode (table or calendar)
+  const [viewMode, setViewMode] = useState('table');
 
   // Load existing constraints when component mounts or availability changes
   useEffect(() => {
@@ -308,6 +314,13 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
     }
   };
 
+  // Handle changing view mode
+  const handleViewModeChange = (event, newMode) => {
+    if (newMode) {
+      setViewMode(newMode);
+    }
+  };
+
   return (
     <Box>
       <Typography variant="h5" component="h2" gutterBottom>
@@ -320,81 +333,115 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
         </Typography>
       </Box>
 
-      <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
-        <Button
-          variant="contained"
-          startIcon={<CalendarTodayIcon />}
-          onClick={handleOpenDialog}
-          sx={{ mr: 2 }}
+      <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Tabs 
+          value={viewMode} 
+          onChange={handleViewModeChange}
+          variant="standard"
+          aria-label="View mode tabs"
+          sx={{ borderBottom: 1, borderColor: 'divider' }}
         >
-          Add Availability
-        </Button>
-        <Button
-          variant="outlined"
-          startIcon={<SaveIcon />}
-          onClick={saveConstraints}
-          color="primary"
-        >
-          Save Availability
-        </Button>
+          <Tab 
+            value="table" 
+            label="Table View" 
+            icon={<ViewListIcon />} 
+            iconPosition="start"
+          />
+          <Tab 
+            value="calendar" 
+            label="Calendar View" 
+            icon={<CalendarViewMonthIcon />} 
+            iconPosition="start"
+          />
+        </Tabs>
+
+        <Box>
+          <Button
+            variant="contained"
+            startIcon={<CalendarTodayIcon />}
+            onClick={handleOpenDialog}
+            sx={{ mr: 2 }}
+          >
+            Add Availability
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<SaveIcon />}
+            onClick={saveConstraints}
+            color="primary"
+          >
+            Save Availability
+          </Button>
+        </Box>
       </Box>
 
-      <TableContainer component={Paper} sx={{ mb: 4 }}>
-        <Table sx={{ minWidth: 650 }}>
-          <TableHead>
-            <TableRow sx={{ backgroundColor: 'primary.light' }}>
-              <TableCell sx={{ fontWeight: 'bold', color: 'white' }}>Doctor</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', color: 'white' }}>Date</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', color: 'white' }}>Availability</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', color: 'white' }}>Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {constraints.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={4} align="center">
-                  <Typography variant="body1" sx={{ py: 2 }}>
-                    No availability constraints set. Add availability constraints to get started.
-                  </Typography>
-                </TableCell>
+      {/* Table View */}
+      {viewMode === 'table' && (
+        <TableContainer component={Paper} sx={{ mb: 4 }}>
+          <Table sx={{ minWidth: 650 }}>
+            <TableHead>
+              <TableRow sx={{ backgroundColor: 'primary.light' }}>
+                <TableCell sx={{ fontWeight: 'bold', color: 'white' }}>Doctor</TableCell>
+                <TableCell sx={{ fontWeight: 'bold', color: 'white' }}>Date</TableCell>
+                <TableCell sx={{ fontWeight: 'bold', color: 'white' }}>Availability</TableCell>
+                <TableCell sx={{ fontWeight: 'bold', color: 'white' }}>Actions</TableCell>
               </TableRow>
-            ) : (
-              constraints.map((constraint, index) => (
-                <TableRow key={index} hover>
-                  <TableCell>
-                    <Typography variant="body1">
-                      {constraint.doctor}
+            </TableHead>
+            <TableBody>
+              {constraints.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} align="center">
+                    <Typography variant="body1" sx={{ py: 2 }}>
+                      No availability constraints set. Add availability constraints to get started.
                     </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body1">
-                      {constraint.date}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Chip 
-                      label={constraint.avail} 
-                      color={getAvailabilityColor(constraint.avail)}
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Tooltip title="Remove">
-                      <IconButton 
-                        color="error" 
-                        onClick={() => removeConstraint(index)}
-                        size="small"
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </Tooltip>
                   </TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+              ) : (
+                constraints.map((constraint, index) => (
+                  <TableRow key={index} hover>
+                    <TableCell>
+                      <Typography variant="body1">
+                        {constraint.doctor}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body1">
+                        {constraint.date}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={constraint.avail} 
+                        color={getAvailabilityColor(constraint.avail)}
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Tooltip title="Remove">
+                        <IconButton 
+                          color="error" 
+                          onClick={() => removeConstraint(index)}
+                          size="small"
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+
+      {/* Calendar View */}
+      {viewMode === 'calendar' && (
+        <DoctorAvailabilityCalendar 
+          doctors={doctors}
+          availability={availability}
+        />
+      )}
 
       {/* Add Availability Dialog */}
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
