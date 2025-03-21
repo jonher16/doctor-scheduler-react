@@ -1,4 +1,4 @@
-// Updated App.jsx with userData file loading
+// Updated App.jsx with userData file loading and multi-year support
 
 import React, { useState, useEffect } from 'react';
 import { 
@@ -20,7 +20,11 @@ import {
   ThemeProvider,
   createTheme,
   Snackbar,
-  Alert
+  Alert,
+  FormControl,
+  Select,
+  MenuItem,
+  InputLabel
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -41,6 +45,9 @@ import Dashboard from './components/Dashboard';
 import MonthlyCalendarView from './components/MonthlyCalendarView';
 import BackendMonitor from './components/BackendMonitor';
 import SyncPage from './components/SyncPage';
+
+// Import utility functions
+import { getYearRange } from './utils/dateUtils';
 
 // Create a custom theme
 const theme = createTheme({
@@ -109,6 +116,9 @@ const API_URL = isElectron
   : import.meta.env.VITE_API_URL || 'http://localhost:5000/api'; // From env or default
 
 function App() {
+  // Get the year range from the utility function
+  const { currentYear, years } = getYearRange();
+  
   const [doctors, setDoctorsState] = useState([]);
   const [holidays, setHolidaysState] = useState({});
   const [availability, setAvailabilityState] = useState({});
@@ -117,6 +127,9 @@ function App() {
   const [activeComponent, setActiveComponent] = useState('generate');
   const [isLoading, setIsLoading] = useState(true);
   const [appPaths, setAppPaths] = useState(null);
+  
+  // Add year state - default to current year
+  const [selectedYear, setSelectedYear] = useState(currentYear);
   
   // For notifications
   const [notification, setNotification] = useState({
@@ -148,6 +161,7 @@ function App() {
       metadata: {
         doctors: JSON.parse(JSON.stringify(doctors)), // Deep copy
         holidays: JSON.parse(JSON.stringify(holidays)), // Deep copy
+        year: selectedYear, // Add the year to the metadata
         generatedAt: new Date().toISOString()
       }
     };
@@ -201,6 +215,11 @@ function App() {
       message: 'Schedule updated successfully!',
       severity: 'success'
     });
+  };
+
+  // Handle year change
+  const handleYearChange = (event) => {
+    setSelectedYear(event.target.value);
   };
 
   // Load data on mount
@@ -298,6 +317,12 @@ function App() {
       try {
         const parsedData = JSON.parse(scheduleData);
         setScheduleState(parsedData.schedule || {});
+        
+        // If there's a year in the metadata, use it
+        if (parsedData.metadata && parsedData.metadata.year) {
+          setSelectedYear(parsedData.metadata.year);
+        }
+        
         console.log("Loaded schedule from localStorage");
       } catch (err) {
         console.error('Error parsing schedule from localStorage', err);
@@ -465,7 +490,8 @@ function App() {
           return {
             schedule: savedSchedule,
             doctors: metadata.doctors || doctors, // Fall back to current doctors if needed
-            holidays: metadata.holidays || holidays // Fall back to current holidays if needed
+            holidays: metadata.holidays || holidays, // Fall back to current holidays if needed
+            year: metadata.year || selectedYear // Use the year from metadata or current selected year
           };
         }
       }
@@ -474,7 +500,7 @@ function App() {
     }
     
     // If there's no valid saved schedule data with metadata, use current state
-    return { schedule, doctors, holidays };
+    return { schedule, doctors, holidays, year: selectedYear };
   };
 
   // Render the active component
@@ -527,9 +553,18 @@ function App() {
       case 'doctors':
         return <DoctorConfig doctors={doctors} setDoctors={setDoctors} />;
       case 'holidays':
-        return <HolidayConfig holidays={holidays} setHolidays={setHolidays} />;
+        return <HolidayConfig 
+          holidays={holidays} 
+          setHolidays={setHolidays}
+          year={selectedYear}
+        />;
       case 'availability':
-        return <DoctorNeeds doctors={doctors} setAvailability={setAvailability} availability={availability} />;
+        return <DoctorNeeds 
+          doctors={doctors} 
+          setAvailability={setAvailability} 
+          availability={availability}
+          year={selectedYear}
+        />;
       case 'generate':
         return (
           <GenerateSchedule
@@ -537,17 +572,19 @@ function App() {
             holidays={holidays}
             availability={availability}
             setSchedule={setSchedule}
-            apiUrl={API_URL}  // Pass API URL to component
+            apiUrl={API_URL}
+            year={selectedYear}
           />
         );
       case 'dashboard': {
         // Get the schedule data with its snapshot of doctors/holidays
-        const { schedule: dashboardSchedule, doctors: dashboardDoctors, holidays: dashboardHolidays } = getScheduleData();
+        const { schedule: dashboardSchedule, doctors: dashboardDoctors, holidays: dashboardHolidays, year: dashboardYear } = getScheduleData();
         return <Dashboard 
           doctors={dashboardDoctors} 
           schedule={dashboardSchedule} 
           holidays={dashboardHolidays}
           onScheduleUpdate={handleScheduleUpdate}
+          year={dashboardYear}
         />;
       };
       case 'sync':
@@ -555,7 +592,7 @@ function App() {
           doctors={doctors} 
           setDoctors={setDoctors} 
           availability={availability} 
-          setAvailability={setAvailability} 
+          setAvailability={setAvailability}
         />;
       default:
         return <DoctorConfig doctors={doctors} setDoctors={setDoctors} />;
@@ -581,6 +618,27 @@ function App() {
             <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
               Hospital Doctor Scheduler
             </Typography>
+            
+            {/* Year selector */}
+            <FormControl variant="outlined" size="small" sx={{ minWidth: 120, mr: 2 }}>
+              <Select
+                value={selectedYear}
+                onChange={handleYearChange}
+                displayEmpty
+                inputProps={{ 'aria-label': 'Select year' }}
+                sx={{ 
+                  color: 'white', 
+                  '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255, 255, 255, 0.5)' },
+                  '& .MuiSvgIcon-root': { color: 'white' }
+                }}
+              >
+                {years.map((year) => (
+                  <MenuItem key={year} value={year}>
+                    {year}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
           </Toolbar>
         </AppBar>
         
