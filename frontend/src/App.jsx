@@ -28,7 +28,8 @@ import {
   EventNote as EventNoteIcon,
   CalendarToday as CalendarTodayIcon,
   Event as EventIcon,
-  Dashboard as DashboardIcon
+  Dashboard as DashboardIcon,
+  CloudSync as CloudSyncIcon
 } from '@mui/icons-material';
 
 // Import components
@@ -39,6 +40,7 @@ import GenerateSchedule from './components/GenerateSchedule';
 import Dashboard from './components/Dashboard';
 import MonthlyCalendarView from './components/MonthlyCalendarView';
 import BackendMonitor from './components/BackendMonitor';
+import SyncPage from './components/SyncPage';
 
 // Create a custom theme
 const theme = createTheme({
@@ -93,7 +95,8 @@ const menuItems = [
   { text: 'Dashboard', icon: <DashboardIcon />, component: 'dashboard' },
   { text: 'Doctor Configuration', icon: <PersonIcon />, component: 'doctors' },
   { text: 'Holiday Configuration', icon: <EventNoteIcon />, component: 'holidays' },
-  { text: 'Doctor Availability', icon: <CalendarTodayIcon />, component: 'availability' }
+  { text: 'Doctor Availability', icon: <CalendarTodayIcon />, component: 'availability' },
+  { text: 'Cloud Sync', icon: <CloudSyncIcon />, component: 'sync' }
   
 ];
 
@@ -546,7 +549,14 @@ function App() {
           holidays={dashboardHolidays}
           onScheduleUpdate={handleScheduleUpdate}
         />;
-      }
+      };
+      case 'sync':
+        return <SyncPage 
+          doctors={doctors} 
+          setDoctors={setDoctors} 
+          availability={availability} 
+          setAvailability={setAvailability} 
+        />;
       default:
         return <DoctorConfig doctors={doctors} setDoctors={setDoctors} />;
     }

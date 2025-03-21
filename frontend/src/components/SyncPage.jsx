@@ -1,0 +1,394 @@
+import React, { useState } from 'react';
+import {
+  Typography,
+  Box,
+  Paper,
+  Button,
+  Grid,
+  Card,
+  CardContent,
+  CardHeader,
+  Divider,
+  CircularProgress,
+  Alert,
+  List,
+  ListItem,
+  ListItemText,
+  Chip,
+  Tooltip,
+  IconButton
+} from '@mui/material';
+import {
+  CloudDownload as CloudDownloadIcon,
+  CloudSync as CloudSyncIcon,
+  PersonOutline as DoctorIcon,
+  CalendarMonth as CalendarIcon,
+  Info as InfoIcon,
+  Check as CheckIcon
+} from '@mui/icons-material';
+import { CloudSyncService } from '../services/CloudSyncService';
+
+const SyncPage = ({ doctors, setDoctors, availability, setAvailability }) => {
+  // State for tracking sync operations
+  const [loading, setLoading] = useState({
+    doctors: false,
+    availability: false
+  });
+  const [results, setResults] = useState({
+    doctors: null,
+    availability: null
+  });
+  const [errors, setErrors] = useState({
+    doctors: null,
+    availability: null
+  });
+  const [lastSynced, setLastSynced] = useState({
+    doctors: localStorage.getItem('lastDoctorSync') ? new Date(localStorage.getItem('lastDoctorSync')) : null,
+    availability: localStorage.getItem('lastAvailabilitySync') ? new Date(localStorage.getItem('lastAvailabilitySync')) : null
+  });
+
+  // Function to sync doctor data
+  const syncDoctors = async () => {
+    setLoading(prev => ({ ...prev, doctors: true }));
+    setErrors(prev => ({ ...prev, doctors: null }));
+    
+    try {
+      // Fetch doctor data from the cloud
+      const cloudDoctors = await CloudSyncService.fetchDoctorPreferences();
+      
+      // Merge with existing data
+      const mergedDoctors = CloudSyncService.mergeDoctors(doctors, cloudDoctors);
+      
+      // Update app state
+      setDoctors(mergedDoctors);
+      
+      // Update results state
+      const now = new Date();
+      setResults(prev => ({ 
+        ...prev, 
+        doctors: {
+          count: cloudDoctors.length,
+          timestamp: now,
+          data: cloudDoctors
+        }
+      }));
+      
+      // Save timestamp to localStorage
+      localStorage.setItem('lastDoctorSync', now.toISOString());
+      setLastSynced(prev => ({ ...prev, doctors: now }));
+      
+    } catch (error) {
+      console.error('Error syncing doctor data:', error);
+      setErrors(prev => ({ ...prev, doctors: error.toString() }));
+    } finally {
+      setLoading(prev => ({ ...prev, doctors: false }));
+    }
+  };
+
+  // Function to sync availability data
+  const syncAvailability = async () => {
+    setLoading(prev => ({ ...prev, availability: true }));
+    setErrors(prev => ({ ...prev, availability: null }));
+    
+    try {
+      // Fetch availability data from the cloud
+      const cloudAvailability = await CloudSyncService.fetchDoctorAvailability();
+      
+      // Merge with existing data
+      const mergedAvailability = CloudSyncService.mergeAvailability(availability, cloudAvailability);
+      
+      // Update app state
+      setAvailability(mergedAvailability);
+      
+      // Update results state
+      const now = new Date();
+      setResults(prev => ({ 
+        ...prev, 
+        availability: {
+          count: Object.keys(cloudAvailability).length,
+          timestamp: now,
+          data: cloudAvailability
+        }
+      }));
+      
+      // Save timestamp to localStorage
+      localStorage.setItem('lastAvailabilitySync', now.toISOString());
+      setLastSynced(prev => ({ ...prev, availability: now }));
+      
+    } catch (error) {
+      console.error('Error syncing availability data:', error);
+      setErrors(prev => ({ ...prev, availability: error.toString() }));
+    } finally {
+      setLoading(prev => ({ ...prev, availability: false }));
+    }
+  };
+
+  // Function to sync all data
+  const syncAll = async () => {
+    await syncDoctors();
+    await syncAvailability();
+  };
+
+  // Format time to human-readable
+  const formatTime = (date) => {
+    if (!date) return 'Never';
+    return date.toLocaleString();
+  };
+
+  // Get relative time description
+  const getTimeAgo = (date) => {
+    if (!date) return '';
+    
+    const now = new Date();
+    const diffMs = now - date;
+    const diffSec = Math.floor(diffMs / 1000);
+    const diffMin = Math.floor(diffSec / 60);
+    const diffHrs = Math.floor(diffMin / 60);
+    const diffDays = Math.floor(diffHrs / 24);
+    
+    if (diffSec < 60) return 'just now';
+    if (diffMin < 60) return `${diffMin} minute${diffMin !== 1 ? 's' : ''} ago`;
+    if (diffHrs < 24) return `${diffHrs} hour${diffHrs !== 1 ? 's' : ''} ago`;
+    return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
+  };
+
+  return (
+    <Box>
+      <Typography variant="h5" component="h2" gutterBottom>
+        Cloud Synchronization
+      </Typography>
+      
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="body1" color="text.secondary" paragraph>
+          Synchronize doctor information and availability data from the cloud portal. This allows you to import
+          the latest doctor preferences and schedules that have been submitted remotely.
+        </Typography>
+      </Box>
+
+      {/* Sync Action Card */}
+      <Paper sx={{ p: 3, mb: 4 }}>
+        <Box sx={{ textAlign: 'center', mb: 3 }}>
+          <Typography variant="h6" gutterBottom>
+            <CloudSyncIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+            Sync Data from Cloud
+          </Typography>
+          
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            Choose what data you want to download from the cloud portal
+          </Typography>
+          
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<CloudDownloadIcon />}
+            onClick={syncAll}
+            disabled={loading.doctors || loading.availability}
+            sx={{ m: 1 }}
+            size="large"
+          >
+            Sync All Data
+          </Button>
+        </Box>
+        
+        <Divider sx={{ my: 2 }} />
+        
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={6}>
+            <Card variant="outlined">
+              <CardHeader
+                title={
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <DoctorIcon sx={{ mr: 1 }} />
+                    Doctor Preferences
+                  </Box>
+                }
+                subheader={
+                  lastSynced.doctors ? 
+                  `Last synced: ${formatTime(lastSynced.doctors)} (${getTimeAgo(lastSynced.doctors)})` : 
+                  'Not yet synced'
+                }
+              />
+              <Divider />
+              <CardContent>
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="body2" paragraph>
+                    Sync doctor information including names, seniority levels, and shift preferences from the cloud.
+                  </Typography>
+                  
+                  {results.doctors && (
+                    <Alert severity="success" sx={{ mb: 2 }}>
+                      Successfully synced {results.doctors.count} doctors at {results.doctors.timestamp.toLocaleString()}
+                    </Alert>
+                  )}
+                  
+                  {errors.doctors && (
+                    <Alert severity="error" sx={{ mb: 2 }}>
+                      Error: {errors.doctors}
+                    </Alert>
+                  )}
+                </Box>
+                
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  startIcon={loading.doctors ? <CircularProgress size={20} /> : <CloudDownloadIcon />}
+                  onClick={syncDoctors}
+                  disabled={loading.doctors}
+                  fullWidth
+                >
+                  {loading.doctors ? 'Syncing...' : 'Sync Doctor Data'}
+                </Button>
+              </CardContent>
+            </Card>
+          </Grid>
+          
+          <Grid item xs={12} md={6}>
+            <Card variant="outlined">
+              <CardHeader
+                title={
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <CalendarIcon sx={{ mr: 1 }} />
+                    Doctor Availability
+                  </Box>
+                }
+                subheader={
+                  lastSynced.availability ? 
+                  `Last synced: ${formatTime(lastSynced.availability)} (${getTimeAgo(lastSynced.availability)})` : 
+                  'Not yet synced'
+                }
+              />
+              <Divider />
+              <CardContent>
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="body2" paragraph>
+                    Sync doctor availability data including unavailable dates and shift preferences for specific dates.
+                  </Typography>
+                  
+                  {results.availability && (
+                    <Alert severity="success" sx={{ mb: 2 }}>
+                      Successfully synced availability for {results.availability.count} doctors at {results.availability.timestamp.toLocaleString()}
+                    </Alert>
+                  )}
+                  
+                  {errors.availability && (
+                    <Alert severity="error" sx={{ mb: 2 }}>
+                      Error: {errors.availability}
+                    </Alert>
+                  )}
+                </Box>
+                
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  startIcon={loading.availability ? <CircularProgress size={20} /> : <CloudDownloadIcon />}
+                  onClick={syncAvailability}
+                  disabled={loading.availability}
+                  fullWidth
+                >
+                  {loading.availability ? 'Syncing...' : 'Sync Availability Data'}
+                </Button>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      </Paper>
+
+      {/* Sync Results */}
+      {(results.doctors || results.availability) && (
+        <Paper sx={{ p: 3, mb: 4 }}>
+          <Typography variant="h6" gutterBottom>
+            <CheckIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+            Sync Results
+          </Typography>
+          
+          <Grid container spacing={3}>
+            {results.doctors && (
+              <Grid item xs={12} md={6}>
+                <Card variant="outlined">
+                  <CardHeader title="Doctor Data Synced" />
+                  <Divider />
+                  <CardContent>
+                    <Typography variant="body2" paragraph>
+                      Successfully synced {results.doctors.count} doctors at {results.doctors.timestamp.toLocaleString()}
+                    </Typography>
+                    
+                    {results.doctors.data.length > 0 && (
+                      <>
+                        <Typography variant="subtitle2" gutterBottom>
+                          Synced Doctors:
+                        </Typography>
+                        <List dense sx={{ maxHeight: 200, overflow: 'auto' }}>
+                          {results.doctors.data.map((doctor, index) => (
+                            <ListItem key={index} divider={index < results.doctors.data.length - 1}>
+                              <ListItemText 
+                                primary={doctor.name}
+                                secondary={
+                                  <Box>
+                                    <Chip 
+                                      label={doctor.seniority} 
+                                      size="small" 
+                                      color={doctor.seniority === 'Senior' ? 'primary' : 'default'}
+                                      sx={{ mr: 1 }}
+                                    />
+                                    <Chip 
+                                      label={doctor.pref || 'No Preference'} 
+                                      size="small" 
+                                      color={doctor.pref ? 'secondary' : 'default'}
+                                    />
+                                  </Box>
+                                }
+                              />
+                            </ListItem>
+                          ))}
+                        </List>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              </Grid>
+            )}
+            
+            {results.availability && (
+              <Grid item xs={12} md={6}>
+                <Card variant="outlined">
+                  <CardHeader title="Availability Data Synced" />
+                  <Divider />
+                  <CardContent>
+                    <Typography variant="body2" paragraph>
+                      Successfully synced availability for {results.availability.count} doctors at {results.availability.timestamp.toLocaleString()}
+                    </Typography>
+                    
+                    {Object.keys(results.availability.data).length > 0 && (
+                      <>
+                        <Typography variant="subtitle2" gutterBottom>
+                          Doctors with availability settings:
+                        </Typography>
+                        <List dense sx={{ maxHeight: 200, overflow: 'auto' }}>
+                          {Object.keys(results.availability.data).map((doctorName, index) => {
+                            const doctorAvail = results.availability.data[doctorName];
+                            const entriesCount = Object.keys(doctorAvail).length;
+                            
+                            return (
+                              <ListItem key={index} divider={index < Object.keys(results.availability.data).length - 1}>
+                                <ListItemText 
+                                  primary={doctorName}
+                                  secondary={`${entriesCount} availability entries`}
+                                />
+                              </ListItem>
+                            );
+                          })}
+                        </List>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              </Grid>
+            )}
+          </Grid>
+        </Paper>
+      )}
+    </Box>
+  );
+};
+
+export default SyncPage;
