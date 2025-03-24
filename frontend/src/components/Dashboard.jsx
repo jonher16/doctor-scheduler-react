@@ -37,7 +37,12 @@ import ExcelExportButton from './ExcelExportButton';
 import DoctorShiftTypesChart from './DoctorShiftTypesChart';
 import ConstraintViolations from './ConstraintViolations';
 
+import { useYear } from '../contexts/YearContext';
+
+
 function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
+
+  const { selectedYear } = useYear();
   const [tabValue, setTabValue] = useState(0);
   const [month, setMonth] = useState(new Date().getMonth() + 1); // Current month (1-12)
   
