@@ -21,11 +21,15 @@ import {
   Legend
 } from 'chart.js';
 import { Bar as BarChart } from 'react-chartjs-2';
+import { useYear } from '../contexts/YearContext';
 
 // Register ChartJS components
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 function WeekendHolidayBalance({ doctors, schedule, holidays, selectedMonth }) {
+
+  const { selectedYear } = useYear(); // Add this line
+
   // Check if schedule and doctors are available
   if (!schedule || Object.keys(schedule).length === 0 || !doctors || doctors.length === 0) {
     return (
@@ -156,7 +160,7 @@ function WeekendHolidayBalance({ doctors, schedule, holidays, selectedMonth }) {
       <Box sx={{ minHeight: '400px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
         <Alert severity="info" sx={{ width: '100%', maxWidth: 600 }}>
           <Typography variant="body1">
-            No weekend or holiday shifts found in {getMonthName(selectedMonth)} 2025.
+            No weekend or holiday shifts found in {getMonthName(selectedMonth)} {selectedYear}.
           </Typography>
         </Alert>
       </Box>
@@ -186,7 +190,7 @@ function WeekendHolidayBalance({ doctors, schedule, holidays, selectedMonth }) {
       legend: { position: 'top' },
       title: { 
         display: true, 
-        text: `${getMonthName(selectedMonth)} 2025 Weekend and Holiday Shift Distribution`,
+        text: `${getMonthName(selectedMonth)} ${selectedYear} Weekend and Holiday Shift Distribution`,
         font: { size: 16 }
       },
     },
@@ -244,7 +248,7 @@ function WeekendHolidayBalance({ doctors, schedule, holidays, selectedMonth }) {
           <Card sx={{ height: '100%' }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>
-                {getMonthName(selectedMonth)} 2025 Weekend & Holiday Distribution
+                {getMonthName(selectedMonth)} {selectedYear} Weekend & Holiday Distribution
               </Typography>
               <Divider sx={{ mb: 2 }} />
               

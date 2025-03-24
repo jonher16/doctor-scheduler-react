@@ -26,10 +26,13 @@ import {
   ChevronRight,
   Edit as EditIcon,
 } from '@mui/icons-material';
+import { useYear } from '../contexts/YearContext';
 
 function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate, selectedMonth }) {
+
+  const { selectedYear } = useYear();
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
-  const [currentYear, setCurrentYear] = useState(2025); // Fixed to 2025 for this app
+  const [currentYear, setCurrentYear] = useState(selectedYear);
   const [calendarDays, setCalendarDays] = useState([]);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(null);
@@ -45,6 +48,10 @@ function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate, se
       setCurrentMonth(selectedMonth - 1);
     }
   }, [selectedMonth]);
+
+  useEffect(() => {
+    setCurrentYear(selectedYear);
+  }, [selectedYear]);
 
   // Use a soft pastel color palette for doctor identification.
   const doctorColors = React.useMemo(() => {

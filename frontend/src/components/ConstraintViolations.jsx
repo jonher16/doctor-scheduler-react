@@ -22,8 +22,11 @@ import {
   ErrorOutline as ErrorIcon,
   CheckCircleOutline as CheckIcon
 } from '@mui/icons-material';
+import { useYear } from '../contexts/YearContext';
+
 
 function ConstraintViolations({ doctors, schedule, holidays, selectedMonth }) {
+  const {currentYear}  = useYear();
   const [violations, setViolations] = useState({});
   const [totalViolations, setTotalViolations] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -31,7 +34,7 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth }) {
   // Helper function to get dates in the selected month
   const getDatesInMonth = (month) => {
     const dates = [];
-    const year = 2025;
+    const year = currentYear;
     const daysInMonth = new Date(year, month, 0).getDate();
     
     for (let day = 1; day <= daysInMonth; day++) {

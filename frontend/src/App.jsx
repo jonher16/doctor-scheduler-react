@@ -505,7 +505,6 @@ function App() {
     // If there's no valid saved schedule data with metadata, use current state
     return { schedule, doctors, holidays };
   };
-
   // Render the active component
   const renderComponent = () => {
     if (isLoading) {
@@ -559,14 +558,12 @@ function App() {
         return <HolidayConfig 
           holidays={holidays} 
           setHolidays={setHolidays}
-          year={selectedYear}
         />;
       case 'availability':
         return <DoctorNeeds 
           doctors={doctors} 
           setAvailability={setAvailability} 
           availability={availability}
-          year={selectedYear}
         />;
       case 'generate':
         return (
@@ -576,18 +573,16 @@ function App() {
             availability={availability}
             setSchedule={setSchedule}
             apiUrl={API_URL}
-            year={selectedYear}
           />
         );
       case 'dashboard': {
         // Get the schedule data with its snapshot of doctors/holidays
-        const { schedule: dashboardSchedule, doctors: dashboardDoctors, holidays: dashboardHolidays, year: selectedYear } = getScheduleData();
+        const { schedule: dashboardSchedule, doctors: dashboardDoctors, holidays: dashboardHolidays} = getScheduleData();
         return <Dashboard 
           doctors={dashboardDoctors} 
           schedule={dashboardSchedule} 
           holidays={dashboardHolidays}
           onScheduleUpdate={handleScheduleUpdate}
-          year={selectedYear}
         />;
       };
       case 'sync':

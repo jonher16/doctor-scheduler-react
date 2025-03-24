@@ -43,8 +43,10 @@ import {
   Person as PersonIcon,
   BarChart as BarChartIcon
 } from '@mui/icons-material';
+import { useYear } from '../contexts/YearContext';
 
 const DoctorShiftTypesChart = ({ doctors, schedule, selectedMonth }) => {
+  const { selectedYear } = useYear();
   const theme = useTheme();
   const [tabValue, setTabValue] = useState(0);
   const [shiftData, setShiftData] = useState([]);
@@ -314,7 +316,7 @@ const DoctorShiftTypesChart = ({ doctors, schedule, selectedMonth }) => {
             <Card>
               <CardContent>
                 <Typography variant="h6" gutterBottom>
-                  {getMonthName(selectedMonth)} 2025 Summary
+                  {getMonthName(selectedMonth)} {selectedYear} Summary
                 </Typography>
                 <Divider sx={{ mb: 2 }} />
 
@@ -427,7 +429,7 @@ const DoctorShiftTypesChart = ({ doctors, schedule, selectedMonth }) => {
             <Card>
               <CardContent>
                 <Typography variant="h6" gutterBottom>
-                  Doctor Shift Distribution - {getMonthName(selectedMonth)} 2025
+                  Doctor Shift Distribution - {getMonthName(selectedMonth)} {selectedYear}
                 </Typography>
                 <Divider  />
 

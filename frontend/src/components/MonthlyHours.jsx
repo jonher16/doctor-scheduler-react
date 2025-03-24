@@ -30,10 +30,16 @@ import {
 } from 'chart.js';
 import { HourglassEmpty, Timer, Timelapse } from '@mui/icons-material';
 
+import { useYear } from '../contexts/YearContext';
+
+
 // Register ChartJS components
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, ChartTooltip, Legend);
 
 function MonthlyHours({ doctors, schedule, selectedMonth }) {
+
+  const { selectedYear } = useYear(); // Add this line
+
   // Use the provided selectedMonth or default to 1 (January)
   const month = selectedMonth || 1;
   
@@ -162,7 +168,7 @@ function MonthlyHours({ doctors, schedule, selectedMonth }) {
       legend: { position: 'top' },
       title: { 
         display: true, 
-        text: `Monthly Hours per Doctor - ${getMonthName(month)} 2025`,
+        text: `Monthly Hours per Doctor - ${getMonthName(month)} ${selectedYear}`,
         font: { size: 16 }
       },
       tooltip: {

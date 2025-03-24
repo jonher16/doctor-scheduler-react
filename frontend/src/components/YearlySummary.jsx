@@ -38,11 +38,15 @@ import {
   Tooltip as ChartTooltip,
   Legend as ChartLegend
 } from 'chart.js';
+import { useYear } from '../contexts/YearContext';
+
 
 // Register ChartJS components
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, ChartTooltip, ChartLegend);
 
 function YearlySummary({ doctors, schedule, holidays }) {
+
+  const { selectedYear } = useYear();
   const [tabValue, setTabValue] = React.useState(0);
 
   // Check if schedule and doctors are available

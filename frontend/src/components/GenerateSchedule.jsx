@@ -116,11 +116,15 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
   // Generate yearly schedule
   const generateYearlySchedule = async () => {
     try {
+      abortControllerRef.current = new AbortController();
+      const { signal } = abortControllerRef.current;
       const result = await generateOptimizedSchedule('/optimize', {
         doctors,
         holidays,
         availability,
-        scheduling_mode: 'yearly'
+        scheduling_mode: 'yearly',
+        year: selectedYear,
+        signal
       });
       
       handleScheduleResult(result);
@@ -416,7 +420,7 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
                 >
                   {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
                     <MenuItem key={m} value={m}>
-                      {getMonthName(m)} 2025
+                      {getMonthName(m)} {selectedYear}
                     </MenuItem>
                   ))}
                 </TextField>
@@ -593,8 +597,8 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
             
             <Typography variant="body2" color="white" sx={{ mb: 2 }}>
               {scheduleType === 'monthly' 
-                ? `Monthly schedule for ${getMonthName(month)} 2025 has been generated.`
-                : 'Yearly schedule for 2025 has been generated.'}
+                ? `Monthly schedule for ${getMonthName(month)} ${selectedYear} has been generated.`
+                : `Yearly schedule for ${selectedYear} has been generated.`}
             </Typography>
             
             <Button

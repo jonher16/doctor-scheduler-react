@@ -325,8 +325,8 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
                     <Typography variant="body2">Period:</Typography>
                     <Typography variant="body1" fontWeight="bold">
                       {scheduleType === 'yearly' ? 
-                        'January - December 2025' : 
-                        `${getMonthName(scheduledMonth)} 2025`}
+                        `January - December ${selectedYear}` : 
+                        `${getMonthName(scheduledMonth)} ${selectedYear}`}
                     </Typography>
                   </Box>
                   
@@ -335,8 +335,8 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
                     <Typography variant="body1" fontWeight="bold">
                       {scheduleType === 'yearly' ? 
                         '365' : 
-                        // Get the number of days in the month (2025, month, 0) gives last day of the month
-                        `${new Date(2025, scheduledMonth, 0).getDate()}`}
+                        // Get the number of days in the month (selectedYear, month, 0) gives last day of the month
+                        `${new Date({selectedYear}, scheduledMonth, 0).getDate()}`}
                     </Typography>
                   </Box>
                   
