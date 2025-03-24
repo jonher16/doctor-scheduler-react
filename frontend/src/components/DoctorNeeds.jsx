@@ -42,8 +42,12 @@ import {
 } from '@mui/icons-material';
 import EnhancedCalendar from './EnhancedCalendar';
 import DoctorAvailabilityCalendar from './DoctorAvailabilityCalendar';
+import { useYear } from '../contexts/YearContext';
+
 
 function DoctorNeeds({ doctors, setAvailability, availability }) {
+  const { selectedYear } = useYear();
+
   // Store constraints with support for date ranges
   const [constraints, setConstraints] = useState([]);
   const [openDialog, setOpenDialog] = useState(false);

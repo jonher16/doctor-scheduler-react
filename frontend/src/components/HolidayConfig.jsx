@@ -40,8 +40,9 @@ import {
 } from '@mui/icons-material';
 import EnhancedCalendar from './EnhancedCalendar';
 import HolidayCalendar from './HolidayCalendar';
-
+import { useYear } from '../contexts/YearContext';
 function HolidayConfig({ holidays, setHolidays }) {
+  const { selectedYear } = useYear();
   const [localHolidays, setLocalHolidays] = useState(holidays);
   
   // Changed selectedDate to store either a string (single date) or an array (date range)

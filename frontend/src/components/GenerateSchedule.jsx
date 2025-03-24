@@ -28,8 +28,12 @@ import {
   PlayArrow as StartIcon,
   Dashboard as DashboardIcon,
 } from '@mui/icons-material';
+import { useYear } from '../contexts/YearContext';
 
 const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl }) => {
+
+  const { selectedYear } = useYear();
+
   // Change default to 'monthly' instead of 'yearly'
   const [scheduleType, setScheduleType] = useState('monthly');
   const [month, setMonth] = useState(new Date().getMonth() + 1); // Current month (1-12)

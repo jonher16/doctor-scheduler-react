@@ -1,6 +1,8 @@
 // Updated App.jsx with userData file loading and multi-year support
 
 import React, { useState, useEffect } from 'react';
+import YearSelector from './components/YearSelector';
+import { YearProvider, useYear } from './contexts/YearContext';
 import { 
   AppBar, 
   Toolbar, 
@@ -116,8 +118,10 @@ const API_URL = isElectron
   : import.meta.env.VITE_API_URL || 'http://localhost:5000/api'; // From env or default
 
 function App() {
-  // Get the year range from the utility function
-  const { currentYear, years } = getYearRange();
+  // Get the year range from the utility function for the selector options
+
+  const { years } = getYearRange();
+
   
   const [doctors, setDoctorsState] = useState([]);
   const [holidays, setHolidaysState] = useState({});
@@ -128,8 +132,8 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [appPaths, setAppPaths] = useState(null);
   
-  // Add year state - default to current year
-  const [selectedYear, setSelectedYear] = useState(currentYear);
+  // Use the year context instead of local state
+  const { selectedYear, setSelectedYear } = useYear();
   
   // For notifications
   const [notification, setNotification] = useState({
@@ -491,7 +495,6 @@ function App() {
             schedule: savedSchedule,
             doctors: metadata.doctors || doctors, // Fall back to current doctors if needed
             holidays: metadata.holidays || holidays, // Fall back to current holidays if needed
-            year: metadata.year || selectedYear // Use the year from metadata or current selected year
           };
         }
       }
@@ -500,7 +503,7 @@ function App() {
     }
     
     // If there's no valid saved schedule data with metadata, use current state
-    return { schedule, doctors, holidays, year: selectedYear };
+    return { schedule, doctors, holidays };
   };
 
   // Render the active component
@@ -578,13 +581,13 @@ function App() {
         );
       case 'dashboard': {
         // Get the schedule data with its snapshot of doctors/holidays
-        const { schedule: dashboardSchedule, doctors: dashboardDoctors, holidays: dashboardHolidays, year: dashboardYear } = getScheduleData();
+        const { schedule: dashboardSchedule, doctors: dashboardDoctors, holidays: dashboardHolidays, year: selectedYear } = getScheduleData();
         return <Dashboard 
           doctors={dashboardDoctors} 
           schedule={dashboardSchedule} 
           holidays={dashboardHolidays}
           onScheduleUpdate={handleScheduleUpdate}
-          year={dashboardYear}
+          year={selectedYear}
         />;
       };
       case 'sync':
@@ -620,25 +623,7 @@ function App() {
             </Typography>
             
             {/* Year selector */}
-            <FormControl variant="outlined" size="small" sx={{ minWidth: 120, mr: 2 }}>
-              <Select
-                value={selectedYear}
-                onChange={handleYearChange}
-                displayEmpty
-                inputProps={{ 'aria-label': 'Select year' }}
-                sx={{ 
-                  color: 'white', 
-                  '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255, 255, 255, 0.5)' },
-                  '& .MuiSvgIcon-root': { color: 'white' }
-                }}
-              >
-                {years.map((year) => (
-                  <MenuItem key={year} value={year}>
-                    {year}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <YearSelector />
           </Toolbar>
         </AppBar>
         
@@ -706,4 +691,10 @@ function App() {
   );
 }
 
-export default App;
+export default function AppWithYearContext() {
+  return (
+    <YearProvider>
+      <App />
+    </YearProvider>
+  );
+}
