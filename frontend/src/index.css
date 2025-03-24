@@ -73,3 +73,44 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+/* Custom scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c0c0c0;
+  border-radius: 10px;
+  transition: background 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a0a0a0;
+}
+
+/* Hide horizontal scrollbar but keep vertical */
+html, body {
+  overflow-x: hidden;
+  overflow-y: scroll;
+  width: 100%;
+  max-width: 100%;
+}
+
+/* Fix for the Select dropdown causing scrollbars */
+.MuiMenu-paper {
+  max-height: 300px !important;
+  max-width: fit-content !important;
+}
+
+/* Ensure content doesn't cause horizontal overflow */
+#root {
+  overflow-x: hidden;
+  width: 100%;
+}
