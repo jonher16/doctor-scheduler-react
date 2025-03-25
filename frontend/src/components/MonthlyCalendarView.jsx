@@ -27,6 +27,8 @@ import {
   ChevronRight,
   Edit as EditIcon,
 } from '@mui/icons-material';
+
+import { getMonthName, formatDateToYYYYMMDD } from '../utils/dateUtils';
 function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate, selectedMonth, selectedYear }) {
 
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
@@ -147,15 +149,7 @@ function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate, se
   
     setCalendarDays(days);
   };
-
-  // Helper function to format date to YYYY-MM-DD
-  const formatDateToYYYYMMDD = (date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-
+  
   // Handle month navigation
   const handlePreviousMonth = () => {
     if (currentMonth === 0) {
@@ -173,15 +167,6 @@ function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate, se
     } else {
       setCurrentMonth(currentMonth + 1);
     }
-  };
-
-  // Get month name
-  const getMonthName = (month) => {
-    const monthNames = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
-    ];
-    return monthNames[month];
   };
 
   // Open edit dialog

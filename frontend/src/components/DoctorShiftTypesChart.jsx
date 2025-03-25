@@ -43,6 +43,7 @@ import {
   Person as PersonIcon,
   BarChart as BarChartIcon
 } from '@mui/icons-material';
+import { getMonthName } from '../utils/dateUtils';
 import { useYear } from '../contexts/YearContext';
 
 const DoctorShiftTypesChart = ({ doctors, schedule, selectedMonth }) => {
@@ -211,15 +212,6 @@ const DoctorShiftTypesChart = ({ doctors, schedule, selectedMonth }) => {
           : (b.adherencePercentage !== null ? -1 : 1)
       )
     };
-  };
-
-  // Get month name
-  const getMonthName = (monthNum) => {
-    const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
-    ];
-    return months[monthNum - 1];
   };
 
   // Custom tooltip for the chart

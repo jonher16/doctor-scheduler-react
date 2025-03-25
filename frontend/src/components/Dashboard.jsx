@@ -37,6 +37,8 @@ import ExcelExportButton from './ExcelExportButton';
 import DoctorShiftTypesChart from './DoctorShiftTypesChart';
 import ConstraintViolations from './ConstraintViolations';
 
+import { getMonthName } from '../utils/dateUtils';
+
 import { useYear } from '../contexts/YearContext';
 
 
@@ -64,15 +66,6 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
   
   // Add state for the year the schedule was generated for
   const [scheduleYear, setScheduleYear] = useState(selectedYear);
-  
-  // Function to get month name
-  const getMonthName = (monthNum) => {
-    const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
-    ];
-    return months[monthNum - 1];
-  };
   
   // Update local data when schedule is generated but not when doctors/holidays change
   useEffect(() => {

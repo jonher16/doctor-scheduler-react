@@ -41,6 +41,7 @@ import {
   ErrorOutline as ErrorIcon
 } from '@mui/icons-material';
 import { CloudSyncService } from '../services/CloudSyncService';
+import { getMonthName } from '../utils/dateUtils';
 
 const SyncPage = ({ doctors, setDoctors, availability, setAvailability }) => {
   // State for tracking sync operations
@@ -210,15 +211,6 @@ const SyncPage = ({ doctors, setDoctors, availability, setAvailability }) => {
     if (diffMin < 60) return `${diffMin} minute${diffMin !== 1 ? 's' : ''} ago`;
     if (diffHrs < 24) return `${diffHrs} hour${diffHrs !== 1 ? 's' : ''} ago`;
     return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
-  };
-  
-  // Get month name
-  const getMonthName = (monthNum) => {
-    const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
-    ];
-    return months[monthNum - 1]; // monthNum is 1-based (1=January, 12=December)
   };
 
   return (

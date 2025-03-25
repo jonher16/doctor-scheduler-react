@@ -28,6 +28,7 @@ import {
   PlayArrow as StartIcon,
   Dashboard as DashboardIcon,
 } from '@mui/icons-material';
+import { getMonthName } from '../utils/dateUtils';
 import { useYear } from '../contexts/YearContext';
 
 const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl }) => {
@@ -342,15 +343,6 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
       // Additional call to ensure the parent state is updated
       setSchedule(generatedSchedule);
     }
-  };
-
-  // Get month name from number
-  const getMonthName = (monthNum) => {
-    const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
-    ];
-    return months[monthNum - 1];
   };
 
   // Prevent optimization if required data is missing

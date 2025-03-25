@@ -22,30 +22,22 @@ import {
   ErrorOutline as ErrorIcon,
   CheckCircleOutline as CheckIcon
 } from '@mui/icons-material';
-import { useYear } from '../contexts/YearContext';
 
+import { isWeekend } from '../utils/dateUtils';
 
-function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, selectedYear }) {
+function ConstraintViolations({ doctors, schedule, holidays, selectedMonth}) {
 
   const [violations, setViolations] = useState({});
   const [totalViolations, setTotalViolations] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [hasData, setHasData] = useState(false); // Add this state variable
 
-  const getMonthName = (monthNum) => {
-    const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
-    ];
-    return months[monthNum - 1];
-  };
-
-
   // Helper function to get dates in the selected month
   const getDatesInMonth = (month) => {
     const dates = [];
     
     Object.keys(schedule).forEach(dateStr => {
+
       
       const date = new Date(dateStr);
       // Only check the month (1-12), ignore the year
@@ -55,13 +47,6 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
     });
     
     return dates;
-  };
-  
-
-  // Helper to check if a date is a weekend
-  const isWeekend = (dateStr) => {
-    const date = new Date(dateStr);
-    return date.getDay() === 0 || date.getDay() === 6; // 0 = Sunday, 6 = Saturday
   };
 
   // Helper to check if a doctor is senior

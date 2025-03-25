@@ -70,3 +70,16 @@ export const getYearRange = () => {
     const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   };
+
+  export const isWeekend = (dateStr) => {
+    const date = new Date(dateStr);
+    return date.getDay() === 0 || date.getDay() === 6; // 0 = Sunday, 6 = Saturday
+  };
+
+  export const getMonthName = (monthNum) => {
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    return months[monthNum - 1];
+  };

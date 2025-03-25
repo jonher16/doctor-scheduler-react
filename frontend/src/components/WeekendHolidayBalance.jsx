@@ -21,6 +21,8 @@ import {
   Legend
 } from 'chart.js';
 import { Bar as BarChart } from 'react-chartjs-2';
+
+import { getMonthName } from '../utils/dateUtils';
 import { useYear } from '../contexts/YearContext';
 
 // Register ChartJS components
@@ -29,15 +31,6 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 function WeekendHolidayBalance({ doctors, schedule, holidays, selectedMonth }) {
 
   const { selectedYear } = useYear();
-  
-  // Function to get month name
-  const getMonthName = (monthNum) => {
-    const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
-    ];
-    return months[monthNum - 1];
-  };
   
   // Filter schedule data by selected month
   const getFilteredSchedule = () => {
