@@ -252,14 +252,6 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
         </Alert>
       ) : (
         <>
-          {/* Show alert if the schedule year is different from selected year */}
-          {scheduleYear !== selectedYear && (
-            <Alert severity="info" sx={{ mb: 3 }}>
-              <AlertTitle>Different Year</AlertTitle>
-              You are viewing schedule data for {scheduleYear}, which is different from your selected year ({selectedYear}).
-              To generate a schedule for {selectedYear}, please go to the Generate Schedule section.
-            </Alert>
-          )}
           
           {/* Quick Statistics Cards */}
           <Grid container spacing={3} sx={{ mb: 4 }}>
@@ -365,7 +357,7 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
                       {scheduleType === 'yearly' ? 
                         '365' : 
                         // Get the number of days in the month (scheduleYear, month, 0) gives last day of the month
-                        `${new Date(scheduleYear, scheduledMonth, 0).getDate()}`}
+                        `${new Date(scheduleYear, month, 0).getDate()}`}
                     </Typography>
                   </Box>
                   

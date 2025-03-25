@@ -28,20 +28,7 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
 function WeekendHolidayBalance({ doctors, schedule, holidays, selectedMonth }) {
 
-  const { selectedYear } = useYear(); // Add this line
-
-  // Check if schedule and doctors are available
-  if (!schedule || Object.keys(schedule).length === 0 || !doctors || doctors.length === 0) {
-    return (
-      <Box sx={{ minHeight: '400px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-        <Alert severity="info" sx={{ width: '100%', maxWidth: 600 }}>
-          <Typography variant="body1">
-            No schedule data available. Please generate a schedule first.
-          </Typography>
-        </Alert>
-      </Box>
-    );
-  }
+  const { selectedYear } = useYear();
   
   // Function to get month name
   const getMonthName = (monthNum) => {

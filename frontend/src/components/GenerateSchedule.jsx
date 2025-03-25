@@ -123,7 +123,6 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
         holidays,
         availability,
         scheduling_mode: 'yearly',
-        year: selectedYear,
         signal
       });
       
@@ -143,9 +142,7 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
         holidays,
         availability,
         scheduling_mode: 'monthly',
-        month,
-        year: selectedYear  // Add this line to pass the selected year
-      });
+        month      });
       
       handleScheduleResult(result);
     } catch (error) {
@@ -163,7 +160,6 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
         holidays,
         availability,
         month,
-        year: selectedYear,  // Add this line to pass the selected year 
         max_iterations: weightMaxIterations,
         parallel_jobs: weightParallelJobs,
         time_limit_minutes: weightTimeLimit

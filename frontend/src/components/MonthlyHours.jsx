@@ -36,7 +36,7 @@ import { useYear } from '../contexts/YearContext';
 // Register ChartJS components
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, ChartTooltip, Legend);
 
-function MonthlyHours({ doctors, schedule, selectedMonth }) {
+function MonthlyHours({ doctors, schedule, selectedMonth, selectedYear }) {
 
   const getMonthName = (monthNum) => {
     const months = [
@@ -45,8 +45,6 @@ function MonthlyHours({ doctors, schedule, selectedMonth }) {
     ];
     return months[monthNum - 1];
   };
-
-  const { selectedYear } = useYear(); // Add this line
 
   // Use the provided selectedMonth or default to 1 (January)
   const month = selectedMonth || 1;
@@ -73,18 +71,6 @@ function MonthlyHours({ doctors, schedule, selectedMonth }) {
       }
     }
   });
-
-  if (monthDates.length === 0) {
-    return (
-      <Box sx={{ minHeight: '400px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-        <Alert severity="info" sx={{ width: '100%', maxWidth: 600 }}>
-          <Typography variant="body1">
-            No schedule data available for {getMonthName(selectedMonth)} {selectedYear}.
-          </Typography>
-        </Alert>
-      </Box>
-    );
-  }
 
   // Create a set of all doctors that appear in the schedule
   const doctorsInSchedule = new Set();

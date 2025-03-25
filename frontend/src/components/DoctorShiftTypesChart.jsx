@@ -289,18 +289,6 @@ const DoctorShiftTypesChart = ({ doctors, schedule, selectedMonth }) => {
     );
   };
 
-  if (shiftData.length === 0) {
-    return (
-      <Box sx={{ minHeight: '400px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-        <Alert severity="info" sx={{ width: '100%', maxWidth: 600 }}>
-          <Typography variant="body1">
-            No schedule data available for {getMonthName(selectedMonth)} {selectedYear}.
-          </Typography>
-        </Alert>
-      </Box>
-    );
-  }
-
   return (
     <Box sx={{ minHeight: 400 }}>
       <Tabs

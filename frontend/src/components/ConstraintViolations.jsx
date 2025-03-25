@@ -25,8 +25,8 @@ import {
 import { useYear } from '../contexts/YearContext';
 
 
-function ConstraintViolations({ doctors, schedule, holidays, selectedMonth }) {
-  const {selectedYear}  = useYear();
+function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, selectedYear }) {
+
   const [violations, setViolations] = useState({});
   const [totalViolations, setTotalViolations] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -44,16 +44,19 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth }) {
   // Helper function to get dates in the selected month
   const getDatesInMonth = (month) => {
     const dates = [];
-    const year = selectedYear;
-    const daysInMonth = new Date(year, month, 0).getDate();
     
-    for (let day = 1; day <= daysInMonth; day++) {
-      const dateObject = new Date(year, month - 1, day);
-      const dateString = dateObject.toISOString().split('T')[0];
-      dates.push(dateString);
-    }
+    Object.keys(schedule).forEach(dateStr => {
+      
+      const date = new Date(dateStr);
+      // Only check the month (1-12), ignore the year
+      if (date.getMonth() + 1 === month) {
+        dates.push(dateStr);
+      }
+    });
+    
     return dates;
   };
+  
 
   // Helper to check if a date is a weekend
   const isWeekend = (dateStr) => {
@@ -83,12 +86,8 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth }) {
     console.log("Dates in month:", monthDates);
     
     // Filter schedule to only include dates in the selected month
-    const monthlySchedule = {};
-    for (const date of monthDates) {
-      if (schedule[date]) {
-        monthlySchedule[date] = schedule[date];
-      }
-    }
+    const monthlySchedule = {...schedule};
+
     console.log("Monthly schedule:", monthlySchedule);
 
     // Check if there's data for this month
@@ -430,19 +429,6 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth }) {
     return (
       <Box sx={{ p: 2 }}>
         <Typography variant="h6">Loading constraint violations...</Typography>
-      </Box>
-    );
-  }
-
-  // Add this condition before the main return
-  if (!hasData) {
-    return (
-      <Box sx={{ minHeight: '400px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-        <Alert severity="info" sx={{ width: '100%', maxWidth: 600 }}>
-          <Typography variant="body1">
-            No schedule data available for {getMonthName(selectedMonth)} {selectedYear}.
-          </Typography>
-        </Alert>
       </Box>
     );
   }

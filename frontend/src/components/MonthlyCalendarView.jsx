@@ -27,11 +27,8 @@ import {
   ChevronRight,
   Edit as EditIcon,
 } from '@mui/icons-material';
-import { useYear } from '../contexts/YearContext';
+function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate, selectedMonth, selectedYear }) {
 
-function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate, selectedMonth }) {
-
-  const { selectedYear } = useYear();
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(selectedYear);
   const [calendarDays, setCalendarDays] = useState([]);
@@ -47,8 +44,20 @@ function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate, se
     if (selectedMonth) {
       // Convert from 1-12 format to 0-11 format
       setCurrentMonth(selectedMonth - 1);
+      
+      // Check if there's any data for this month
+      const hasDataForMonth = Object.keys(currentSchedule).some(dateStr => {
+        if (dateStr === '_metadata') return false; // Skip metadata
+        const date = new Date(dateStr);
+        return date.getMonth() + 1 === selectedMonth;
+      });
+      
+      if (!hasDataForMonth && Object.keys(currentSchedule).length > 0) {
+        // Show an alert or message that there's no data for this month
+        // You can set a state variable here
+      }
     }
-  }, [selectedMonth]);
+  }, [selectedMonth, currentSchedule]);
 
   useEffect(() => {
     setCurrentYear(selectedYear);
@@ -83,20 +92,6 @@ function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate, se
     
   }, [schedule]);
 
-  useEffect(() => {
-    // Check if there's any data for the selected month/year
-    const hasDataForMonth = Object.keys(currentSchedule).some(dateStr => {
-      if (dateStr === '_metadata') return false; // Skip metadata
-      const date = new Date(dateStr);
-      return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
-    });
-    
-    if (!hasDataForMonth && Object.keys(currentSchedule).length > 0) {
-      // Show an alert or message that there's no data for this month/year
-      // (You can add a state variable for this if needed)
-    }
-  }, [currentMonth, currentYear, currentSchedule]);
-
   // Generate calendar days for the selected month
   useEffect(() => {
     generateCalendarDays();
@@ -105,26 +100,34 @@ function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate, se
   const generateCalendarDays = () => {
     const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
     const firstDayOfMonth = new Date(currentYear, currentMonth, 1).getDay();
-
+  
     // Create an array to hold all days for the calendar
     const days = [];
-
+  
     // Add empty cells for days before the first day of the month
     for (let i = 0; i < firstDayOfMonth; i++) {
       days.push({ day: null, isCurrentMonth: false });
     }
-
+  
     // Add days of current month
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(currentYear, currentMonth, day);
       const dateStr = formatDateToYYYYMMDD(date);
-
+  
       // Check if this date is a holiday
       const isHoliday = holidays && holidays[dateStr];
-
+  
       // Check if this date is a weekend
       const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-
+  
+      // Find the correct date in the schedule - use the actual schedule year data
+      // Look for date with matching month and day format (MM-DD)
+      const monthDayStr = dateStr.substring(5); // Gets the "MM-DD" part
+      const matchingDate = Object.keys(currentSchedule).find(scheduleDate => {
+        if (scheduleDate === '_metadata') return false;
+        return scheduleDate.substring(5) === monthDayStr;
+      });
+  
       days.push({
         day,
         date: dateStr,
@@ -132,16 +135,16 @@ function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate, se
         isWeekend,
         isHoliday,
         holidayType: isHoliday ? holidays[dateStr] : null,
-        shifts: currentSchedule[dateStr] || { Day: [], Evening: [], Night: [] }
+        shifts: matchingDate ? currentSchedule[matchingDate] : { Day: [], Evening: [], Night: [] }
       });
     }
-
+  
     // Add empty cells for days after the last day of the month to complete the grid
     const totalCells = Math.ceil(days.length / 7) * 7;
     for (let i = days.length; i < totalCells; i++) {
       days.push({ day: null, isCurrentMonth: false });
     }
-
+  
     setCalendarDays(days);
   };
 
@@ -265,22 +268,7 @@ function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate, se
     return '#ffffff'; // White for regular days
   };
 
-  if (Object.keys(currentSchedule).length === 0 || 
-    !Object.keys(currentSchedule).some(dateStr => {
-      if (dateStr === '_metadata') return false;
-      const date = new Date(dateStr);
-      return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
-    })) {
-  return (
-    <Box sx={{ minHeight: '400px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-      <Alert severity="info" sx={{ width: '100%', maxWidth: 600 }}>
-        <Typography variant="body1">
-          No schedule data available for {getMonthName(currentMonth)} {currentYear}.
-        </Typography>
-      </Alert>
-    </Box>
-  );
-}
+  
 
   return (
     <Box sx={{ minHeight: '400px', mb: 4 }}>
@@ -315,7 +303,56 @@ function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate, se
                 }}>
                   {day}
                 </Box>
-              </Grid>
+              </Grid>const generateCalendarDays = () => {
+  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+  const firstDayOfMonth = new Date(currentYear, currentMonth, 1).getDay();
+
+  // Create an array to hold all days for the calendar
+  const days = [];
+
+  // Add empty cells for days before the first day of the month
+  for (let i = 0; i < firstDayOfMonth; i++) {
+    days.push({ day: null, isCurrentMonth: false });
+  }
+
+  // Add days of current month
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = new Date(currentYear, currentMonth, day);
+    const dateStr = formatDateToYYYYMMDD(date);
+
+    // Check if this date is a holiday
+    const isHoliday = holidays && holidays[dateStr];
+
+    // Check if this date is a weekend
+    const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+
+    // Find the correct date in the schedule - use the actual schedule year data
+    // Look for date with matching month and day format (MM-DD)
+    const monthDayStr = dateStr.substring(5); // Gets the "MM-DD" part
+    const matchingDate = Object.keys(currentSchedule).find(scheduleDate => {
+      if (scheduleDate === '_metadata') return false;
+      return scheduleDate.substring(5) === monthDayStr;
+    });
+
+    days.push({
+      day,
+      date: dateStr,
+      isCurrentMonth: true,
+      isWeekend,
+      isHoliday,
+      holidayType: isHoliday ? holidays[dateStr] : null,
+      shifts: matchingDate ? currentSchedule[matchingDate] : { Day: [], Evening: [], Night: [] }
+    });
+  }
+
+  // Add empty cells for days after the last day of the month to complete the grid
+  const totalCells = Math.ceil(days.length / 7) * 7;
+  for (let i = days.length; i < totalCells; i++) {
+    days.push({ day: null, isCurrentMonth: false });
+  }
+
+  setCalendarDays(days);
+};
             ))}
 
             {/* Calendar days */}
