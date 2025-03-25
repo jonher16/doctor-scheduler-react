@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
+  Alert,
   Typography,
   Box,
   Paper,
@@ -79,7 +80,22 @@ function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate, se
     if (schedule && Object.keys(schedule).length > 0) {
       setCurrentSchedule(JSON.parse(JSON.stringify(schedule))); // Deep copy
     }
+    
   }, [schedule]);
+
+  useEffect(() => {
+    // Check if there's any data for the selected month/year
+    const hasDataForMonth = Object.keys(currentSchedule).some(dateStr => {
+      if (dateStr === '_metadata') return false; // Skip metadata
+      const date = new Date(dateStr);
+      return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
+    });
+    
+    if (!hasDataForMonth && Object.keys(currentSchedule).length > 0) {
+      // Show an alert or message that there's no data for this month/year
+      // (You can add a state variable for this if needed)
+    }
+  }, [currentMonth, currentYear, currentSchedule]);
 
   // Generate calendar days for the selected month
   useEffect(() => {
@@ -248,6 +264,23 @@ function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate, se
     if (dayInfo.isWeekend) return '#fafafa'; // Light gray for weekends
     return '#ffffff'; // White for regular days
   };
+
+  if (Object.keys(currentSchedule).length === 0 || 
+    !Object.keys(currentSchedule).some(dateStr => {
+      if (dateStr === '_metadata') return false;
+      const date = new Date(dateStr);
+      return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
+    })) {
+  return (
+    <Box sx={{ minHeight: '400px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+      <Alert severity="info" sx={{ width: '100%', maxWidth: 600 }}>
+        <Typography variant="body1">
+          No schedule data available for {getMonthName(currentMonth)} {currentYear}.
+        </Typography>
+      </Alert>
+    </Box>
+  );
+}
 
   return (
     <Box sx={{ minHeight: '400px', mb: 4 }}>

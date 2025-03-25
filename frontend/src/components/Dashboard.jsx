@@ -75,6 +75,15 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
   useEffect(() => {
     // Only update local state when a new schedule is generated (not when doctors change)
     if (schedule && Object.keys(schedule).length > 0) {
+
+      const scheduleYear = schedule._metadata?.year || selectedYear;
+      if (scheduleYear !== selectedYear) {
+        setLocalSchedule({});
+        setHasSchedule(false);
+        return;
+      }
+
+
       setLocalSchedule(schedule);
       
       // If we have a schedule, also take a snapshot of the doctors and holidays
@@ -109,7 +118,7 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
       
       setHasSchedule(true);
     }
-  }, [schedule, doctors, holidays]);
+  }, [schedule, doctors, holidays, selectedYear]);
   
   // Recalculate quick stats when local data changes
   useEffect(() => {

@@ -38,6 +38,14 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Title, ChartTooltip, Le
 
 function MonthlyHours({ doctors, schedule, selectedMonth }) {
 
+  const getMonthName = (monthNum) => {
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    return months[monthNum - 1];
+  };
+
   const { selectedYear } = useYear(); // Add this line
 
   // Use the provided selectedMonth or default to 1 (January)
@@ -50,6 +58,28 @@ function MonthlyHours({ doctors, schedule, selectedMonth }) {
         <Alert severity="info" sx={{ width: '100%', maxWidth: 600 }}>
           <Typography variant="body1">
             No schedule data available
+          </Typography>
+        </Alert>
+      </Box>
+    );
+  }
+
+  const monthDates = [];
+  Object.keys(schedule).forEach(dateStr => {
+    if (dateStr !== '_metadata') { // Skip metadata entry
+      const date = new Date(dateStr);
+      if (date.getMonth() + 1 === selectedMonth) {
+        monthDates.push(dateStr);
+      }
+    }
+  });
+
+  if (monthDates.length === 0) {
+    return (
+      <Box sx={{ minHeight: '400px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <Alert severity="info" sx={{ width: '100%', maxWidth: 600 }}>
+          <Typography variant="body1">
+            No schedule data available for {getMonthName(selectedMonth)} {selectedYear}.
           </Typography>
         </Alert>
       </Box>
@@ -137,15 +167,6 @@ function MonthlyHours({ doctors, schedule, selectedMonth }) {
   // Get doctor with max and min hours
   const maxHoursDoctor = Object.keys(monthlyHours).find(doc => monthlyHours[doc] === maxHours) || "N/A";
   const minHoursDoctor = Object.keys(monthlyHours).find(doc => monthlyHours[doc] === minHours) || "N/A";
-
-  // Get month name
-  const getMonthName = (monthNum) => {
-    const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
-    ];
-    return months[monthNum - 1];
-  };
 
   // Chart configuration
   const data = {

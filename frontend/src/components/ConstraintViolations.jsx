@@ -26,15 +26,25 @@ import { useYear } from '../contexts/YearContext';
 
 
 function ConstraintViolations({ doctors, schedule, holidays, selectedMonth }) {
-  const {currentYear}  = useYear();
+  const {selectedYear}  = useYear();
   const [violations, setViolations] = useState({});
   const [totalViolations, setTotalViolations] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasData, setHasData] = useState(false); // Add this state variable
+
+  const getMonthName = (monthNum) => {
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    return months[monthNum - 1];
+  };
+
 
   // Helper function to get dates in the selected month
   const getDatesInMonth = (month) => {
     const dates = [];
-    const year = currentYear;
+    const year = selectedYear;
     const daysInMonth = new Date(year, month, 0).getDate();
     
     for (let day = 1; day <= daysInMonth; day++) {
@@ -80,6 +90,15 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth }) {
       }
     }
     console.log("Monthly schedule:", monthlySchedule);
+
+    // Check if there's data for this month
+    if (Object.keys(monthlySchedule).length === 0) {
+        setHasData(false);
+        setIsLoading(false);
+        return; // Exit early if no data
+        }
+
+    setHasData(true);
 
     // Initialize violations object
     const violationsData = {
@@ -411,6 +430,19 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth }) {
     return (
       <Box sx={{ p: 2 }}>
         <Typography variant="h6">Loading constraint violations...</Typography>
+      </Box>
+    );
+  }
+
+  // Add this condition before the main return
+  if (!hasData) {
+    return (
+      <Box sx={{ minHeight: '400px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <Alert severity="info" sx={{ width: '100%', maxWidth: 600 }}>
+          <Typography variant="body1">
+            No schedule data available for {getMonthName(selectedMonth)} {selectedYear}.
+          </Typography>
+        </Alert>
       </Box>
     );
   }

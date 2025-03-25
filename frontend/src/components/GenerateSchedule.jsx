@@ -143,7 +143,8 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
         holidays,
         availability,
         scheduling_mode: 'monthly',
-        month
+        month,
+        year: selectedYear  // Add this line to pass the selected year
       });
       
       handleScheduleResult(result);
@@ -162,6 +163,7 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
         holidays,
         availability,
         month,
+        year: selectedYear,  // Add this line to pass the selected year 
         max_iterations: weightMaxIterations,
         parallel_jobs: weightParallelJobs,
         time_limit_minutes: weightTimeLimit

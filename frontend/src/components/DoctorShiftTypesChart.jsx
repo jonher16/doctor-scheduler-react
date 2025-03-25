@@ -57,6 +57,21 @@ const DoctorShiftTypesChart = ({ doctors, schedule, selectedMonth }) => {
   // Process data when schedule, doctors, or selected month changes
   useEffect(() => {
     if (!schedule || !doctors || doctors.length === 0) return;
+
+    // Check if there's any data for the selected month
+    const hasDataForMonth = Object.keys(schedule).some(dateStr => {
+      if (dateStr === '_metadata') return false; // Skip metadata
+      const date = new Date(dateStr);
+      return date.getMonth() + 1 === selectedMonth;
+    });
+    
+    if (!hasDataForMonth) {
+      setShiftData([]);
+      setTotalShifts({ day: 0, evening: 0, night: 0 });
+      setDoctorPreferenceData([]);
+      setOverallDistribution([]);
+      return;
+    }
     
     const processedData = processScheduleData();
     setShiftData(processedData.shiftData);
@@ -274,13 +289,12 @@ const DoctorShiftTypesChart = ({ doctors, schedule, selectedMonth }) => {
     );
   };
 
-  // No data available
   if (shiftData.length === 0) {
     return (
-      <Box sx={{ minHeight: 400, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+      <Box sx={{ minHeight: '400px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
         <Alert severity="info" sx={{ width: '100%', maxWidth: 600 }}>
           <Typography variant="body1">
-            No shift data available for {getMonthName(selectedMonth)}
+            No schedule data available for {getMonthName(selectedMonth)} {selectedYear}.
           </Typography>
         </Alert>
       </Box>
