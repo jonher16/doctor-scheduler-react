@@ -62,6 +62,9 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
   const [scheduleType, setScheduleType] = useState('yearly');
   const [scheduledMonth, setScheduledMonth] = useState(null);
   
+  // Add state for the year the schedule was generated for
+  const [scheduleYear, setScheduleYear] = useState(selectedYear);
+  
   // Function to get month name
   const getMonthName = (monthNum) => {
     const months = [
@@ -75,16 +78,11 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
   useEffect(() => {
     // Only update local state when a new schedule is generated (not when doctors change)
     if (schedule && Object.keys(schedule).length > 0) {
-
-      const scheduleYear = schedule._metadata?.year || selectedYear;
-      if (scheduleYear !== selectedYear) {
-        setLocalSchedule({});
-        setHasSchedule(false);
-        return;
-      }
-
-
       setLocalSchedule(schedule);
+      
+      // Get the year from metadata or default to selected year
+      const year = schedule._metadata?.year || selectedYear;
+      setScheduleYear(year);
       
       // If we have a schedule, also take a snapshot of the doctors and holidays
       // that were used to generate it
@@ -99,8 +97,10 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
       // Determine if it's a yearly or monthly schedule by checking dates
       const months = new Set();
       Object.keys(schedule).forEach(dateStr => {
-        const month = new Date(dateStr).getMonth() + 1; // Get month as 1-12
-        months.add(month);
+        if (dateStr !== '_metadata') {  // Skip metadata when counting months
+          const month = new Date(dateStr).getMonth() + 1; // Get month as 1-12
+          months.add(month);
+        }
       });
       
       if (months.size === 1) {
@@ -134,11 +134,20 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
   
   // Handle schedule updates from the calendar view
   const handleScheduleUpdate = (updatedSchedule) => {
-    setLocalSchedule(updatedSchedule);
+    // Preserve the metadata when updating the schedule
+    const updatedScheduleWithMetadata = {
+      ...updatedSchedule,
+      _metadata: { 
+        ...(localSchedule._metadata || {}),
+        year: scheduleYear
+      }
+    };
+    
+    setLocalSchedule(updatedScheduleWithMetadata);
     
     // Notify parent component if provided
     if (onScheduleUpdate) {
-      onScheduleUpdate(updatedSchedule);
+      onScheduleUpdate(updatedScheduleWithMetadata);
     }
     
     // Show notification
@@ -168,6 +177,8 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
     
     // Calculate statistics
     Object.keys(localSchedule).forEach(date => {
+      if (date === '_metadata') return; // Skip metadata
+      
       const daySchedule = localSchedule[date];
       if (!daySchedule || typeof daySchedule !== 'object') return;
       
@@ -224,15 +235,15 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
       </Typography>
       
       <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-      <Typography variant="body1" color="text.secondary">
-        View and analyze the generated schedule with different visualizations and statistics.
-      </Typography>
-      
-      {/* Excel Export Button */}
-      {hasSchedule && (
-        <ExcelExportButton schedule={localSchedule} doctors={localDoctors} />
-      )}
-    </Box>
+        <Typography variant="body1" color="text.secondary">
+          View and analyze the generated schedule with different visualizations and statistics.
+        </Typography>
+        
+        {/* Excel Export Button */}
+        {hasSchedule && (
+          <ExcelExportButton schedule={localSchedule} doctors={localDoctors} />
+        )}
+      </Box>
 
       {!hasSchedule ? (
         <Alert severity="info" sx={{ mb: 3 }}>
@@ -241,6 +252,15 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
         </Alert>
       ) : (
         <>
+          {/* Show alert if the schedule year is different from selected year */}
+          {scheduleYear !== selectedYear && (
+            <Alert severity="info" sx={{ mb: 3 }}>
+              <AlertTitle>Different Year</AlertTitle>
+              You are viewing schedule data for {scheduleYear}, which is different from your selected year ({selectedYear}).
+              To generate a schedule for {selectedYear}, please go to the Generate Schedule section.
+            </Alert>
+          )}
+          
           {/* Quick Statistics Cards */}
           <Grid container spacing={3} sx={{ mb: 4 }}>
             <Grid item xs={12} md={4}>
@@ -334,8 +354,8 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
                     <Typography variant="body2">Period:</Typography>
                     <Typography variant="body1" fontWeight="bold">
                       {scheduleType === 'yearly' ? 
-                        `January - December ${selectedYear}` : 
-                        `${getMonthName(scheduledMonth)} ${selectedYear}`}
+                        `January - December ${scheduleYear}` : 
+                        `${getMonthName(scheduledMonth)} ${scheduleYear}`}
                     </Typography>
                   </Box>
                   
@@ -344,8 +364,8 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
                     <Typography variant="body1" fontWeight="bold">
                       {scheduleType === 'yearly' ? 
                         '365' : 
-                        // Get the number of days in the month (selectedYear, month, 0) gives last day of the month
-                        `${new Date({selectedYear}, scheduledMonth, 0).getDate()}`}
+                        // Get the number of days in the month (scheduleYear, month, 0) gives last day of the month
+                        `${new Date(scheduleYear, scheduledMonth, 0).getDate()}`}
                     </Typography>
                   </Box>
                   
@@ -442,22 +462,50 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
                   holidays={localHolidays}
                   onScheduleUpdate={handleScheduleUpdate}
                   selectedMonth={month}
+                  selectedYear={scheduleYear}
                 />
               )}
               {tabValue === 1 && (
-                <MonthlyHours doctors={localDoctors} schedule={localSchedule} selectedMonth={month} />
+                <MonthlyHours 
+                  doctors={localDoctors} 
+                  schedule={localSchedule} 
+                  selectedMonth={month}
+                  selectedYear={scheduleYear}
+                />
               )}
               {tabValue === 2 && (
-                <DoctorShiftTypesChart doctors={localDoctors} schedule={localSchedule} selectedMonth={month} />
+                <DoctorShiftTypesChart 
+                  doctors={localDoctors} 
+                  schedule={localSchedule} 
+                  selectedMonth={month}
+                  selectedYear={scheduleYear}
+                />
               )}
               {tabValue === 3 && (
-                <WeekendHolidayBalance doctors={localDoctors} schedule={localSchedule} holidays={localHolidays} selectedMonth={month} />
+                <WeekendHolidayBalance 
+                  doctors={localDoctors} 
+                  schedule={localSchedule} 
+                  holidays={localHolidays} 
+                  selectedMonth={month}
+                  selectedYear={scheduleYear}
+                />
               )}
               {tabValue === 4 && (
-                <YearlySummary doctors={localDoctors} schedule={localSchedule} holidays={localHolidays} />
+                <YearlySummary 
+                  doctors={localDoctors} 
+                  schedule={localSchedule} 
+                  holidays={localHolidays}
+                  selectedYear={scheduleYear}
+                />
               )}
               {tabValue === 5 && (
-                <ConstraintViolations doctors={localDoctors} schedule={localSchedule} holidays={localHolidays} selectedMonth={month} />
+                <ConstraintViolations 
+                  doctors={localDoctors} 
+                  schedule={localSchedule} 
+                  holidays={localHolidays} 
+                  selectedMonth={month}
+                  selectedYear={scheduleYear}
+                />
               )}
             </Box>
           </Paper>

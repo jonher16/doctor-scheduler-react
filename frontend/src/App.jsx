@@ -133,7 +133,7 @@ function App() {
   const [appPaths, setAppPaths] = useState(null);
   
   // Use the year context instead of local state
-  const { selectedYear, setSelectedYear } = useYear();
+  const { selectedYear, yearChanged, resetYearChanged } = useYear();
   
   // For notifications
   const [notification, setNotification] = useState({
@@ -225,6 +225,26 @@ function App() {
   const handleYearChange = (event) => {
     setSelectedYear(event.target.value);
   };
+
+  useEffect(() => {
+    if (yearChanged) {
+      // Clear schedule data
+      setScheduleState({});
+      
+      // Set active component to generate schedule
+      setActiveComponent('generate');
+      
+      // Reset the year changed flag
+      resetYearChanged();
+      
+      // Show notification to the user
+      setNotification({
+        open: true,
+        message: `Year changed to ${selectedYear}. Please generate a new schedule.`,
+        severity: 'info'
+      });
+    }
+  }, [yearChanged, resetYearChanged, selectedYear]);
 
   // Load data on mount
   useEffect(() => {

@@ -12,8 +12,12 @@ import {
   ChevronRight as ChevronRightIcon,
   CalendarMonth as CalendarIcon
 } from '@mui/icons-material';
+import { isLeapYear, getDaysInMonth } from '../utils/dateUtils';
+import { useYear } from '../contexts/YearContext';
 
 function EnhancedCalendar({ value, onChange, minDate, maxDate, isRangeMode = false }) {
+  const { selectedYear } = useYear();
+  
   // Parse the initial date(s) if provided or use current date
   const parseInitialDate = () => {
     if (value) {
@@ -82,9 +86,8 @@ function EnhancedCalendar({ value, onChange, minDate, maxDate, isRangeMode = fal
     const firstDay = new Date(year, month, 1);
     const startingDayOfWeek = firstDay.getDay();
     
-    // Last day of the month
-    const lastDay = new Date(year, month + 1, 0);
-    const daysInMonth = lastDay.getDate();
+    // Last day of the month - account for leap years
+    const daysInMonth = getDaysInMonth(year, month + 1);
     
     const days = [];
     

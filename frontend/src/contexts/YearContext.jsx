@@ -13,13 +13,34 @@ export function YearProvider({ children }) {
     return storedYear ? parseInt(storedYear, 10) : currentYear;
   });
 
+  // New state to track year changes
+  const [yearChanged, setYearChanged] = useState(false);
+
+  // Custom setter for the year that also sets the yearChanged flag
+  const changeYear = (newYear) => {
+    if (newYear !== selectedYear) {
+      setSelectedYear(newYear);
+      setYearChanged(true);
+    }
+  };
+
+  // Reset the yearChanged flag - to be called after handling the year change
+  const resetYearChanged = () => {
+    setYearChanged(false);
+  };
+
   // Update localStorage when year changes
   useEffect(() => {
     localStorage.setItem('selectedYear', selectedYear.toString());
   }, [selectedYear]);
 
   return (
-    <YearContext.Provider value={{ selectedYear, setSelectedYear }}>
+    <YearContext.Provider value={{ 
+      selectedYear, 
+      setSelectedYear: changeYear,
+      yearChanged,
+      resetYearChanged
+    }}>
       {children}
     </YearContext.Provider>
   );
