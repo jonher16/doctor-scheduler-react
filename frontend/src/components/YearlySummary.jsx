@@ -40,6 +40,8 @@ import {
 } from 'chart.js';
 import { useYear } from '../contexts/YearContext';
 
+import { monthNames } from '../utils/dateUtils';
+
 
 // Register ChartJS components
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, ChartTooltip, ChartLegend);
@@ -160,10 +162,7 @@ function YearlySummary({ doctors, schedule, holidays }) {
   
   // Find the busiest month
   const busiestMonthIndex = monthlyTotals.indexOf(Math.max(...monthlyTotals));
-  const monthNames = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
-  ];
+
   const busiestMonth = monthNames[busiestMonthIndex];
   
   // --- WEEKEND/HOLIDAY CALCULATION ---

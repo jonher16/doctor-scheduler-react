@@ -12,7 +12,7 @@ import {
   ChevronRight as ChevronRightIcon,
   CalendarMonth as CalendarIcon
 } from '@mui/icons-material';
-import { isLeapYear, getDaysInMonth } from '../utils/dateUtils';
+import { isLeapYear, getDaysInMonth, monthNames, dayNames } from '../utils/dateUtils';
 import { useYear } from '../contexts/YearContext';
 
 function EnhancedCalendar({ value, onChange, minDate, maxDate, isRangeMode = false }) {
@@ -67,15 +67,6 @@ function EnhancedCalendar({ value, onChange, minDate, maxDate, isRangeMode = fal
       }
     }
   }, [value, isRangeMode]);
-
-  // Month names for display
-  const monthNames = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
-  ];
-
-  // Day names for display
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   // Generate days for the current month view
   const generateDays = () => {

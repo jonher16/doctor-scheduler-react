@@ -76,10 +76,18 @@ export const getYearRange = () => {
     return date.getDay() === 0 || date.getDay() === 6; // 0 = Sunday, 6 = Saturday
   };
 
+   // Month names for display
+export const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  // Day names for display
+export const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
   export const getMonthName = (monthNum) => {
-    const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
-    ];
-    return months[monthNum - 1];
+
+    return monthNames[monthNum - 1];
   };
+
+   

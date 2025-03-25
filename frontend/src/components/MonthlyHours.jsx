@@ -30,8 +30,6 @@ import {
 } from 'chart.js';
 import { HourglassEmpty, Timer, Timelapse } from '@mui/icons-material';
 
-import { useYear } from '../contexts/YearContext';
-
 
 // Register ChartJS components
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, ChartTooltip, Legend);

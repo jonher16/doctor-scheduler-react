@@ -21,20 +21,13 @@ import {
   Info as InfoIcon
 } from '@mui/icons-material';
 
+import { monthNames, dayNames } from '../utils/dateUtils';
+
 function DoctorAvailabilityCalendar({ doctors, availability }) {
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(2025); // Fixed to 2025 for the application
   const [selectedDoctor, setSelectedDoctor] = useState('all');
   const [calendarDays, setCalendarDays] = useState([]);
-
-  // Month names for display
-  const monthNames = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
-  ];
-
-  // Day names for display
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   // Colors for different availability types
   const availabilityColors = {
