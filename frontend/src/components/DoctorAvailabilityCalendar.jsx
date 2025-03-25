@@ -23,10 +23,15 @@ import {
 
 import { monthNames, dayNames } from '../utils/dateUtils';
 
-function DoctorAvailabilityCalendar({ doctors, availability }) {
+function DoctorAvailabilityCalendar({ doctors, availability, initialYear }) {
+  
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
-  const [currentYear, setCurrentYear] = useState(2025); // Fixed to 2025 for the application
-  const [selectedDoctor, setSelectedDoctor] = useState('all');
+  const [currentYear, setCurrentYear] = useState(() => {
+    // Convert to number in case it's a string and validate
+    const year = Number(initialYear);
+    // Return the initialYear if valid, or current year as fallback
+    return !isNaN(year) ? year : new Date().getFullYear();
+  });  const [selectedDoctor, setSelectedDoctor] = useState('all');
   const [calendarDays, setCalendarDays] = useState([]);
 
   // Colors for different availability types
@@ -38,13 +43,22 @@ function DoctorAvailabilityCalendar({ doctors, availability }) {
     'Night Only': '#ff9800'
   };
 
+  useEffect(() => {
+    if (initialYear !== undefined && initialYear !== null) {
+      const year = Number(initialYear);
+      if (!isNaN(year)) {
+        setCurrentYear(year);
+      }
+    }
+  }, [initialYear]);
+
   // Generate days for the current month view
   useEffect(() => {
     generateCalendarDays();
   }, [currentMonth, currentYear, selectedDoctor, availability]);
 
   const generateCalendarDays = () => {
-    const year = currentYear;
+    const year = initialYear;
     const month = currentMonth;
     
     // First day of the month

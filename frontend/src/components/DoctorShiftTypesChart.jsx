@@ -44,10 +44,9 @@ import {
   BarChart as BarChartIcon
 } from '@mui/icons-material';
 import { getMonthName } from '../utils/dateUtils';
-import { useYear } from '../contexts/YearContext';
 
-const DoctorShiftTypesChart = ({ doctors, schedule, selectedMonth }) => {
-  const { selectedYear } = useYear();
+const DoctorShiftTypesChart = ({ doctors, schedule, selectedMonth, selectedYear }) => {
+  
   const theme = useTheme();
   const [tabValue, setTabValue] = useState(0);
   const [shiftData, setShiftData] = useState([]);

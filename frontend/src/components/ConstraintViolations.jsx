@@ -25,7 +25,7 @@ import {
 
 import { isWeekend } from '../utils/dateUtils';
 
-function ConstraintViolations({ doctors, schedule, holidays, selectedMonth}) {
+function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, selectedYear}) {
 
   const [violations, setViolations] = useState({});
   const [totalViolations, setTotalViolations] = useState(0);
@@ -421,7 +421,7 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth}) {
   return (
     <Box sx={{ p: 2 }}>
       <Typography variant="h6" gutterBottom>
-        Constraint Violations for {new Date(2025, selectedMonth - 1).toLocaleString('default', { month: 'long' })} 2025
+        Constraint Violations for {new Date({selectedYear}, selectedMonth - 1).toLocaleString('default', { month: 'long' })} {selectedYear}
       </Typography>
       
       <Box sx={{ mb: 3 }}>

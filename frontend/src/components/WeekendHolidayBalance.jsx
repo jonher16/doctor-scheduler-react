@@ -23,14 +23,11 @@ import {
 import { Bar as BarChart } from 'react-chartjs-2';
 
 import { getMonthName } from '../utils/dateUtils';
-import { useYear } from '../contexts/YearContext';
 
 // Register ChartJS components
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
-function WeekendHolidayBalance({ doctors, schedule, holidays, selectedMonth }) {
-
-  const { selectedYear } = useYear();
+function WeekendHolidayBalance({ doctors, schedule, holidays, selectedMonth, selectedYear }) {
   
   // Filter schedule data by selected month
   const getFilteredSchedule = () => {

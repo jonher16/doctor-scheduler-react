@@ -38,7 +38,6 @@ import {
   Tooltip as ChartTooltip,
   Legend as ChartLegend
 } from 'chart.js';
-import { useYear } from '../contexts/YearContext';
 
 import { monthNames } from '../utils/dateUtils';
 
@@ -46,9 +45,8 @@ import { monthNames } from '../utils/dateUtils';
 // Register ChartJS components
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, ChartTooltip, ChartLegend);
 
-function YearlySummary({ doctors, schedule, holidays }) {
+function YearlySummary({ doctors, schedule, holidays, selectedYear }) {
 
-  const { selectedYear } = useYear();
   const [tabValue, setTabValue] = React.useState(0);
 
   // Check if schedule and doctors are available
@@ -314,7 +312,7 @@ function YearlySummary({ doctors, schedule, holidays }) {
             <Card>
               <CardContent>
                 <Typography variant="h6" gutterBottom>
-                  Yearly Hours Summary
+                  {selectedYear} Hours Summary
                 </Typography>
                 <Divider sx={{ mb: 2 }} />
                 

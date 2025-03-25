@@ -444,6 +444,7 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
         <DoctorAvailabilityCalendar 
           doctors={doctors}
           availability={availability}
+          initialYear={selectedYear}
         />
       )}
 

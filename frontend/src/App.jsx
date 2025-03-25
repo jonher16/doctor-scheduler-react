@@ -44,7 +44,6 @@ import HolidayConfig from './components/HolidayConfig';
 import DoctorNeeds from './components/DoctorNeeds';
 import GenerateSchedule from './components/GenerateSchedule';
 import Dashboard from './components/Dashboard';
-import MonthlyCalendarView from './components/MonthlyCalendarView';
 import BackendMonitor from './components/BackendMonitor';
 import SyncPage from './components/SyncPage';
 
@@ -221,11 +220,6 @@ function App() {
     });
   };
 
-  // Handle year change
-  const handleYearChange = (event) => {
-    setSelectedYear(event.target.value);
-  };
-
   useEffect(() => {
     if (yearChanged) {
       // Clear schedule data
@@ -341,11 +335,6 @@ function App() {
       try {
         const parsedData = JSON.parse(scheduleData);
         setScheduleState(parsedData.schedule || {});
-        
-        // If there's a year in the metadata, use it
-        if (parsedData.metadata && parsedData.metadata.year) {
-          setSelectedYear(parsedData.metadata.year);
-        }
         
         console.log("Loaded schedule from localStorage");
       } catch (err) {

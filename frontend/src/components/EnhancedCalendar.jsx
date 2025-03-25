@@ -13,17 +13,15 @@ import {
   CalendarMonth as CalendarIcon
 } from '@mui/icons-material';
 import { isLeapYear, getDaysInMonth, monthNames, dayNames } from '../utils/dateUtils';
-import { useYear } from '../contexts/YearContext';
 
-function EnhancedCalendar({ value, onChange, minDate, maxDate, isRangeMode = false }) {
-  const { selectedYear } = useYear();
+function EnhancedCalendar({ value, onChange, minDate, maxDate, isRangeMode = false, initialYear }) {
   
   // Parse the initial date(s) if provided or use current date
   const parseInitialDate = () => {
     if (value) {
       // For date range mode
       if (isRangeMode && Array.isArray(value) && value.length === 2) {
-        return new Date(value[0] || new Date());
+        return new Date(value[0] || new Date(initialYear, 0, 1));
       }
       // For single date mode
       else if (typeof value === 'string') {
@@ -33,7 +31,7 @@ function EnhancedCalendar({ value, onChange, minDate, maxDate, isRangeMode = fal
         }
       }
     }
-    return new Date();
+    return new Date(initialYear, 0, 1);
   };
 
   const [currentDate, setCurrentDate] = useState(parseInitialDate());

@@ -32,9 +32,13 @@ import {
 
 import { monthNames, dayNames } from '../utils/dateUtils';
 
+import { useYear } from '../contexts/YearContext';
+
 function HolidayCalendar({ holidays, setHolidays }) {
+
+  const { selectedYear } = useYear();
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
-  const [currentYear, setCurrentYear] = useState(2025); // Fixed to 2025 for the application
+  const [currentYear, setCurrentYear] = useState(selectedYear);
   const [calendarDays, setCalendarDays] = useState([]);
   
   // State for managing the context menu
