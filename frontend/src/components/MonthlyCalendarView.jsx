@@ -303,56 +303,7 @@ function MonthlyCalendarView({ schedule, doctors, holidays, onScheduleUpdate, se
                 }}>
                   {day}
                 </Box>
-              </Grid>const generateCalendarDays = () => {
-  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-  const firstDayOfMonth = new Date(currentYear, currentMonth, 1).getDay();
-
-  // Create an array to hold all days for the calendar
-  const days = [];
-
-  // Add empty cells for days before the first day of the month
-  for (let i = 0; i < firstDayOfMonth; i++) {
-    days.push({ day: null, isCurrentMonth: false });
-  }
-
-  // Add days of current month
-  for (let day = 1; day <= daysInMonth; day++) {
-    const date = new Date(currentYear, currentMonth, day);
-    const dateStr = formatDateToYYYYMMDD(date);
-
-    // Check if this date is a holiday
-    const isHoliday = holidays && holidays[dateStr];
-
-    // Check if this date is a weekend
-    const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-
-    // Find the correct date in the schedule - use the actual schedule year data
-    // Look for date with matching month and day format (MM-DD)
-    const monthDayStr = dateStr.substring(5); // Gets the "MM-DD" part
-    const matchingDate = Object.keys(currentSchedule).find(scheduleDate => {
-      if (scheduleDate === '_metadata') return false;
-      return scheduleDate.substring(5) === monthDayStr;
-    });
-
-    days.push({
-      day,
-      date: dateStr,
-      isCurrentMonth: true,
-      isWeekend,
-      isHoliday,
-      holidayType: isHoliday ? holidays[dateStr] : null,
-      shifts: matchingDate ? currentSchedule[matchingDate] : { Day: [], Evening: [], Night: [] }
-    });
-  }
-
-  // Add empty cells for days after the last day of the month to complete the grid
-  const totalCells = Math.ceil(days.length / 7) * 7;
-  for (let i = days.length; i < totalCells; i++) {
-    days.push({ day: null, isCurrentMonth: false });
-  }
-
-  setCalendarDays(days);
-};
+              </Grid>
             ))}
 
             {/* Calendar days */}

@@ -38,6 +38,7 @@ class WeightOptimizer:
                  holidays: Dict[str, str],
                  availability: Dict[str, Dict[str, str]],
                  month: int = None,
+                 year: int = None,
                  max_iterations: int = 20,
                  parallel_jobs: int = 1,
                  time_limit_minutes: int = 10):
@@ -57,6 +58,7 @@ class WeightOptimizer:
         self.holidays = holidays
         self.availability = availability
         self.month = month
+        self.year = year
         self.max_iterations = max_iterations
         self.parallel_jobs = max(1, min(parallel_jobs, 4))  # Between 1 and 4 jobs
         self.time_limit_seconds = time_limit_minutes * 60
@@ -579,7 +581,8 @@ class WeightOptimizer:
                 self.doctors,
                 self.holidays,
                 self.availability,
-                self.month
+                self.month,
+                self.year
             )
             
             # Override weights
@@ -885,6 +888,7 @@ def optimize_weights(data: Dict[str, Any], progress_callback: Callable = None) -
         holidays = data.get("holidays", {})
         availability = data.get("availability", {})
         month = data.get("month")
+        year = data.get("year")
         
         # Meta-optimization parameters
         max_iterations = data.get("max_iterations", 20)
@@ -897,6 +901,7 @@ def optimize_weights(data: Dict[str, Any], progress_callback: Callable = None) -
             holidays=holidays,
             availability=availability,
             month=month,
+            year=year,
             max_iterations=max_iterations,
             parallel_jobs=parallel_jobs,
             time_limit_minutes=time_limit_minutes

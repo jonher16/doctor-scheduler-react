@@ -25,7 +25,7 @@ logger = logging.getLogger("MonthlyScheduleOptimizer")
 
 class MonthlyScheduleOptimizer:
     def __init__(self, doctors: List[Dict], holidays: Dict[str, str],
-                 availability: Dict[str, Dict[str, str]], month: int):
+                 availability: Dict[str, Dict[str, str]], month: int, year: int):
         """
         Initialize with input data for a specific month.
         
@@ -39,6 +39,7 @@ class MonthlyScheduleOptimizer:
         self.holidays = holidays
         self.availability = availability
         self.month = month
+        self.year = year
 
         # Create indices for faster lookups
         self.doctor_indices = {doc["name"]: i for i, doc in enumerate(doctors)}
@@ -187,18 +188,18 @@ class MonthlyScheduleOptimizer:
         return True
     
     def _generate_dates_for_month(self, month: int) -> List[str]:
-        """Generate all dates for the specified month in 2025 in YYYY-MM-DD format."""
+        """Generate all dates for the specified month in self.year in YYYY-MM-DD format."""
         if month < 1 or month > 12:
             raise ValueError(f"Invalid month: {month}. Month must be between 1 and 12.")
             
         all_dates = []
-        start_date = datetime.date(2025, month, 1)
+        start_date = datetime.date(self.year, month, 1)
         
         # Find the last day of the month
         if month == 12:
-            end_date = datetime.date(2025, 12, 31)
+            end_date = datetime.date(self.year, 12, 31)
         else:
-            end_date = datetime.date(2025, month + 1, 1) - datetime.timedelta(days=1)
+            end_date = datetime.date(self.year, month + 1, 1) - datetime.timedelta(days=1)
         
         days_in_month = (end_date - start_date).days + 1
         
@@ -2031,6 +2032,7 @@ def optimize_monthly_schedule(data: Dict[str, Any], progress_callback: Callable 
         holidays = data.get("holidays", {})
         availability = data.get("availability", {})
         month = data.get("month")
+        year = data.get("year")
         
         # Validate month is between 1 and 12
         if month is None:
@@ -2046,7 +2048,7 @@ def optimize_monthly_schedule(data: Dict[str, Any], progress_callback: Callable 
             raise ValueError(f"Invalid month format: {month}. Month must be an integer.")
         
         # Create optimizer for the specified month
-        optimizer = MonthlyScheduleOptimizer(doctors, holidays, availability, month)
+        optimizer = MonthlyScheduleOptimizer(doctors, holidays, availability, month, year)
         schedule, stats = optimizer.optimize(progress_callback=progress_callback)
         
         return {
