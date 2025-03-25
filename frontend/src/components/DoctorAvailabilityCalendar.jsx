@@ -31,7 +31,8 @@ function DoctorAvailabilityCalendar({ doctors, availability, initialYear }) {
     const year = Number(initialYear);
     // Return the initialYear if valid, or current year as fallback
     return !isNaN(year) ? year : new Date().getFullYear();
-  });  const [selectedDoctor, setSelectedDoctor] = useState('all');
+  });
+  const [selectedDoctor, setSelectedDoctor] = useState('all');
   const [calendarDays, setCalendarDays] = useState([]);
 
   // Colors for different availability types
@@ -58,7 +59,8 @@ function DoctorAvailabilityCalendar({ doctors, availability, initialYear }) {
   }, [currentMonth, currentYear, selectedDoctor, availability]);
 
   const generateCalendarDays = () => {
-    const year = initialYear;
+    // Use currentYear instead of initialYear to ensure it's properly validated
+    const year = currentYear;
     const month = currentMonth;
     
     // First day of the month
@@ -85,6 +87,7 @@ function DoctorAvailabilityCalendar({ doctors, availability, initialYear }) {
     
     // Add days of the current month
     for (let i = 1; i <= daysInMonth; i++) {
+      // Ensure proper formatting of dates with leading zeros
       const date = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
       
       // Get availability for this date for all or selected doctor

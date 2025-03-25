@@ -493,6 +493,7 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
                 onChange={handleDateChange}
                 minDate={new Date().toISOString().split('T')[0]} // Today as min date
                 isRangeMode={isRangeMode}
+                initialYear={selectedYear}
               />
             </Grid>
             <Grid item xs={12}>
