@@ -671,6 +671,9 @@ class WeightOptimizer:
                 # Re-raise the exception
                 raise
             
+            # Set shift template if available
+            if hasattr(self, 'shift_template'):
+                optimizer.shift_template = self.shift_template
             # Override weights
             for key, value in weights.items():
                 if hasattr(optimizer, key):
@@ -1003,6 +1006,9 @@ def optimize_weights(data: Dict[str, Any], progress_callback: Callable = None) -
         parallel_jobs = data.get("parallel_jobs", 1)
         time_limit_minutes = data.get("time_limit_minutes", 10)
         
+        # Extract shift template from data
+        shift_template = data.get('shift_template', {})
+
         # Create and run the weight optimizer
         optimizer = WeightOptimizer(
             doctors=doctors,
@@ -1014,6 +1020,31 @@ def optimize_weights(data: Dict[str, Any], progress_callback: Callable = None) -
             parallel_jobs=parallel_jobs,
             time_limit_minutes=time_limit_minutes
         )
+
+        # Set shift template if provided
+        if shift_template and isinstance(shift_template, dict) and len(shift_template) > 0:
+            # Filter the template to only include dates in the target month and year
+            filtered_template = {}
+            for date, shifts in shift_template.items():
+                # Skip metadata or non-date entries
+                if date == '_metadata' or not isinstance(date, str):
+                    continue
+                    
+                try:
+                    date_obj = datetime.date.fromisoformat(date)
+                    if date_obj.month == month and date_obj.year == year:
+                        filtered_template[date] = shifts
+                except (ValueError, TypeError):
+                    # Skip invalid dates
+                    continue
+            
+            # Set the filtered template as the shift template
+            if filtered_template:
+                optimizer.shift_template = filtered_template
+                
+                if progress_callback:
+                    num_shifts = sum(len(shifts) for shifts in filtered_template.values())
+                    progress_callback(5, f"Using template with {len(filtered_template)} days and {num_shifts} shifts")
         
         # Initialize additional tracking for soft constraint hierarchy
         optimizer.best_has_monthly_variance = True

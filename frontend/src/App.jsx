@@ -46,6 +46,7 @@ import GenerateSchedule from './components/GenerateSchedule';
 import Dashboard from './components/Dashboard';
 import BackendMonitor from './components/BackendMonitor';
 import SyncPage from './components/SyncPage';
+import ShiftManager from './components/ShiftManager';
 
 // Import utility functions
 import { getYearRange } from './utils/dateUtils';
@@ -104,7 +105,8 @@ const menuItems = [
   { text: 'Doctor Configuration', icon: <PersonIcon />, component: 'doctors' },
   { text: 'Holiday Configuration', icon: <EventNoteIcon />, component: 'holidays' },
   { text: 'Doctor Availability', icon: <CalendarTodayIcon />, component: 'availability' },
-  { text: 'Cloud Sync', icon: <CloudSyncIcon />, component: 'sync' }
+  { text: 'Cloud Sync', icon: <CloudSyncIcon />, component: 'sync' },
+  { text: 'Shift Manager', icon: <EventIcon />, component: 'shiftmanager' },
   
 ];
 
@@ -601,6 +603,13 @@ function App() {
           availability={availability} 
           setAvailability={setAvailability}
         />;
+      case 'shiftmanager':
+      return <ShiftManager 
+        doctors={doctors} 
+        setDoctors={setDoctors} 
+        availability={availability} 
+        setAvailability={setAvailability}
+      />;
       default:
         return <DoctorConfig doctors={doctors} setDoctors={setDoctors} />;
     }

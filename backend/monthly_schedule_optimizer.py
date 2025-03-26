@@ -251,7 +251,17 @@ class MonthlyScheduleOptimizer:
             
             # Process shifts in the determined order
             for shift in shift_order:
-                required = self.shift_requirements[shift]
+                # Check if this date has a template with this shift
+                if hasattr(self, 'shift_template') and date in self.shift_template and shift in self.shift_template[date]:
+                    # Get the required doctor count from the template
+                    required = self.shift_template[date][shift].get('slots', self.shift_requirements[shift])
+                    
+                    # Skip if no slots required for this shift
+                    if required <= 0:
+                        continue
+                else:
+                    # Use default requirement
+                    required = self.shift_requirements[shift]
                 
                 # Get doctors with preference for this shift first
                 pref_key = f"{shift} Only"
@@ -2033,6 +2043,7 @@ def optimize_monthly_schedule(data: Dict[str, Any], progress_callback: Callable 
         availability = data.get("availability", {})
         month = data.get("month")
         year = data.get("year")
+        shift_template = data.get("shift_template", {})  # Get the shift template
         
         # Validate month is between 1 and 12
         if month is None:
@@ -2047,8 +2058,35 @@ def optimize_monthly_schedule(data: Dict[str, Any], progress_callback: Callable 
                 raise
             raise ValueError(f"Invalid month format: {month}. Month must be an integer.")
         
+
         # Create optimizer for the specified month
         optimizer = MonthlyScheduleOptimizer(doctors, holidays, availability, month, year)
+
+        # Set the shift template if provided
+        if 'shift_template' in data and isinstance(data['shift_template'], dict) and len(data['shift_template']) > 0:
+            # Filter the template to only include dates in the target month and year
+            filtered_template = {}
+            for date, shifts in data['shift_template'].items():
+                # Skip metadata or non-date entries
+                if date == '_metadata' or not isinstance(date, str):
+                    continue
+                    
+                try:
+                    date_obj = datetime.date.fromisoformat(date)
+                    if date_obj.month == month and date_obj.year == year:
+                        filtered_template[date] = shifts
+                except (ValueError, TypeError):
+                    # Skip invalid dates
+                    continue
+            
+            # Set the filtered template as the shift template
+            if filtered_template:
+                optimizer.shift_template = filtered_template
+                
+                if progress_callback:
+                    num_shifts = sum(len(shifts) for shifts in filtered_template.values())
+                    progress_callback(5, f"Using template with {len(filtered_template)} days and {num_shifts} shifts")
+
         schedule, stats = optimizer.optimize(progress_callback=progress_callback)
         
         return {
