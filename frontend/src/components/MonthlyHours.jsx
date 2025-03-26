@@ -29,7 +29,9 @@ import {
   Legend
 } from 'chart.js';
 import { HourglassEmpty, Timer, Timelapse } from '@mui/icons-material';
-
+import {
+  Info as InfoIcon
+} from '@mui/icons-material';
 
 // Register ChartJS components
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, ChartTooltip, Legend);
@@ -215,13 +217,32 @@ function MonthlyHours({ doctors, schedule, selectedMonth, selectedYear }) {
   
   if (!hasData) {
     return (
-      <Box sx={{ minHeight: '400px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-        <Alert severity="info" sx={{ width: '100%', maxWidth: 600 }}>
-          <Typography variant="body1">
-            No data available for {getMonthName(month)}
-          </Typography>
-        </Alert>
-      </Box>
+      <Box sx={{ 
+              minHeight: '400px', 
+              display: 'flex', 
+              justifyContent: 'center', 
+              alignItems: 'center', 
+              width: '100%' 
+            }}>
+              <Paper 
+                elevation={0}
+                sx={{ 
+                  width: '100%', 
+                  maxWidth: 600, 
+                  mx: 'auto', 
+                  border: '1px solid #ccc',
+                  p: 2,
+                  bgcolor: 'rgb(229, 246, 253)' // Info alert background color
+                }}
+              >
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <InfoIcon color="info" sx={{ mb: 1 }} />
+                  <Typography variant="body1" color="info.main" sx={{ textAlign: 'center' }}>
+                    No data available for {new Date(selectedYear, selectedMonth - 1).toLocaleString('default', { month: 'long' })} {selectedYear}.
+                  </Typography>
+                </Box>
+              </Paper>
+            </Box>
     );
   }
 

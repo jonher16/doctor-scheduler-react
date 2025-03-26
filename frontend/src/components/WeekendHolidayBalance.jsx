@@ -24,6 +24,8 @@ import { Bar as BarChart } from 'react-chartjs-2';
 
 import { getMonthName } from '../utils/dateUtils';
 
+import {Info as InfoIcon} from '@mui/icons-material';
+
 // Register ChartJS components
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
@@ -51,13 +53,32 @@ function WeekendHolidayBalance({ doctors, schedule, holidays, selectedMonth, sel
   // Check if the filtered schedule has any data
   if (Object.keys(filteredSchedule).length === 0) {
     return (
-      <Box sx={{ minHeight: '400px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-        <Alert severity="info" sx={{ width: '100%', maxWidth: 600 }}>
-          <Typography variant="body1">
-            No schedule data available for {getMonthName(selectedMonth)}.
-          </Typography>
-        </Alert>
-      </Box>
+      <Box sx={{ 
+              minHeight: '400px', 
+              display: 'flex', 
+              justifyContent: 'center', 
+              alignItems: 'center', 
+              width: '100%' 
+            }}>
+              <Paper 
+                elevation={0}
+                sx={{ 
+                  width: '100%', 
+                  maxWidth: 600, 
+                  mx: 'auto', 
+                  border: '1px solid #ccc',
+                  p: 2,
+                  bgcolor: 'rgb(229, 246, 253)' // Info alert background color
+                }}
+              >
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <InfoIcon color="info" sx={{ mb: 1 }} />
+                  <Typography variant="body1" color="info.main" sx={{ textAlign: 'center' }}>
+                    No data available for {new Date(selectedYear, selectedMonth - 1).toLocaleString('default', { month: 'long' })} {selectedYear}.
+                  </Typography>
+                </Box>
+              </Paper>
+            </Box>
     );
   }
   

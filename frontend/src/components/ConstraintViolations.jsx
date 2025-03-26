@@ -20,7 +20,8 @@ import {
 import {
   ExpandMore as ExpandMoreIcon,
   ErrorOutline as ErrorIcon,
-  CheckCircleOutline as CheckIcon
+  CheckCircleOutline as CheckIcon,
+  Info as InfoIcon
 } from '@mui/icons-material';
 
 import { isWeekend } from '../utils/dateUtils';
@@ -71,7 +72,12 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
     console.log("Dates in month:", monthDates);
     
     // Filter schedule to only include dates in the selected month
-    const monthlySchedule = {...schedule};
+    const monthlySchedule = {};
+    for (const date of monthDates) {
+        if (schedule[date]) {
+        monthlySchedule[date] = schedule[date];
+        }
+    }
 
     console.log("Monthly schedule:", monthlySchedule);
 
@@ -436,6 +442,37 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
     return (
       <Box sx={{ p: 2 }}>
         <Typography variant="h6">Loading constraint violations...</Typography>
+      </Box>
+    );
+  }
+
+  if (!hasData) {
+    return (
+      <Box sx={{ 
+        minHeight: '400px', 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        width: '100%' 
+      }}>
+        <Paper 
+          elevation={0}
+          sx={{ 
+            width: '100%', 
+            maxWidth: 600, 
+            mx: 'auto', 
+            border: '1px solid #ccc',
+            p: 2,
+            bgcolor: 'rgb(229, 246, 253)' // Info alert background color
+          }}
+        >
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <InfoIcon color="info" sx={{ mb: 1 }} />
+            <Typography variant="body1" color="info.main" sx={{ textAlign: 'center' }}>
+              No data available for {new Date(selectedYear, selectedMonth - 1).toLocaleString('default', { month: 'long' })} {selectedYear}.
+            </Typography>
+          </Box>
+        </Paper>
       </Box>
     );
   }
