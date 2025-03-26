@@ -486,7 +486,7 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
                     type="number"
                     value={weightParallelJobs}
                     onChange={(e) => setWeightParallelJobs(parseInt(e.target.value, 10))}
-                    InputProps={{ inputProps: { min: 1, max: 4 } }}
+                    InputProps={{ inputProps: { min: 1, max: 10 } }}
                     variant="outlined"
                     fullWidth
                   />

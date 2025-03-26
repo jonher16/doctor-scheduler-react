@@ -50,6 +50,7 @@ class WeightOptimizer:
             holidays: Dictionary mapping dates to holiday types
             availability: Doctor availability constraints
             month: Specific month to optimize (None for full year)
+            year: The year to optimize for
             max_iterations: Maximum number of weight configurations to try
             parallel_jobs: Number of parallel optimization jobs to run
             time_limit_minutes: Time limit in minutes for the optimization
@@ -57,10 +58,22 @@ class WeightOptimizer:
         self.doctors = doctors
         self.holidays = holidays
         self.availability = availability
-        self.month = month
-        self.year = year
+        
+        # Handle the case where month or year might be None or non-integer
+        try:
+            self.month = int(month) if month is not None else None
+            self.year = int(year) if year is not None else None
+        except (ValueError, TypeError) as e:
+            logger.warning(f"Invalid month or year value: month={month}, year={year}. Error: {e}")
+            # Default to current month and year if invalid
+            current_date = datetime.date.today()
+            self.month = self.month if self.month is not None else current_date.month
+            self.year = self.year if self.year is not None else current_date.year
+            
+        logger.info(f"Weight Optimizer initialized with month={self.month}, year={self.year}")
+            
         self.max_iterations = max_iterations
-        self.parallel_jobs = max(1, min(parallel_jobs, 4))  # Between 1 and 4 jobs
+        self.parallel_jobs = max(1, min(parallel_jobs, 10))  # Between 1 and 10 jobs
         self.time_limit_seconds = time_limit_minutes * 60
         
         # Track the best configuration found
@@ -336,9 +349,15 @@ class WeightOptimizer:
         # Get all dates in chronological order
         dates = sorted(schedule.keys())
         
-        # Filter dates by month if monthly optimization
+        # Filter dates by month AND year if monthly optimization
         if self.month is not None:
-            dates = [d for d in dates if datetime.date.fromisoformat(d).month == self.month]
+            if self.year is not None:
+                # Filter by both month and year
+                dates = [d for d in dates if datetime.date.fromisoformat(d).month == self.month and 
+                                              datetime.date.fromisoformat(d).year == self.year]
+            else:
+                # If year is None, just filter by month
+                dates = [d for d in dates if datetime.date.fromisoformat(d).month == self.month]
         
         for i in range(len(dates) - 1):
             current_date = dates[i]
@@ -368,9 +387,15 @@ class WeightOptimizer:
         # Get all dates in chronological order
         dates = sorted(schedule.keys())
         
-        # Filter dates by month if monthly optimization
+        # Filter dates by month AND year if monthly optimization
         if self.month is not None:
-            dates = [d for d in dates if datetime.date.fromisoformat(d).month == self.month]
+            if self.year is not None:
+                # Filter by both month and year
+                dates = [d for d in dates if datetime.date.fromisoformat(d).month == self.month and 
+                                              datetime.date.fromisoformat(d).year == self.year]
+            else:
+                # If year is None, just filter by month
+                dates = [d for d in dates if datetime.date.fromisoformat(d).month == self.month]
         
         for i in range(len(dates) - 1):
             current_date = dates[i]
@@ -405,9 +430,14 @@ class WeightOptimizer:
             if holiday_type != "Long" or date not in schedule:
                 continue
                 
-            # Skip if not in the target month for monthly optimization
-            if self.month is not None and datetime.date.fromisoformat(date).month != self.month:
-                continue
+            # Skip if not in the target month (and year if provided) for monthly optimization
+            if self.month is not None:
+                d_date = datetime.date.fromisoformat(date)
+                if d_date.month != self.month:
+                    continue
+                # Only check year if it's not None
+                if self.year is not None and d_date.year != self.year:
+                    continue
             
             for shift in ["Day", "Evening", "Night"]:
                 if shift not in schedule[date]:
@@ -536,9 +566,15 @@ class WeightOptimizer:
         # Get all dates in chronological order
         dates = sorted(schedule.keys())
         
-        # Filter dates by month if monthly optimization
+        # Filter dates by month AND year if monthly optimization
         if self.month is not None:
-            dates = [d for d in dates if datetime.date.fromisoformat(d).month == self.month]
+            if self.year is not None:
+                # Filter by both month and year
+                dates = [d for d in dates if datetime.date.fromisoformat(d).month == self.month and 
+                                              datetime.date.fromisoformat(d).year == self.year]
+            else:
+                # If year is None, just filter by month
+                dates = [d for d in dates if datetime.date.fromisoformat(d).month == self.month]
         
         for i in range(len(dates) - 1):
             current_date = dates[i]
@@ -576,14 +612,22 @@ class WeightOptimizer:
         
         # Run either monthly or yearly optimizer based on whether month is specified
         if self.month is not None:
-            # Create instance with default settings first
-            optimizer = MonthlyScheduleOptimizer(
-                self.doctors,
-                self.holidays,
-                self.availability,
-                self.month,
-                self.year
-            )
+            # Log the parameters for debugging
+            logger.info(f"Creating MonthlyScheduleOptimizer with month={self.month}, year={self.year}")
+            
+            try:
+                # Create instance with default settings first
+                optimizer = MonthlyScheduleOptimizer(
+                    self.doctors,
+                    self.holidays,
+                    self.availability,
+                    self.month,
+                    self.year
+                )
+            except Exception as e:
+                logger.error(f"Error creating MonthlyScheduleOptimizer: {e}")
+                # Re-raise the exception
+                raise
             
             # Override weights
             for key, value in weights.items():
@@ -890,6 +934,28 @@ def optimize_weights(data: Dict[str, Any], progress_callback: Callable = None) -
         month = data.get("month")
         year = data.get("year")
         
+        # Log the received data for debugging
+        logger.info(f"optimize_weights received: month={month}, year={year}")
+        
+        # Ensure month and year are integers if provided
+        if month is not None:
+            try:
+                month = int(month)
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid month value: {month}, using current month")
+                month = datetime.date.today().month
+                
+        if year is not None:
+            try:
+                year = int(year)
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid year value: {year}, using current year")
+                year = datetime.date.today().year
+        else:
+            # If year is None, set it to current year as a fallback
+            year = datetime.date.today().year
+            logger.info(f"Year was None, using current year: {year}")
+        
         # Meta-optimization parameters
         max_iterations = data.get("max_iterations", 20)
         parallel_jobs = data.get("parallel_jobs", 1)
@@ -938,15 +1004,23 @@ def optimize_weights(data: Dict[str, Any], progress_callback: Callable = None) -
                 if result_item.get("hard_violations", float('inf')) > 0:
                     continue
                 
-                # Create an optimizer instance with these weights
-                if month is not None:
-                    # For monthly optimization
-                    optimizer_instance = MonthlyScheduleOptimizer(
-                        doctors,
-                        holidays,
-                        availability,
-                        month
-                    )
+                try:
+                    # Create an optimizer instance with these weights
+                    if month is not None:
+                        # Log parameters for debugging
+                        logger.info(f"Creating alternative MonthlyScheduleOptimizer with month={month}, year={year}")
+                        
+                        # For monthly optimization
+                        optimizer_instance = MonthlyScheduleOptimizer(
+                            doctors,
+                            holidays,
+                            availability,
+                            month,
+                            year  # Make sure we pass the year parameter here
+                        )
+                except Exception as e:
+                    logger.error(f"Error creating alternative optimizer: {e}")
+                    continue
                 else:
                     # For yearly optimization
                     optimizer_instance = ScheduleOptimizer(
@@ -1107,10 +1181,33 @@ if __name__ == "__main__":
         "max_iterations": 5,  # Small number for testing
         "parallel_jobs": 1,
         "time_limit_minutes": 5,
-        "month": 1  # Just optimize January
+        "month": 1,  # Just optimize January
+        "year": 2025  # Add the year parameter
     }
 
-    result = optimize_weights(sample_data)
+    # Configure logging for console output when running as standalone
+    if logging.getLogger().level == logging.NOTSET:
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
+
+    # Run the test and catch any exceptions
+    try:
+        result = optimize_weights(sample_data)
+        
+        print(f"Best weights found:")
+        for key, value in result["weights"].items():
+            print(f"  {key}: {value}")
+        print(f"Best score: {result['score']:.2f}")
+        print(f"Hard violations: {result.get('hard_violations', 'N/A')}")
+        print(f"Monthly variance: {result.get('has_monthly_variance', 'N/A')}")
+        print(f"Preference violations: {result.get('preference_violations', 'N/A')}")
+        print(f"Solution time: {result['solution_time_seconds']:.2f} seconds")
+    except Exception as e:
+        print(f"Error running test: {e}")
+        import traceback
+        traceback.print_exc()
     
     print(f"Best weights found:")
     for key, value in result["weights"].items():
