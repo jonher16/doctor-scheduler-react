@@ -214,6 +214,12 @@ class WeightOptimizer:
         hard_violations += consecutive_night_violations
         if consecutive_night_violations > 0:
             hard_violation_details.append(f"Consecutive night shifts: {consecutive_night_violations}")
+
+        # 1j. Check for Day/Evening preference doctors assigned to Night shifts (hard constraint)
+        day_evening_to_night_violations = self._check_day_evening_to_night(schedule)
+        hard_violations += day_evening_to_night_violations
+        if day_evening_to_night_violations > 0:
+            hard_violation_details.append(f"Day/Evening pref assigned to Night shifts: {day_evening_to_night_violations}")
         
         # PART 2: Calculate soft constraint score
         soft_score, _, _ = self._calculate_soft_score(schedule, stats)
@@ -587,6 +593,42 @@ class WeightOptimizer:
             # Check for doctors working both nights
             for doctor in schedule[current_date]["Night"]:
                 if doctor in schedule[next_date]["Night"]:
+                    violations += 1
+        
+        return violations
+    
+    def _check_day_evening_to_night(self, schedule: Dict) -> int:
+        """Check for doctors with Day/Evening preference assigned to Night shifts."""
+        violations = 0
+        
+        # Get all dates in chronological order
+        dates = sorted(schedule.keys())
+        
+        # Filter dates by month AND year if monthly optimization
+        if self.month is not None:
+            if self.year is not None:
+                # Filter by both month and year
+                dates = [d for d in dates if datetime.date.fromisoformat(d).month == self.month and 
+                                            datetime.date.fromisoformat(d).year == self.year]
+            else:
+                # If year is None, just filter by month
+                dates = [d for d in dates if datetime.date.fromisoformat(d).month == self.month]
+        
+        for date in dates:
+            # Skip if no Night shift on this date
+            if not schedule.get(date, {}).get("Night"):
+                continue
+            
+            for doctor in schedule[date]["Night"]:
+                # Get doctor's preference
+                pref = None
+                for doc in self.doctors:
+                    if doc["name"] == doctor:
+                        pref = doc.get("pref", "None")
+                        break
+                
+                # Check if doctor has Day Only or Evening Only preference
+                if pref in ["Day Only", "Evening Only"]:
                     violations += 1
         
         return violations
