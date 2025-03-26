@@ -102,6 +102,11 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
         count: 0,
         details: []
       },
+      // New hard constraint for Day/Evening preference assigned to Night shifts
+      dayEveningToNightViolations: {
+        count: 0,
+        details: []
+      },
       seniorOnLongHoliday: {
         count: 0,
         details: []
@@ -201,14 +206,31 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
         for (const doctor of schedule[date][shift]) {
           const preference = getDoctorPreference(doctor);
           
-          if (preference !== "None" && preference !== `${shift} Only`) {
-            violationsData.preferenceViolations.count++;
-            violationsData.preferenceViolations.details.push({
-              doctor,
-              date,
-              shift,
-              preference
-            });
+          // Skip if no preference
+          if (preference === "None") continue;
+          
+          // Check if doctor's preference doesn't match the shift
+          if (preference !== `${shift} Only`) {
+            // Special case: Day/Evening preference assigned to Night shift (hard constraint)
+            if (shift === "Night" && (preference === "Day Only" || preference === "Evening Only")) {
+              violationsData.dayEveningToNightViolations.count++;
+              violationsData.dayEveningToNightViolations.details.push({
+                doctor,
+                date,
+                shift,
+                preference
+              });
+            } 
+            // Regular preference violation (soft constraint)
+            else {
+              violationsData.preferenceViolations.count++;
+              violationsData.preferenceViolations.details.push({
+                doctor,
+                date,
+                shift,
+                preference
+              });
+            }
           }
         }
       }
@@ -507,8 +529,18 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
                   <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                     <Chip 
                       icon={violations.preferenceViolations.count > 0 ? <ErrorIcon /> : <CheckIcon />}
-                      label={`Preferences: ${violations.preferenceViolations.count}`}
+                      label={`Regular Pref: ${violations.preferenceViolations.count}`}
                       color={violations.preferenceViolations.count > 0 ? "warning" : "success"}
+                      sx={{ width: '100%', justifyContent: 'flex-start' }}
+                    />
+                  </Box>
+                </Grid>
+                <Grid item xs={6}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                    <Chip 
+                      icon={violations.dayEveningToNightViolations.count > 0 ? <ErrorIcon /> : <CheckIcon />}
+                      label={`Day/Eve → Night: ${violations.dayEveningToNightViolations.count}`}
+                      color={violations.dayEveningToNightViolations.count > 0 ? "error" : "success"}
                       sx={{ width: '100%', justifyContent: 'flex-start' }}
                     />
                   </Box>
@@ -677,6 +709,41 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
           </AccordionDetails>
         </Accordion>
         
+        {/* New hard constraint section for Day/Evening preference assigned to Night */}
+        <Accordion 
+          disabled={violations.dayEveningToNightViolations.count === 0}
+          sx={{
+            borderLeft: violations.dayEveningToNightViolations.count > 0 ? '4px solid' : 'none',
+            borderColor: 'error.main',
+          }}
+        >
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+              <Typography sx={{ flexGrow: 1 }}>Day/Evening Preference Assigned to Night ({violations.dayEveningToNightViolations.count})</Typography>
+              <Chip size="small" color="error" label="Hard Constraint" sx={{ ml: 2 }} />
+            </Box>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Typography variant="body2" sx={{ mb: 2, fontStyle: 'italic', color: 'error.main' }}>
+              Critical violation: Doctors with Day Only or Evening Only preference should never be assigned to Night shifts.
+            </Typography>
+            {violations.dayEveningToNightViolations.details.length > 0 ? (
+              <List>
+                {violations.dayEveningToNightViolations.details.map((violation, index) => (
+                  <ListItem key={`dayeve-night-${index}`} divider>
+                    <ListItemText 
+                      primary={`${violation.doctor} (${isSeniorDoctor(violation.doctor) ? 'Senior' : 'Junior'})`}
+                      secondary={`Date: ${violation.date}, Assigned: Night Shift, Preference: ${violation.preference}`} 
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            ) : (
+              <Typography>No violations of this type.</Typography>
+            )}
+          </AccordionDetails>
+        </Accordion>
+        
         <Accordion 
           disabled={violations.preferenceViolations.count === 0}
           sx={{
@@ -686,13 +753,13 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
         >
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
             <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-              <Typography sx={{ flexGrow: 1 }}>Preference Violations ({violations.preferenceViolations.count})</Typography>
+              <Typography sx={{ flexGrow: 1 }}>Other Preference Violations ({violations.preferenceViolations.count})</Typography>
               <Chip size="small" color="warning" label="Soft Constraint" sx={{ ml: 2 }} />
             </Box>
           </AccordionSummary>
           <AccordionDetails>
             <Typography variant="body2" sx={{ mb: 2, fontStyle: 'italic' }}>
-              Preference violations are considered soft constraints and do not severely impact schedule quality.
+              These preference violations (excluding Day/Evening → Night) are considered soft constraints and do not severely impact schedule quality.
             </Typography>
             {violations.preferenceViolations.details.length > 0 ? (
               <List>
