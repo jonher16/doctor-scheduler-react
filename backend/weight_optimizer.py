@@ -180,8 +180,8 @@ class WeightOptimizer:
         if duplicate_doctors > 0:
             hard_violation_details.append(f"Duplicate doctors: {duplicate_doctors}")
         
-        # 1c. Coverage errors (hard constraint)
-        coverage_errors = stats.get("coverage_errors", 0)
+        # 1c. Coverage errors - now using our template-aware method
+        coverage_errors = self._check_coverage_errors(schedule)
         hard_violations += coverage_errors
         if coverage_errors > 0:
             hard_violation_details.append(f"Coverage errors: {coverage_errors}")
@@ -248,6 +248,65 @@ class WeightOptimizer:
             total_score = soft_score
             
         return (total_score, hard_violations, soft_score)
+    
+    def _check_coverage_errors(self, schedule: Dict) -> int:
+        """
+        Check for coverage errors while respecting the shift template.
+        Only counts as an error if a required shift (according to template) is not properly staffed.
+        
+        Args:
+            schedule: The schedule to check
+            
+        Returns:
+            Number of coverage errors
+        """
+        coverage_errors = 0
+        
+        # Default shift requirements if not using template
+        default_shift_requirements = {"Day": 2, "Evening": 1, "Night": 2}
+        
+        # Get a list of dates to check - filtered by month if monthly optimization
+        dates_to_check = []
+        for date in schedule.keys():
+            # Skip if not in the target month for monthly optimization
+            if self.month is not None:
+                d_date = datetime.date.fromisoformat(date)
+                if d_date.month != self.month:
+                    continue
+                # Also check year if it's provided
+                if self.year is not None and d_date.year != self.year:
+                    continue
+            dates_to_check.append(date)
+        
+        # Check each date
+        for date in dates_to_check:
+            # Determine which shifts should be present on this date according to template
+            expected_shifts = {}
+            
+            # If we have a shift template and this date is in it, use that
+            if hasattr(self, 'shift_template') and self.shift_template and date in self.shift_template:
+                for shift, shift_data in self.shift_template[date].items():
+                    slots = shift_data.get('slots', 0)
+                    # Only include shifts with slots > 0
+                    if slots > 0:
+                        expected_shifts[shift] = slots
+            else:
+                # Otherwise use default requirements
+                expected_shifts = default_shift_requirements
+            
+            # Check that all expected shifts are in the schedule with the right number of doctors
+            for shift, required in expected_shifts.items():
+                # Check if shift exists in schedule
+                if shift not in schedule.get(date, {}):
+                    coverage_errors += 1
+                    continue
+                
+                # Check if enough doctors are assigned
+                assigned = len(schedule[date][shift])
+                if assigned != required:
+                    coverage_errors += 1
+        
+        return coverage_errors
 
     def _calculate_soft_score(self, schedule: Dict, stats: Dict) -> Tuple[float, bool, int]:
         """
