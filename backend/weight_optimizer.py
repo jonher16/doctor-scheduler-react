@@ -41,7 +41,9 @@ class WeightOptimizer:
                  year: int = None,
                  max_iterations: int = 20,
                  parallel_jobs: int = 1,
-                 time_limit_minutes: int = 10):
+                 time_limit_minutes: int = 10,
+                 shift_template: Dict[str, Dict[str, Dict[str, int]]] = None
+                 ):
         """
         Initialize the weight optimizer.
         
@@ -120,6 +122,11 @@ class WeightOptimizer:
         self.max_consecutive_shifts = 5  # Maximum number of consecutive days a doctor should work
         self.w_consecutive_shifts = 50   # Penalty for exceeding consecutive shift limit
         
+        # Store the shift template
+        self.shift_template = shift_template
+        if shift_template:
+            logger.info(f"Initialized with shift template containing {len(shift_template)} days")
+
         # Results storage
         self.results = []
 
@@ -672,8 +679,11 @@ class WeightOptimizer:
                 raise
             
             # Set shift template if available
-            if hasattr(self, 'shift_template'):
-                optimizer.shift_template = self.shift_template
+            if hasattr(self, 'shift_template') and self.shift_template:
+                # Make sure to copy the shift template to avoid modifications
+                optimizer.shift_template = copy.deepcopy(self.shift_template)
+                logger.info(f"Applied shift template with {len(self.shift_template)} days to optimizer")
+            
             # Override weights
             for key, value in weights.items():
                 if hasattr(optimizer, key):
@@ -687,7 +697,13 @@ class WeightOptimizer:
                 self.holidays,
                 self.availability
             )
-            
+
+            # Set shift template if available
+            if hasattr(self, 'shift_template') and self.shift_template:
+                # Make sure to copy the shift template to avoid modifications
+                optimizer.shift_template = copy.deepcopy(self.shift_template)
+                logger.info(f"Applied shift template with {len(self.shift_template)} days to optimizer")
+                        
             # Override weights
             for key, value in weights.items():
                 if hasattr(optimizer, key):
@@ -1009,22 +1025,9 @@ def optimize_weights(data: Dict[str, Any], progress_callback: Callable = None) -
         # Extract shift template from data
         shift_template = data.get('shift_template', {})
 
-        # Create and run the weight optimizer
-        optimizer = WeightOptimizer(
-            doctors=doctors,
-            holidays=holidays,
-            availability=availability,
-            month=month,
-            year=year,
-            max_iterations=max_iterations,
-            parallel_jobs=parallel_jobs,
-            time_limit_minutes=time_limit_minutes
-        )
-
-        # Set shift template if provided
+        # Filter the template if provided to only include dates in the target month and year
+        filtered_template = {}
         if shift_template and isinstance(shift_template, dict) and len(shift_template) > 0:
-            # Filter the template to only include dates in the target month and year
-            filtered_template = {}
             for date, shifts in shift_template.items():
                 # Skip metadata or non-date entries
                 if date == '_metadata' or not isinstance(date, str):
@@ -1038,13 +1041,23 @@ def optimize_weights(data: Dict[str, Any], progress_callback: Callable = None) -
                     # Skip invalid dates
                     continue
             
-            # Set the filtered template as the shift template
             if filtered_template:
-                optimizer.shift_template = filtered_template
-                
+                logger.info(f"Filtered shift template to {len(filtered_template)} days for month {month}, year {year}")
                 if progress_callback:
-                    num_shifts = sum(len(shifts) for shifts in filtered_template.values())
-                    progress_callback(5, f"Using template with {len(filtered_template)} days and {num_shifts} shifts")
+                    progress_callback(5, f"Using template with {len(filtered_template)} days")
+
+        # Create and run the weight optimizer with the filtered template
+        optimizer = WeightOptimizer(
+            doctors=doctors,
+            holidays=holidays,
+            availability=availability,
+            month=month,
+            year=year,
+            max_iterations=max_iterations,
+            parallel_jobs=parallel_jobs,
+            time_limit_minutes=time_limit_minutes,
+            shift_template=filtered_template  # Pass the filtered template here
+        )
         
         # Initialize additional tracking for soft constraint hierarchy
         optimizer.best_has_monthly_variance = True

@@ -448,6 +448,14 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
                   onScheduleUpdate={handleScheduleUpdate}
                   selectedMonth={month}
                   selectedYear={scheduleYear}
+                  shiftTemplate={(() => {
+                    try {
+                      return JSON.parse(localStorage.getItem('shiftTemplate') || '{}');
+                    } catch (error) {
+                      console.error('Error parsing shift template:', error);
+                      return {};
+                    }
+                  })()}
                 />
               )}
               {tabValue === 1 && (

@@ -252,16 +252,22 @@ class MonthlyScheduleOptimizer:
             # Process shifts in the determined order
             for shift in shift_order:
                 # Check if this date has a template with this shift
-                if hasattr(self, 'shift_template') and date in self.shift_template and shift in self.shift_template[date]:
-                    # Get the required doctor count from the template
+                has_shift_template = hasattr(self, 'shift_template') and date in self.shift_template
+                shift_in_template = has_shift_template and shift in self.shift_template[date]
+                
+                # Skip this shift if it's not in the template (and we have a template)
+                if has_shift_template and not shift_in_template:
+                    continue
+                
+                # Get the required doctor count from the template or defaults
+                if shift_in_template:
                     required = self.shift_template[date][shift].get('slots', self.shift_requirements[shift])
-                    
-                    # Skip if no slots required for this shift
-                    if required <= 0:
-                        continue
                 else:
-                    # Use default requirement
                     required = self.shift_requirements[shift]
+                
+                # Skip if no slots required for this shift
+                if required <= 0:
+                    continue
                 
                 # Get doctors with preference for this shift first
                 pref_key = f"{shift} Only"
