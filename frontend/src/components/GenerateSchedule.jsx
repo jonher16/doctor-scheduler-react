@@ -143,6 +143,7 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
       try {
         const storedTemplate = localStorage.getItem('shiftTemplate');
         if (storedTemplate) {
+          console.log('Loaded shift template from localStorage')
           shiftTemplate = JSON.parse(storedTemplate);
         }
       } catch (error) {
@@ -171,15 +172,16 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
   const generateWithWeightOptimization = async () => {
     try {
         // Get shift template from localStorage if it exists
-      let shiftTemplate = {};
-      try {
-        const storedTemplate = localStorage.getItem('shiftTemplate');
-        if (storedTemplate) {
-          shiftTemplate = JSON.parse(storedTemplate);
+        let shiftTemplate = {};
+        try {
+          const storedTemplate = localStorage.getItem('shiftTemplate');
+          if (storedTemplate) {
+            console.log('Loaded shift template from localStorage')
+            shiftTemplate = JSON.parse(storedTemplate);
+          }
+        } catch (error) {
+          console.error('Error loading shift template:', error);
         }
-      } catch (error) {
-        console.error('Error loading shift template:', error);
-      }
       const result = await generateOptimizedSchedule('/optimize-weights', {
         doctors,
         holidays,

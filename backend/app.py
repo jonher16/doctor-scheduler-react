@@ -83,11 +83,22 @@ def api_optimize_weights():
         "holidays": data.get('holidays', {}),
         "availability": data.get('availability', {}),
         "month": month,
+        "year": data.get('year'),
         "max_iterations": max_iterations,
         "parallel_jobs": parallel_jobs,
-        "time_limit_minutes": time_limit_minutes
+        "time_limit_minutes": time_limit_minutes,
+        "shift_template": data.get('shift_template', {})  # Add shift template
     }
     
+    # Log the shift template structure for debugging
+    shift_template = data.get('shift_template', {})
+    if shift_template:
+        logger.info(f"Received shift template with {len(shift_template)} days")
+        # Log a sample of the template
+        sample_keys = list(shift_template.keys())[:3]
+        for key in sample_keys:
+            logger.info(f"Template sample - {key}: {shift_template[key]}")
+
     # Create a socket for progress updates
     task_id = f"optimize_weights_{int(time.time())}"
     tasks[task_id] = {"status": "PENDING", "progress": 0, "message": "Initializing..."}
