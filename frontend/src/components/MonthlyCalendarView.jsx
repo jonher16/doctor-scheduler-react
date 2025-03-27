@@ -330,7 +330,7 @@ function MonthlyCalendarView({ doctors, schedule, holidays, onScheduleUpdate, se
       return dayObj.holidayType === 'Long' ? 'rgba(244, 67, 54, 0.08)' : 'rgba(255, 152, 0, 0.08)';
     }
     if (dayObj.isWeekend) {
-      return 'rgba(0, 0, 0, 0.02)';
+      return 'rgba(0, 0, 0, 0.05)';
     }
     return 'white';
   };
@@ -483,7 +483,7 @@ function MonthlyCalendarView({ doctors, schedule, holidays, onScheduleUpdate, se
                 </Box>
                 
                 {/* Shifts */}
-                <Box sx={{ flexGrow: 1 }}>
+                <Box sx={{ flexGrow: 1, backgroundColor: 'rgba(0,0,0,0.02)' }}>
                   {['Day', 'Evening', 'Night'].map(shift => {
                     // Check if this shift is available in the template
                     const shiftAvailable = isShiftAvailable(day.date, shift);
@@ -503,6 +503,7 @@ function MonthlyCalendarView({ doctors, schedule, holidays, onScheduleUpdate, se
                         sx={{ 
                           mb: 0.5, 
                           p: 0.5,
+                          background: 'linear-gradient(to bottom, rgba(0,0,0,0.02), rgba(0,0,0,0.05))',
                           border: '1px solid',
                           borderColor: isActiveShift ? 'divider' : 'rgba(0,0,0,0.05)',
                           borderRadius: 1,

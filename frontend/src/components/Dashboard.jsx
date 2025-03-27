@@ -428,15 +428,17 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
                 iconPosition="start" 
               />
               <Tab 
-                icon={<AnalyticsIcon />} 
-                label="Yearly Summary" 
-                iconPosition="start" 
-              />
-              <Tab 
                 icon={<ErrorIcon />} 
                 label="Constraint Violations" 
                 iconPosition="start" 
               />
+              {/* Deactivate temporarily until yearly scheduling its fixed */}
+              {/* <Tab 
+                icon={<AnalyticsIcon />} 
+                label="Yearly Summary" 
+                iconPosition="start" 
+              /> */}
+              
             </Tabs>
             
             <Box sx={{ p: 3 }}>
@@ -484,22 +486,24 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
                 />
               )}
               {tabValue === 4 && (
-                <YearlySummary 
-                  doctors={localDoctors} 
-                  schedule={localSchedule} 
-                  holidays={localHolidays}
-                  selectedYear={scheduleYear}
-                />
-              )}
-              {tabValue === 5 && (
                 <ConstraintViolations 
-                  doctors={localDoctors} 
-                  schedule={localSchedule} 
-                  holidays={localHolidays} 
-                  selectedMonth={month}
-                  selectedYear={scheduleYear}
-                />
+                doctors={localDoctors} 
+                schedule={localSchedule} 
+                holidays={localHolidays} 
+                selectedMonth={month}
+                selectedYear={scheduleYear}
+              />
+                
               )}
+              {/* Deactivate temporarily until yearly scheduling its fixed */}
+              {/* {tabValue === 5 && (
+                <YearlySummary 
+                doctors={localDoctors} 
+                schedule={localSchedule} 
+                holidays={localHolidays}
+                selectedYear={scheduleYear}
+              />
+              )} */}
             </Box>
           </Paper>
           
