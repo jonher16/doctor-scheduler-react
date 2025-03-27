@@ -26,7 +26,10 @@ import {
   FormControl,
   Select,
   MenuItem,
-  InputLabel
+  InputLabel,
+  Avatar,
+  Badge,
+  Tooltip
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -35,7 +38,8 @@ import {
   CalendarToday as CalendarTodayIcon,
   Event as EventIcon,
   Dashboard as DashboardIcon,
-  CloudSync as CloudSyncIcon
+  CloudSync as CloudSyncIcon,
+  LocalHospital as HospitalIcon
 } from '@mui/icons-material';
 
 // Import components
@@ -107,7 +111,6 @@ const menuItems = [
   { text: 'Doctor Availability', icon: <CalendarTodayIcon />, component: 'availability' },
   { text: 'Cloud Sync', icon: <CloudSyncIcon />, component: 'sync' },
   { text: 'Shift Manager', icon: <EventIcon />, component: 'shiftmanager' },
-  
 ];
 
 // Determine if we're running in Electron
@@ -120,9 +123,7 @@ const API_URL = isElectron
 
 function App() {
   // Get the year range from the utility function for the selector options
-
   const { years } = getYearRange();
-
   
   const [doctors, setDoctorsState] = useState([]);
   const [holidays, setHolidaysState] = useState({});
@@ -454,43 +455,129 @@ function App() {
     setNotification({...notification, open: false});
   };
 
-  // Drawer content
+  // Helper to check if menu item is active
+  const isActiveRoute = (component) => {
+    return activeComponent === component;
+  };
+
+  // Get first letter of Hospital Scheduler for Avatar
+  const getAvatarLetter = () => {
+    return "H";
+  };
+
+  // Drawer content with improved styling
   const drawerContent = (
     <Box
-      sx={{ width: 250 }}
+      sx={{ width: 280 }}
       role="presentation"
       onClick={toggleDrawer(false)}
       onKeyDown={toggleDrawer(false)}
     >
-      <Box sx={{ height: 64, display: 'flex', alignItems: 'center', px: 2 }}>
-        <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-          Menu
+      <Box sx={{ 
+        height: 170, 
+        display: 'flex', 
+        flexDirection: 'column',
+        alignItems: 'center', 
+        justifyContent: 'center',
+        bgcolor: 'primary.main',
+        color: 'white',
+        px: 2,
+        position: 'relative'
+      }}>
+        <Avatar 
+          sx={{ 
+            width: 70, 
+            height: 70, 
+            bgcolor: 'white', 
+            color: 'primary.main',
+            fontSize: 32,
+            fontWeight: 'bold',
+            mb: 1
+          }}
+        >
+          {getAvatarLetter()}
+        </Avatar>
+        
+        <Typography variant="h6" align="center" sx={{ fontWeight: 500 }}>
+          HERS Menu
+        </Typography>
+        
+        <Typography variant="body2" align="center" sx={{ opacity: 0.8 }}>
+          {`Year: ${selectedYear}`}
+        </Typography>
+        
+        <HospitalIcon sx={{ 
+          position: 'absolute', 
+          right: 20, 
+          top: 20, 
+          fontSize: 28,
+          opacity: 0.7
+        }} />
+      </Box>
+      
+      <Divider />
+      
+      <Box sx={{ py: 1 }}>
+        <List>
+          {menuItems.map((item) => {
+            const isActive = isActiveRoute(item.component);
+            
+            return (
+              <ListItem 
+                button 
+                key={item.component} 
+                onClick={() => handleMenuItemClick(item.component)}
+                sx={{ 
+                  pl: 3,
+                  py: 1.5,
+                  bgcolor: isActive ? 'rgba(25, 118, 210, 0.08)' : 'transparent',
+                  '&:hover': {
+                    bgcolor: isActive ? 'rgba(25, 118, 210, 0.12)' : 'rgba(0, 0, 0, 0.04)'
+                  },
+                  cursor: 'pointer'
+                }}
+              >
+                <ListItemIcon sx={{ 
+                  color: isActive ? 'primary.main' : 'inherit',
+                  minWidth: 45
+                }}>
+                  {item.icon}
+                </ListItemIcon>
+                <ListItemText 
+                  primary={item.text} 
+                  primaryTypographyProps={{ 
+                    fontWeight: isActive ? 500 : 400,
+                    color: isActive ? 'primary.main' : 'inherit'
+                  }} 
+                />
+                {isActive && (
+                  <Box 
+                    sx={{ 
+                      width: 4, 
+                      height: 35, 
+                      bgcolor: 'primary.main',
+                      position: 'absolute',
+                      left: 0,
+                      borderRadius: '0 4px 4px 0'
+                    }} 
+                  />
+                )}
+              </ListItem>
+            );
+          })}
+        </List>
+      </Box>
+      
+      <Divider />
+      
+      <Box sx={{ p: 2, mt: 'auto' }}>
+        <Typography variant="caption" color="text.secondary" align="center" sx={{ display: 'block' }}>
+          H.E.R.S. (Hospital Emergency Room Scheduler) Admin Portal v1.0
+        </Typography>
+        <Typography variant="caption" color="text.secondary" align="center" sx={{ display: 'block' }}>
+          {`Smart Health Lab 2025, Jon HERnandez`}
         </Typography>
       </Box>
-      <Divider />
-      <List>
-        {menuItems.map((item) => (
-          <ListItem 
-            button 
-            key={item.component} 
-            onClick={() => handleMenuItemClick(item.component)}
-            selected={activeComponent === item.component}
-            sx={{
-              '&.Mui-selected': {
-                backgroundColor: 'rgba(25, 118, 210, 0.08)',
-                '&:hover': {
-                  backgroundColor: 'rgba(25, 118, 210, 0.12)',
-                },
-              }
-            }}
-          >
-            <ListItemIcon>
-              {item.icon}
-            </ListItemIcon>
-            <ListItemText primary={item.text} />
-          </ListItem>
-        ))}
-      </List>
     </Box>
   );
 
@@ -631,20 +718,31 @@ function App() {
             >
               <MenuIcon />
             </IconButton>
-            <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-              Hospital Doctor Scheduler
-            </Typography>
+            
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <HospitalIcon sx={{ mr: 1, fontSize: 28 }} />
+              <Typography variant="h6" component="div">
+                HERS Admin
+              </Typography>
+            </Box>
+            
+            <Box sx={{ flexGrow: 1 }} />
             
             {/* Year selector */}
             <YearSelector />
           </Toolbar>
         </AppBar>
         
-        {/* Drawer */}
+        {/* Drawer with improved styling */}
         <Drawer
           anchor="left"
           open={drawerOpen}
           onClose={toggleDrawer(false)}
+          PaperProps={{
+            sx: {
+              borderRadius: '0 12px 12px 0'
+            }
+          }}
         >
           {drawerContent}
         </Drawer>
@@ -654,26 +752,30 @@ function App() {
           component="main"
           sx={{
             flexGrow: 1,
-            p: 3,
+            p: { xs: 2, sm: 3 },
             mt: 8, // To account for AppBar height
             backgroundColor: theme.palette.background.default,
-            display: 'flex',
-            justifyContent: 'center',
             width: '100%'
           }}
         >
           <Container 
             maxWidth="lg" 
             sx={{ 
-              mx: 'auto'  // Center horizontally
+              display: 'flex',
+              justifyContent: 'center',
+              px: { xs: 2, sm: 3 },
+              margin: '0 auto'
             }}
           >
             <Paper 
               elevation={2}
               sx={{ 
-                p: 3, 
-                borderRadius: 2,
-                minHeight: 'calc(100vh - 150px)'
+                p: { xs: 2, sm: 3 }, 
+                borderRadius: 3, 
+                minHeight: 'calc(100vh - 150px)',
+                width: '100%',
+                border: `1px solid ${theme.palette.divider}`,
+                margin: '0 auto'
               }}
             >
               {renderComponent()}
@@ -695,6 +797,7 @@ function App() {
             onClose={handleCloseNotification} 
             severity={notification.severity} 
             sx={{ width: '100%' }}
+            variant="filled"
           >
             {notification.message}
           </Alert>
