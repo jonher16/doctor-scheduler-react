@@ -109,8 +109,8 @@ const menuItems = [
   { text: 'Doctor Configuration', icon: <PersonIcon />, component: 'doctors' },
   { text: 'Holiday Configuration', icon: <EventNoteIcon />, component: 'holidays' },
   { text: 'Doctor Availability', icon: <CalendarTodayIcon />, component: 'availability' },
-  { text: 'Cloud Sync', icon: <CloudSyncIcon />, component: 'sync' },
   { text: 'Shift Manager', icon: <EventIcon />, component: 'shiftmanager' },
+  { text: 'Cloud Sync', icon: <CloudSyncIcon />, component: 'sync' },
 ];
 
 // Determine if we're running in Electron
@@ -572,7 +572,13 @@ function App() {
       
       <Box sx={{ p: 2, mt: 'auto' }}>
         <Typography variant="caption" color="text.secondary" align="center" sx={{ display: 'block' }}>
-          H.E.R.S. (Hospital Emergency Room Scheduler) Admin Portal v1.0
+          H.E.R.S.
+        </Typography>
+        <Typography variant="caption" color="text.secondary" align="center" sx={{ display: 'block' }}>
+          (Hospital Emergency Room Scheduler) 
+        </Typography>
+        <Typography variant="caption" color="text.secondary" align="center" sx={{ display: 'block' }}>
+        Admin Portal v1.0
         </Typography>
         <Typography variant="caption" color="text.secondary" align="center" sx={{ display: 'block' }}>
           {`Smart Health Lab 2025, Jon HERnandez`}

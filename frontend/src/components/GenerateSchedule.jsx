@@ -8,7 +8,6 @@ import {
   FormControlLabel,
   RadioGroup,
   Radio,
-  Checkbox,
   TextField,
   MenuItem,
   Grid,
@@ -20,6 +19,7 @@ import {
   CardContent,
   Tooltip,
   IconButton,
+  Stack,
 } from '@mui/material';
 import {
   CalendarMonth as CalendarIcon,
@@ -27,15 +27,16 @@ import {
   Settings as SettingsIcon,
   PlayArrow as StartIcon,
   Dashboard as DashboardIcon,
+  Tune as TuneIcon,
+  EventNote as EventNoteIcon,
 } from '@mui/icons-material';
 import { getMonthName } from '../utils/dateUtils';
 import { useYear } from '../contexts/YearContext';
 
 const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl }) => {
-
   const { selectedYear } = useYear();
 
-  // Change default to 'monthly' instead of 'yearly'
+  // Schedule type: 'monthly', 'weight', or 'yearly' (yearly is commented out)
   const [scheduleType, setScheduleType] = useState('monthly');
   const [month, setMonth] = useState(new Date().getMonth() + 1); // Current month (1-12)
   const [optimizing, setOptimizing] = useState(false);
@@ -46,11 +47,10 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
   const [error, setError] = useState(null);
   const [advancedOptions, setAdvancedOptions] = useState(false);
   
-  // Weight optimization options - only available for monthly scheduling
-  const [useWeightOptimization, setUseWeightOptimization] = useState(false);
-  const [weightMaxIterations, setWeightMaxIterations] = useState(20);
+  // Weight optimization options
+  const [weightMaxIterations, setWeightMaxIterations] = useState(30);
   const [weightParallelJobs, setWeightParallelJobs] = useState(10);
-  const [weightTimeLimit, setWeightTimeLimit] = useState(10);
+  const [weightTimeLimit, setWeightTimeLimit] = useState(5);
   
   // For polling task progress
   const pollingInterval = useRef(null);
@@ -73,9 +73,9 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
     const newType = event.target.value;
     setScheduleType(newType);
     
-    // If switching to yearly, disable weight optimization
-    if (newType === 'yearly') {
-      setUseWeightOptimization(false);
+    // If switching to weight optimization, show advanced options by default
+    if (newType === 'weight') {
+      setAdvancedOptions(true);
     }
   };
 
@@ -98,7 +98,7 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
       setError(null);
       setGeneratedSchedule(null);
       
-      if (useWeightOptimization && scheduleType === 'monthly') {
+      if (scheduleType === 'weight') {
         await generateWithWeightOptimization();
       } else if (scheduleType === 'monthly') {
         await generateMonthlySchedule();
@@ -157,7 +157,6 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
         month,
         year: selectedYear,
         shift_template: shiftTemplate
-      
       });
       
       handleScheduleResult(result);
@@ -171,17 +170,17 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
   // Generate with weight optimization
   const generateWithWeightOptimization = async () => {
     try {
-        // Get shift template from localStorage if it exists
-        let shiftTemplate = {};
-        try {
-          const storedTemplate = localStorage.getItem('shiftTemplate');
-          if (storedTemplate) {
-            console.log('Loaded shift template from localStorage')
-            shiftTemplate = JSON.parse(storedTemplate);
-          }
-        } catch (error) {
-          console.error('Error loading shift template:', error);
+      // Get shift template from localStorage if it exists
+      let shiftTemplate = {};
+      try {
+        const storedTemplate = localStorage.getItem('shiftTemplate');
+        if (storedTemplate) {
+          console.log('Loaded shift template from localStorage')
+          shiftTemplate = JSON.parse(storedTemplate);
         }
+      } catch (error) {
+        console.error('Error loading shift template:', error);
+      }
       const result = await generateOptimizedSchedule('/optimize-weights', {
         doctors,
         holidays,
@@ -372,6 +371,39 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
   const canOptimize = doctors && doctors.length > 0 && 
                      holidays && Object.keys(holidays).length > 0;
 
+  // Get the selected schedule type information
+  const getScheduleTypeInfo = () => {
+    switch(scheduleType) {
+      case 'monthly':
+        return {
+          title: 'Monthly Schedule',
+          description: 'Generate a schedule for a specific month. This is the recommended option for most use cases.',
+          icon: <CalendarIcon fontSize="large" color="primary" />,
+        };
+      case 'weight':
+        return {
+          title: 'Monthly Schedule with Weight Optimization',
+          description: 'Advanced option that tries multiple weight configurations to find the best possible schedule. Takes longer but may produce better results.',
+          icon: <TuneIcon fontSize="large" color="primary" />,
+        };
+      case 'yearly':
+        return {
+          title: 'Yearly Schedule',
+          description: 'Generate a schedule for the entire year at once. This option takes longer and is more resource-intensive.',
+          icon: <EventNoteIcon fontSize="large" color="primary" />,
+        };
+      default:
+        return {
+          title: 'Monthly Schedule',
+          description: 'Generate a schedule for a specific month.',
+          icon: <CalendarIcon fontSize="large" color="primary" />,
+        };
+    }
+  };
+
+  // Get information about the current schedule type
+  const scheduleTypeInfo = getScheduleTypeInfo();
+
   return (
     <Box>
       <Typography variant="h5" component="h2" gutterBottom>
@@ -398,11 +430,14 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
           Schedule Options
         </Typography>
         
+        <Divider sx={{ my: 2 }} />
+        
+        {/* Schedule Type Selection */}
         <Grid container spacing={3}>
-          <Grid item xs={12} md={6}>
-            <FormControl component="fieldset" sx={{ mb: 2 }}>
-              <Typography variant="subtitle2" gutterBottom>
-                Schedule Type
+          <Grid item xs={12} md={4}>
+            <FormControl component="fieldset" fullWidth>
+              <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
+                Scheduling Method
               </Typography>
               <RadioGroup
                 name="schedule-type"
@@ -412,8 +447,14 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
                 <FormControlLabel 
                   value="monthly" 
                   control={<Radio />} 
-                  label="Monthly Schedule (Recommended)" 
+                  label="Monthly Schedule" 
                 />
+                <FormControlLabel 
+                  value="weight" 
+                  control={<Radio />} 
+                  label="Monthly Schedule with Weight Optimization" 
+                />
+                {/* Yearly option commented out as requested */}
                 {/* <FormControlLabel 
                   value="yearly" 
                   control={<Radio />} 
@@ -423,67 +464,71 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
             </FormControl>
           </Grid>
           
-          {scheduleType === 'monthly' && (
-            <Grid item xs={12} md={6}>
-              <Typography variant="subtitle2" gutterBottom>
-                Select Month
-              </Typography>
-              <FormControl fullWidth>
-                <TextField
-                  select
-                  value={month}
-                  onChange={handleMonthChange}
-                  variant="outlined"
-                  fullWidth
-                >
-                  {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                    <MenuItem key={m} value={m}>
-                      {getMonthName(m)} {selectedYear}
-                    </MenuItem>
-                  ))}
-                </TextField>
-              </FormControl>
-              
-              {/* Only show weight optimization for monthly scheduling */}
-              <Box sx={{ mt: 2 }}>
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={useWeightOptimization}
-                      onChange={(e) => setUseWeightOptimization(e.target.checked)}
-                    />
-                  }
-                  label={
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      <Typography variant="body2">Use Weight Optimization</Typography>
-                      <Tooltip title="Weight optimization tries different constraint weights to find the best schedule. This takes longer but may produce better results.">
-                        <IconButton size="small">
-                          <InfoIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    </Box>
-                  }
-                />
-              </Box>
-            </Grid>
-          )}
+          <Grid item xs={12} md={8}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+              <Card variant="outlined" sx={{ mb: 2, height: '100%' }}>
+                <CardContent>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                    {scheduleTypeInfo.icon}
+                    <Typography variant="h6" sx={{ ml: 2 }}>
+                      {scheduleTypeInfo.title}
+                    </Typography>
+                  </Box>
+                  <Typography variant="body2" color="text.secondary">
+                    {scheduleTypeInfo.description}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Box>
+          </Grid>
         </Grid>
         
-        {/* Advanced options - only show for monthly with weight optimization */}
-        {scheduleType === 'monthly' && useWeightOptimization && (
-          <Box sx={{ mt: 2 }}>
-            <Button
-              startIcon={<SettingsIcon />}
-              onClick={toggleAdvancedOptions}
-              variant="outlined"
-              size="small"
-              sx={{ mb: 2 }}
-            >
-              {advancedOptions ? 'Hide Advanced Options' : 'Show Advanced Options'}
-            </Button>
+        <Divider sx={{ my: 3 }} />
+        
+        {/* Month Selection (for monthly and weight optimization) */}
+        {(scheduleType === 'monthly' || scheduleType === 'weight') && (
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
+              Select Month
+            </Typography>
+            <FormControl fullWidth sx={{ maxWidth: 300 }}>
+              <TextField
+                select
+                value={month}
+                onChange={handleMonthChange}
+                variant="outlined"
+                fullWidth
+              >
+                {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                  <MenuItem key={m} value={m}>
+                    {getMonthName(m)} {selectedYear}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </FormControl>
+          </Box>
+        )}
+        
+        {/* Advanced options for weight optimization */}
+        {scheduleType === 'weight' && (
+          <Box sx={{ mb: 3 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+                Optimization Settings
+              </Typography>
+              <Button
+                startIcon={advancedOptions ? null : <SettingsIcon />}
+                onClick={toggleAdvancedOptions}
+                variant="text"
+                size="small"
+                sx={{ ml: 2 }}
+              >
+                {advancedOptions ? 'Hide Settings' : 'Show Settings'}
+              </Button>
+            </Box>
             
             {advancedOptions && (
-              <Grid container spacing={2} sx={{ mt: 1 }}>
+              <Grid container spacing={3} sx={{ mt: 0 }}>
                 <Grid item xs={12} sm={4}>
                   <Typography variant="subtitle2" gutterBottom>
                     Max Iterations
@@ -494,6 +539,7 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
                     onChange={(e) => setWeightMaxIterations(parseInt(e.target.value, 10))}
                     InputProps={{ inputProps: { min: 5, max: 100 } }}
                     variant="outlined"
+                    size="small"
                     fullWidth
                   />
                   <Typography variant="caption" color="text.secondary">
@@ -509,12 +555,13 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
                     type="number"
                     value={weightParallelJobs}
                     onChange={(e) => setWeightParallelJobs(parseInt(e.target.value, 10))}
-                    InputProps={{ inputProps: { min: 1, max: 10 } }}
+                    InputProps={{ inputProps: { min: 1, max: 8 } }}
                     variant="outlined"
+                    size="small"
                     fullWidth
                   />
                   <Typography variant="caption" color="text.secondary">
-                    Number of parallel optimization jobs (1-4)
+                    Number of parallel optimization jobs (1-8)
                   </Typography>
                 </Grid>
                 
@@ -528,6 +575,7 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
                     onChange={(e) => setWeightTimeLimit(parseInt(e.target.value, 10))}
                     InputProps={{ inputProps: { min: 1, max: 30 } }}
                     variant="outlined"
+                    size="small"
                     fullWidth
                   />
                   <Typography variant="caption" color="text.secondary">
@@ -539,16 +587,32 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
           </Box>
         )}
         
-        <Box sx={{ mt: 3, display: 'flex', justifyContent: 'space-between' }}>
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<StartIcon />}
-            onClick={generate}
-            disabled={optimizing || !canOptimize}
-          >
-            {optimizing ? 'Optimizing...' : 'Generate Schedule'}
-          </Button>
+        <Divider sx={{ my: 3 }} />
+        
+        {/* Action Buttons */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Stack direction="row" spacing={2}>
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<StartIcon />}
+              onClick={generate}
+              disabled={optimizing || !canOptimize}
+              size="large"
+            >
+              {optimizing ? 'Optimizing...' : 'Generate Schedule'}
+            </Button>
+            
+            {optimizing && (
+              <Button
+                variant="outlined"
+                color="error"
+                onClick={cancelOptimization}
+              >
+                Cancel
+              </Button>
+            )}
+          </Stack>
           
           {generatedSchedule && !optimizing && (
             <Button
@@ -557,17 +621,7 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
               startIcon={<DashboardIcon />}
               onClick={goToDashboard}
             >
-              Go to Dashboard
-            </Button>
-          )}
-          
-          {optimizing && (
-            <Button
-              variant="outlined"
-              color="error"
-              onClick={cancelOptimization}
-            >
-              Cancel
+              View in Dashboard
             </Button>
           )}
         </Box>
@@ -597,9 +651,9 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
             </Box>
             
             <Typography variant="caption" color="text.secondary">
-              This process may take several minutes depending on the complexity of the schedule.
+              This process may take several minutes depending on the complexity.
               {scheduleType === 'yearly' && ' Yearly schedules take longer to generate than monthly schedules.'}
-              {useWeightOptimization && ' Weight optimization requires additional processing time.'}
+              {scheduleType === 'weight' && ' Weight optimization requires additional processing time.'}
             </Typography>
           </CardContent>
         </Card>
@@ -614,8 +668,8 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
             </Typography>
             
             <Typography variant="body2" color="white" sx={{ mb: 2 }}>
-              {scheduleType === 'monthly' 
-                ? `Monthly schedule for ${getMonthName(month)} ${selectedYear} has been generated.`
+              {scheduleType === 'monthly' || scheduleType === 'weight'
+                ? `Schedule for ${getMonthName(month)} ${selectedYear} has been generated.`
                 : `Yearly schedule for ${selectedYear} has been generated.`}
             </Typography>
             
