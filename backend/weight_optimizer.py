@@ -11,10 +11,14 @@ import logging
 import random
 import copy
 import datetime
+import os
+import sys
+import multiprocessing
 from typing import Dict, List, Any, Tuple, Callable
 import concurrent.futures
 from collections import defaultdict
 import json
+import threading
 
 # Import the optimizers
 from schedule_optimizer import optimize_schedule, ScheduleOptimizer
@@ -26,6 +30,27 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger("WeightOptimizer")
+
+# Helper function to check if we're running in a bundled Electron app
+def is_electron_bundled():
+    """Check if we're running in a bundled Electron application."""
+    # Check for specific environment variables or paths that indicate Electron bundled mode
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        logger.info("Detected Electron bundle: running in PyInstaller frozen environment")
+        return True
+    
+    # Check if running within an ASAR archive (Electron packaging)
+    if os.path.join('app.asar') in os.path.abspath(__file__):
+        logger.info("Detected Electron bundle: running in ASAR archive")
+        return True
+    
+    # Check a common environment variable set in Electron
+    if os.environ.get('ELECTRON_RUN_AS_NODE') is not None:
+        logger.info("Detected Electron environment: ELECTRON_RUN_AS_NODE is set")
+        return True
+    
+    logger.info("Not running in Electron bundled environment")
+    return False
 
 class WeightOptimizer:
     """
@@ -129,6 +154,21 @@ class WeightOptimizer:
 
         # Results storage
         self.results = []
+        
+        # Check if we're running in Electron bundled mode
+        self.is_electron_bundled = is_electron_bundled()
+        if self.is_electron_bundled:
+            logger.info("Running in bundled Electron mode - will use specialized parallelization")
+            
+            # Try to set multiprocessing start method to 'spawn' for Electron compatibility
+            try:
+                multiprocessing.set_start_method('spawn', force=True)
+                logger.info("Successfully set multiprocessing start method to 'spawn'")
+            except RuntimeError as e:
+                # This happens if the context has already been set
+                logger.warning(f"Could not set start method to 'spawn': {e}")
+                current_method = multiprocessing.get_start_method()
+                logger.info(f"Current multiprocessing start method: {current_method}")
 
     def _get_random_weights(self) -> Dict[str, Any]:
         """Generate a random set of weights within the defined ranges."""
@@ -803,10 +843,17 @@ class WeightOptimizer:
         
         # Run optimization with different weights
         if self.parallel_jobs > 1:
-            # Parallel execution
-            self._optimize_parallel(progress_callback)
+            if self.is_electron_bundled:
+                # Use our special bundled app optimization that avoids multiprocessing
+                logger.info("Using bundled app optimization to avoid multiprocessing errors")
+                self._optimize_bundled_app(progress_callback)
+            else:
+                # Normal process-based parallelization for non-Electron
+                logger.info("Using standard process-based parallelization")
+                self._optimize_parallel(progress_callback)
         else:
-            # Sequential execution
+            # Sequential execution (unchanged)
+            logger.info("Using sequential optimization (no parallelization)")
             self._optimize_sequential(progress_callback)
             
         solution_time = time.time() - start_time
@@ -1034,6 +1081,129 @@ class WeightOptimizer:
             # Cancel any remaining futures if we hit time limit
             for future in active_futures:
                 future.cancel()
+
+    def _optimize_bundled_app(self, progress_callback: Callable = None):
+        """
+        Optimization strategy for bundled apps that avoids using ProcessPoolExecutor.
+        Uses threading with chunked work to maximize performance while avoiding socket errors.
+        """
+        start_time = time.time()
+        logger.info(f"Starting bundled app optimization with {self.parallel_jobs} workers")
+        
+        # Generate all weight configurations first
+        weight_configs = []
+        for i in range(self.max_iterations):
+            weights = self._get_random_weights()
+            weight_configs.append((weights, i + 1))
+        
+        # Track iterations completed
+        completed = 0
+        
+        # Initialize tracking for best solution
+        self.best_hard_violations = float('inf')
+        self.best_has_monthly_variance = True
+        self.best_preference_violations = float('inf')
+        self.best_soft_score = float('inf')
+        
+        # Create a lock for thread-safe updates to shared state
+        update_lock = threading.Lock()
+        
+        # Define a worker function that processes a chunk of configurations
+        def process_chunk(chunk_configs):
+            nonlocal completed
+            chunk_results = []
+            
+            for weights, iteration in chunk_configs:
+                # Evaluate this configuration
+                try:
+                    result = self._evaluate_weights(weights, iteration)
+                    chunk_results.append(result)
+                    
+                    # Thread-safe update of shared state
+                    with update_lock:
+                        completed += 1
+                        
+                        current_weights, schedule, stats, total_score, hard_violations, soft_score, \
+                        has_monthly_variance, preference_violations = result
+                        
+                        # Store result
+                        self.results.append({
+                            "weights": copy.deepcopy(current_weights),
+                            "score": total_score,
+                            "hard_violations": hard_violations,
+                            "has_monthly_variance": has_monthly_variance,
+                            "preference_violations": preference_violations,
+                            "soft_score": soft_score,
+                            "stats": {
+                                "availability_violations": stats.get("availability_violations", 0),
+                                "duplicate_doctors": stats.get("duplicate_doctors", 0),
+                                "coverage_errors": stats.get("coverage_errors", 0),
+                                "objective_value": stats.get("objective_value", 0)
+                            }
+                        })
+                        
+                        # Update best if improved
+                        if self._is_better_solution(
+                            hard_violations, has_monthly_variance, preference_violations, soft_score,
+                            self.best_hard_violations, self.best_has_monthly_variance, 
+                            self.best_preference_violations, self.best_soft_score
+                        ):
+                            logger.info(f"New best solution! Score: {total_score:.2f} (was {self.best_score:.2f})")
+                            
+                            self.best_score = total_score
+                            self.best_hard_violations = hard_violations
+                            self.best_has_monthly_variance = has_monthly_variance
+                            self.best_preference_violations = preference_violations
+                            self.best_soft_score = soft_score
+                            self.best_weights = copy.deepcopy(current_weights)
+                            self.best_schedule = copy.deepcopy(schedule)
+                            self.best_stats = copy.deepcopy(stats)
+                            
+                        # Report progress after each evaluation
+                        if progress_callback and completed % max(1, min(5, self.max_iterations // 10)) == 0:
+                            elapsed_time = time.time() - start_time
+                            time_percent = min(100, int(100 * elapsed_time / self.time_limit_seconds))
+                            iter_percent = int(100 * completed / self.max_iterations)
+                            progress = max(time_percent, iter_percent)
+                            
+                            status_msg = f"Completed {completed}/{self.max_iterations}, Best score: {self.best_score:.2f}"
+                            if self.best_hard_violations > 0:
+                                status_msg += f" (WARNING: {self.best_hard_violations} hard violations!)"
+                            elif self.best_has_monthly_variance:
+                                status_msg += f" (Monthly variance > 10h, Preference violations: {self.best_preference_violations})"
+                            else:
+                                status_msg += f" (No hard/monthly violations, Preference violations: {self.best_preference_violations})"
+                            
+                            progress_callback(progress, status_msg)
+                
+                except Exception as e:
+                    logger.error(f"Error evaluating weights: {e}")
+                    with update_lock:
+                        completed += 1
+        
+        # Split work into chunks, one per thread
+        chunk_size = max(1, len(weight_configs) // self.parallel_jobs)
+        chunks = [weight_configs[i:i + chunk_size] for i in range(0, len(weight_configs), chunk_size)]
+        
+        # Create and start threads
+        threads = []
+        for chunk in chunks:
+            thread = threading.Thread(target=process_chunk, args=(chunk,))
+            thread.daemon = True  # Allow the program to exit even if threads are running
+            threads.append(thread)
+            thread.start()
+        
+        # Wait for threads to complete or time limit to be reached
+        elapsed = 0
+        while any(t.is_alive() for t in threads) and elapsed < self.time_limit_seconds:
+            time.sleep(0.5)
+            elapsed = time.time() - start_time
+        
+        # Final progress update
+        if progress_callback:
+            progress_callback(100, f"Completed {completed}/{self.max_iterations}, Best score: {self.best_score:.2f}")
+        
+        logger.info(f"Bundled app optimization completed: processed {completed}/{self.max_iterations} configurations")
 
 
 def optimize_weights(data: Dict[str, Any], progress_callback: Callable = None) -> Dict[str, Any]:
