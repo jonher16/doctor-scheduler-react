@@ -145,15 +145,31 @@ class MonthlyScheduleOptimizer:
             return True
         if date not in self.availability[doctor]:
             return True
+            
         avail = self.availability[doctor][date]
+        
+        # Handle standard statuses
         if avail == "Not Available":
             return False
+        elif avail == "Available":
+            return True
         elif avail == "Day Only":
             return shift == "Day"
         elif avail == "Evening Only":
             return shift == "Evening"
         elif avail == "Night Only":
             return shift == "Night"
+        # Handle new format: "Not Available: Shift1, Shift2, ..."
+        elif avail.startswith("Not Available: "):
+            unavailable_shifts_text = avail[len("Not Available: "):]
+            unavailable_shifts = unavailable_shifts_text.split(", ")
+            return shift not in unavailable_shifts
+        # Handle legacy format: "No Shift1/Shift2"
+        elif avail.startswith("No "):
+            unavailable_shifts = avail[3:].split("/")
+            return shift not in unavailable_shifts
+            
+        # Default to available
         return True
 
     def _is_doctor_available(self, doctor: str, date: str, shift: str) -> bool:

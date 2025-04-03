@@ -458,6 +458,7 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
                       return {};
                     }
                   })()}
+                  availability={window.availability || {}}
                 />
               )}
               {tabValue === 1 && (

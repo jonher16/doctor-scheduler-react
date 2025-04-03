@@ -29,7 +29,10 @@ import {
   Tabs,
   Tab,
   FormControlLabel,
-  Switch
+  Switch,
+  Checkbox,
+  FormGroup,
+  FormHelperText
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -54,7 +57,11 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
   const [newConstraint, setNewConstraint] = useState({
     doctor: '',
     date: '',
-    avail: 'Available'
+    unavailableShifts: {
+      Day: false,
+      Evening: false,
+      Night: false
+    }
   });
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   
@@ -93,7 +100,11 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
     setNewConstraint({
       doctor: '',
       date: isRangeMode ? [null, null] : '',
-      avail: 'Available'
+      unavailableShifts: {
+        Day: false,
+        Evening: false,
+        Night: false
+      }
     });
     setOpenDialog(true);
   };
@@ -122,6 +133,17 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
     });
   };
 
+  // Handle shift checkbox change
+  const handleShiftChange = (event) => {
+    setNewConstraint({
+      ...newConstraint,
+      unavailableShifts: {
+        ...newConstraint.unavailableShifts,
+        [event.target.name]: event.target.checked
+      }
+    });
+  };
+
   // Validate date format (YYYY-MM-DD)
   const isValidDate = (dateString) => {
     const regex = /^\d{4}-\d{2}-\d{2}$/;
@@ -138,12 +160,48 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
            date.getDate() === day;
   };
 
+  // Converts unavailable shifts to availability status
+  const getAvailabilityStatus = (unavailableShifts) => {
+    const { Day, Evening, Night } = unavailableShifts;
+    
+    // Count how many shifts are unavailable
+    const unavailableCount = Object.values(unavailableShifts).filter(Boolean).length;
+    
+    if (unavailableCount === 0) {
+      return "Available";
+    }
+    
+    // All shifts unavailable
+    if (Day && Evening && Night) {
+      return "Not Available";
+    } 
+    
+    // Create a descriptive status consistently showing what shifts are NOT available
+    const unavailableShiftNames = [];
+    if (Day) unavailableShiftNames.push("Day");
+    if (Evening) unavailableShiftNames.push("Evening");
+    if (Night) unavailableShiftNames.push("Night");
+    
+    return `Not Available: ${unavailableShiftNames.join(", ")}`;
+  };
+
   // Handle adding a new constraint
   const addConstraint = () => {
     if (!newConstraint.doctor) {
       setSnackbar({
         open: true,
         message: 'Please select a doctor',
+        severity: 'error'
+      });
+      return;
+    }
+    
+    // Check if at least one shift is marked as unavailable
+    const anyShiftUnavailable = Object.values(newConstraint.unavailableShifts).some(value => value);
+    if (!anyShiftUnavailable) {
+      setSnackbar({
+        open: true,
+        message: 'Please select at least one unavailable shift',
         severity: 'error'
       });
       return;
@@ -178,6 +236,9 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
       let addedCount = 0;
       let updatedCount = 0;
       
+      // Convert unavailable shifts to availability status
+      const availStatus = getAvailabilityStatus(newConstraint.unavailableShifts);
+      
       // Loop through each date in the range
       while (current <= end) {
         const dateStr = current.toISOString().split('T')[0];
@@ -191,7 +252,7 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
           // Update existing constraint
           newConstraints[existingIndex] = {
             ...newConstraints[existingIndex],
-            avail: newConstraint.avail
+            avail: availStatus
           };
           updatedCount++;
         } else {
@@ -199,7 +260,7 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
           newConstraints.push({
             doctor: newConstraint.doctor,
             date: dateStr,
-            avail: newConstraint.avail
+            avail: availStatus
           });
           addedCount++;
         }
@@ -211,7 +272,7 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
       setConstraints(newConstraints);
       setSnackbar({
         open: true,
-        message: `Updated availability for Dr. ${newConstraint.doctor}: ${addedCount} new entries, ${updatedCount} updated entries`,
+        message: `Updated non-availability for Dr. ${newConstraint.doctor}: ${addedCount} new entries, ${updatedCount} updated entries`,
         severity: 'success'
       });
       
@@ -226,6 +287,9 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
         return;
       }
       
+      // Convert unavailable shifts to availability status
+      const availStatus = getAvailabilityStatus(newConstraint.unavailableShifts);
+      
       // Check if constraint already exists
       const existingIndex = constraints.findIndex(
         c => c.doctor === newConstraint.doctor && c.date === newConstraint.date
@@ -236,12 +300,12 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
         const newConstraints = [...constraints];
         newConstraints[existingIndex] = {
           ...newConstraints[existingIndex],
-          avail: newConstraint.avail
+          avail: availStatus
         };
         setConstraints(newConstraints);
         setSnackbar({
           open: true,
-          message: `Updated availability for Dr. ${newConstraint.doctor} on ${newConstraint.date}`,
+          message: `Updated non-availability for Dr. ${newConstraint.doctor} on ${newConstraint.date}`,
           severity: 'info'
         });
       } else {
@@ -249,12 +313,12 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
         const constraintToAdd = {
           doctor: newConstraint.doctor,
           date: newConstraint.date,
-          avail: newConstraint.avail
+          avail: availStatus
         };
         setConstraints([...constraints, constraintToAdd]);
         setSnackbar({
           open: true,
-          message: `Added availability for Dr. ${newConstraint.doctor} on ${newConstraint.date}`,
+          message: `Added non-availability for Dr. ${newConstraint.doctor} on ${newConstraint.date}`,
           severity: 'success'
         });
       }
@@ -278,51 +342,53 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
 
   // Save constraints back to parent component
   const saveConstraints = () => {
-    // Build availability object: { doctor: { date: avail, ... }, ... }
-    const avail = {};
-    constraints.forEach(({ doctor, date, avail: a }) => {
-      if (!avail[doctor]) avail[doctor] = {};
-      avail[doctor][date] = a;
+    const newAvailability = {};
+    
+    constraints.forEach(constraint => {
+      // Initialize doctor if not already in newAvailability
+      if (!newAvailability[constraint.doctor]) {
+        newAvailability[constraint.doctor] = {};
+      }
+      
+      // Add/update date for this doctor
+      newAvailability[constraint.doctor][constraint.date] = constraint.avail;
     });
-    setAvailability(avail);
+    
+    setAvailability(newAvailability);
     setSnackbar({
       open: true,
-      message: 'Doctor availability saved successfully!',
+      message: 'Availability constraints saved successfully',
       severity: 'success'
     });
   };
-
-  // Handle closing snackbar
+  
+  // Close snackbar
   const handleCloseSnackbar = (event, reason) => {
     if (reason === 'clickaway') {
       return;
     }
     setSnackbar({ ...snackbar, open: false });
   };
-
+  
   // Get color for availability chip
   const getAvailabilityColor = (avail) => {
-    switch(avail) {
-      case 'Available':
-        return 'success';
+    if (avail.startsWith("Not Available: ")) {
+      return "warning";  // Use warning color for partial unavailability
+    }
+    
+    switch (avail) {
       case 'Not Available':
         return 'error';
-      case 'Day Only':
-        return 'primary';
-      case 'Evening Only':
-        return 'info';
-      case 'Night Only':
-        return 'secondary';
+      case 'Available':
+        return 'success';
       default:
         return 'default';
     }
   };
-
-  // Handle changing view mode
+  
+  // Handle view mode change
   const handleViewModeChange = (event, newMode) => {
-    if (newMode) {
-      setViewMode(newMode);
-    }
+    setViewMode(newMode);
   };
 
   return (
@@ -333,7 +399,7 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
       
       <Box sx={{ mb: 3 }}>
         <Typography variant="body1" color="text.secondary" paragraph>
-          Manage individual doctor availability and shift preferences for specific dates. This helps in creating optimal schedules that accommodate doctor needs.
+          Manage individual doctor non-availability for specific dates and shifts. By default, doctors are considered available for all shifts on all days unless specified otherwise.
         </Typography>
       </Box>
 
@@ -365,8 +431,9 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
             startIcon={<CalendarTodayIcon />}
             onClick={handleOpenDialog}
             sx={{ mr: 2 }}
+            color="error"
           >
-            Add Availability
+            Mark As Unavailable
           </Button>
           <Button
             variant="outlined"
@@ -381,22 +448,22 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
 
       {/* Table View */}
       {viewMode === 'table' && (
-        <TableContainer component={Paper} sx={{ mb: 4 }}>
-          <Table sx={{ minWidth: 650 }}>
+        <TableContainer component={Paper}>
+          <Table size="small">
             <TableHead>
-              <TableRow sx={{ backgroundColor: 'primary.light' }}>
-                <TableCell sx={{ fontWeight: 'bold', color: 'white' }}>Doctor</TableCell>
-                <TableCell sx={{ fontWeight: 'bold', color: 'white' }}>Date</TableCell>
-                <TableCell sx={{ fontWeight: 'bold', color: 'white' }}>Availability</TableCell>
-                <TableCell sx={{ fontWeight: 'bold', color: 'white' }}>Actions</TableCell>
+              <TableRow>
+                <TableCell><Typography variant="subtitle2">Doctor</Typography></TableCell>
+                <TableCell><Typography variant="subtitle2">Date</Typography></TableCell>
+                <TableCell><Typography variant="subtitle2">Availability</Typography></TableCell>
+                <TableCell><Typography variant="subtitle2">Actions</Typography></TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {constraints.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={4} align="center">
-                    <Typography variant="body1" sx={{ py: 2 }}>
-                      No availability constraints set. Add availability constraints to get started.
+                    <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
+                      No availability constraints added yet. By default, all doctors are available on all dates.
                     </Typography>
                   </TableCell>
                 </TableRow>
@@ -448,10 +515,10 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
         />
       )}
 
-      {/* Add Availability Dialog */}
+      {/* Add Non-Availability Dialog */}
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
         <DialogTitle>
-          {isRangeMode ? 'Add Availability Range' : 'Add Doctor Availability'}
+          {isRangeMode ? 'Add Non-Availability Range' : 'Add Doctor Non-Availability'}
         </DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
@@ -497,21 +564,47 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
               />
             </Grid>
             <Grid item xs={12}>
-              <FormControl fullWidth>
-                <InputLabel id="availability-label">Availability</InputLabel>
-                <Select
-                  labelId="availability-label"
-                  value={newConstraint.avail}
-                  label="Availability"
-                  onChange={(e) => setNewConstraint({...newConstraint, avail: e.target.value})}
-                >
-                  <MenuItem value="Available">Available</MenuItem>
-                  <MenuItem value="Not Available">Not Available</MenuItem>
-                  <MenuItem value="Day Only">Day Shift Only</MenuItem>
-                  <MenuItem value="Evening Only">Evening Shift Only</MenuItem>
-                  <MenuItem value="Night Only">Night Shift Only</MenuItem>
-                </Select>
-              </FormControl>
+              <Typography variant="subtitle1" gutterBottom>
+                Select Shifts NOT Available:
+              </Typography>
+              <FormGroup>
+                <FormControlLabel
+                  control={
+                    <Checkbox 
+                      checked={newConstraint.unavailableShifts.Day}
+                      onChange={handleShiftChange}
+                      name="Day"
+                      color="primary"
+                    />
+                  }
+                  label="Day Shift"
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox 
+                      checked={newConstraint.unavailableShifts.Evening}
+                      onChange={handleShiftChange}
+                      name="Evening"
+                      color="success"
+                    />
+                  }
+                  label="Evening Shift"
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox 
+                      checked={newConstraint.unavailableShifts.Night}
+                      onChange={handleShiftChange}
+                      name="Night"
+                      color="secondary"
+                    />
+                  }
+                  label="Night Shift"
+                />
+              </FormGroup>
+              <FormHelperText>
+                Note: By default, doctors are available for all shifts. Select the shifts this doctor CANNOT work on the selected date(s).
+              </FormHelperText>
             </Grid>
           </Grid>
         </DialogContent>

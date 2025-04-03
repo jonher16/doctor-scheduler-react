@@ -37,7 +37,36 @@ import {
 } from '@mui/icons-material';
 import { getMonthName } from '../utils/dateUtils';
 
-function MonthlyCalendarView({ doctors, schedule, holidays, onScheduleUpdate, selectedMonth, selectedYear, shiftTemplate = {} }) {
+// Helper to generate random colors
+const getRandomColor = (seed = 0) => {
+  // This ensures the same doctor always gets the same color
+  const colors = [
+    '#42A5F5', // blue
+    '#66BB6A', // green
+    '#FFA726', // orange
+    '#EC407A', // pink
+    '#AB47BC', // purple
+    '#26C6DA', // cyan
+    '#8D6E63', // brown
+    '#5C6BC0', // indigo
+    '#78909C', // blue-grey
+    '#29B6F6', // light blue
+    '#26A69A', // teal
+    '#D4E157'  // lime
+  ];
+  return colors[seed % colors.length];
+};
+
+// Function to convert string to integer hash for color selection
+const stringToHashCode = (str) => {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return Math.abs(hash);
+};
+
+function MonthlyCalendarView({ doctors, schedule, holidays, onScheduleUpdate, selectedMonth, selectedYear, shiftTemplate = {}, availability = {} }) {
   const [calendarDays, setCalendarDays] = useState([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingDay, setEditingDay] = useState(null);
@@ -351,8 +380,52 @@ function MonthlyCalendarView({ doctors, schedule, holidays, onScheduleUpdate, se
   
   // Helper to check if doctor is available for a shift
   const isDoctorAvailable = (doctorName, date, shift) => {
-    // A placeholder for doctor availability logic
-    // This should be implemented based on your application's availability data
+    // If we don't have availability data, assume the doctor is available
+    if (!doctors) return true;
+    
+    // Find doctor in the doctors list to check if they exist
+    const doctorExists = doctors.find(d => d.name === doctorName);
+    if (!doctorExists) return false;
+    
+    // Check if the doctor has any availability constraints for this date
+    if (availability && availability[doctorName] && availability[doctorName][date]) {
+      const status = availability[doctorName][date];
+      
+      // Return availability based on shift and status
+      if (status === 'Not Available') {
+        // Doctor is not available for any shift
+        return false;
+      }
+      else if (status === 'Available') {
+        // Doctor is available for all shifts
+        return true;
+      }
+      else if (status.startsWith('Not Available: ')) {
+        // Format is "Not Available: Shift1, Shift2, ..."
+        const unavailableShiftsText = status.substring('Not Available: '.length);
+        const unavailableShifts = unavailableShiftsText.split(', ');
+        return !unavailableShifts.includes(shift);
+      }
+      // Handle legacy formats for backward compatibility
+      else if (status === 'Day Only') {
+        return shift === 'Day';
+      }
+      else if (status === 'Evening Only') {
+        return shift === 'Evening';
+      }
+      else if (status === 'Night Only') {
+        return shift === 'Night';
+      }
+      else if (status.startsWith('No ')) {
+        const unavailableShifts = status.substring(3).split('/');
+        return !unavailableShifts.includes(shift);
+      }
+      
+      // Default to available
+      return true;
+    }
+    
+    // If no specific availability is set for this doctor on this date, they are available by default
     return true;
   };
 

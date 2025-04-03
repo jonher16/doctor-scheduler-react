@@ -38,10 +38,7 @@ function DoctorAvailabilityCalendar({ doctors, availability, initialYear }) {
   // Colors for different availability types
   const availabilityColors = {
     'Available': '#4caf50',
-    'Not Available': '#f44336',
-    'Day Only': '#2196f3',
-    'Evening Only': '#9c27b0',
-    'Night Only': '#ff9800'
+    'Not Available': '#f44336'
   };
 
   useEffect(() => {
@@ -150,20 +147,46 @@ function DoctorAvailabilityCalendar({ doctors, availability, initialYear }) {
     setSelectedDoctor(event.target.value);
   };
   
+  // Get color for an availability status
+  const getAvailabilityColor = (status) => {
+    if (status.startsWith('Not Available: ')) {
+      return '#ff9800'; // Use warning color (orange) for partial unavailability
+    }
+    
+    return availabilityColors[status] || '#4caf50'; // Default to available (green)
+  };
+
   // Get availability summary for a day, including doctor names
   const getAvailabilitySummary = (doctorAvailability) => {
+    // Initialize summary with default categories
     const summary = {
       'Available': { count: 0, doctors: [] },
-      'Not Available': { count: 0, doctors: [] },
-      'Day Only': { count: 0, doctors: [] },
-      'Evening Only': { count: 0, doctors: [] },
-      'Night Only': { count: 0, doctors: [] }
+      'Not Available': { count: 0, doctors: [] }
+      // Custom "Not Available: X, Y" statuses will be added dynamically
     };
     
     Object.entries(doctorAvailability).forEach(([doctor, avail]) => {
+      // Handle standard availability types
       if (summary[avail] !== undefined) {
         summary[avail].count++;
         summary[avail].doctors.push(doctor);
+      } 
+      // Handle "Not Available: X, Y" statuses
+      else if (avail.startsWith('Not Available: ')) {
+        if (!summary[avail]) {
+          summary[avail] = { count: 0, doctors: [] };
+        }
+        summary[avail].count++;
+        summary[avail].doctors.push(doctor);
+      }
+      // Handle legacy formats for backward compatibility
+      else if (avail === 'Day Only' || avail === 'Evening Only' || avail === 'Night Only' || avail.startsWith('No ')) {
+        const legacyKey = avail;
+        if (!summary[legacyKey]) {
+          summary[legacyKey] = { count: 0, doctors: [] };
+        }
+        summary[legacyKey].count++;
+        summary[legacyKey].doctors.push(doctor);
       }
     });
     
@@ -181,7 +204,7 @@ function DoctorAvailabilityCalendar({ doctors, availability, initialYear }) {
             size="small" 
             label={availability} 
             sx={{ 
-              bgcolor: availabilityColors[availability],
+              bgcolor: getAvailabilityColor(availability),
               color: 'white',
               fontSize: '0.7rem',
               height: '20px'
@@ -217,7 +240,7 @@ function DoctorAvailabilityCalendar({ doctors, availability, initialYear }) {
                 <Box sx={{ 
                   width: '100%', 
                   height: '4px', 
-                  bgcolor: availabilityColors[avail],
+                  bgcolor: getAvailabilityColor(avail),
                   borderRadius: '2px',
                   opacity: count > 0 ? 1 : 0.3,
                   cursor: 'pointer'
@@ -257,28 +280,27 @@ function DoctorAvailabilityCalendar({ doctors, availability, initialYear }) {
       <Paper elevation={3} sx={{ p: 2, mb: 4 }}>
         {/* Calendar header with month/year and navigation */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <IconButton onClick={prevMonth} size="small">
+          <IconButton onClick={prevMonth}>
             <ChevronLeftIcon />
           </IconButton>
           <Typography variant="h6">
             {monthNames[currentMonth]} {currentYear}
           </Typography>
-          <IconButton onClick={nextMonth} size="small">
+          <IconButton onClick={nextMonth}>
             <ChevronRightIcon />
           </IconButton>
         </Box>
         
-        {/* Day names header */}
+        {/* Calendar days header */}
         <Grid container spacing={1} sx={{ mb: 1 }}>
           {dayNames.map((day, index) => (
             <Grid item xs={12/7} key={index}>
               <Typography 
-                variant="caption" 
+                variant="subtitle2" 
                 align="center" 
                 sx={{ 
-                  fontWeight: 'bold', 
-                  display: 'block',
-                  color: index === 0 || index === 6 ? 'error.main' : 'inherit'
+                  fontWeight: 'bold',
+                  color: (index === 0 || index === 6) ? 'error.main' : 'inherit'
                 }}
               >
                 {day}
@@ -287,7 +309,7 @@ function DoctorAvailabilityCalendar({ doctors, availability, initialYear }) {
           ))}
         </Grid>
         
-        {/* Calendar grid */}
+        {/* Calendar days grid */}
         <Grid container spacing={1}>
           {calendarDays.map((dayObj, index) => (
             <Grid item xs={12/7} key={index}>
@@ -323,19 +345,29 @@ function DoctorAvailabilityCalendar({ doctors, availability, initialYear }) {
                     
                     {/* Show number of available doctors when in "all" view */}
                     {selectedDoctor === 'all' && (
-                      <Typography 
-                        variant="caption" 
-                        align="center" 
-                        sx={{ 
-                          position: 'absolute',
-                          bottom: 2,
-                          right: 4,
-                          fontSize: '0.6rem',
-                          color: 'text.secondary'
-                        }}
+                      <Tooltip 
+                        title={
+                          <Typography variant="caption">
+                            {Object.values(dayObj.doctorAvailability).filter(a => a === 'Available').length} fully available doctors
+                          </Typography>
+                        }
                       >
-                        {Object.values(dayObj.doctorAvailability).filter(status => status !== 'Not Available').length} / {Object.keys(dayObj.doctorAvailability).length} docs
-                      </Typography>
+                        <Box sx={{ 
+                          position: 'absolute', 
+                          bottom: 2, 
+                          right: 2,
+                          backgroundColor: 'background.default',
+                          borderRadius: '50%',
+                          width: 20,
+                          height: 20,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '0.7rem'
+                        }}>
+                          {Object.values(dayObj.doctorAvailability).filter(a => a === 'Available').length}
+                        </Box>
+                      </Tooltip>
                     )}
                   </>
                 )}
@@ -343,34 +375,50 @@ function DoctorAvailabilityCalendar({ doctors, availability, initialYear }) {
             </Grid>
           ))}
         </Grid>
+        
+        {/* Legend */}
+        <Box sx={{ mt: 3, display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+          <Typography variant="subtitle2" sx={{ width: '100%', mb: 1 }}>
+            Legend:
+          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <Box sx={{ 
+              width: 16, 
+              height: 16, 
+              backgroundColor: availabilityColors['Available'],
+              marginRight: 1
+            }} />
+            <Typography variant="caption">
+              Available
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <Box sx={{ 
+              width: 16, 
+              height: 16, 
+              backgroundColor: availabilityColors['Not Available'],
+              marginRight: 1
+            }} />
+            <Typography variant="caption">
+              Not Available (All Shifts)
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <Box sx={{ 
+              width: 16, 
+              height: 16, 
+              backgroundColor: '#ff9800',
+              marginRight: 1
+            }} />
+            <Typography variant="caption">
+              Partially Not Available
+            </Typography>
+          </Box>
+          <Typography variant="body2" color="text.secondary" sx={{ width: '100%', mt: 1, fontSize: '0.75rem' }}>
+            Note: By default, all doctors are considered available on all days for all shifts unless specified otherwise.
+          </Typography>
+        </Box>
       </Paper>
-      
-      {/* Legend */}
-      <Paper elevation={1} sx={{ p: 2, mb: 2 }}>
-        <Typography variant="subtitle2" gutterBottom>
-          Availability Legend
-        </Typography>
-        <Divider sx={{ mb: 1 }} />
-        <Grid container spacing={1}>
-          {Object.entries(availabilityColors).map(([type, color]) => (
-            <Grid item xs={6} sm={4} md={2} key={type}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Box sx={{ width: 16, height: 16, borderRadius: '50%', bgcolor: color }} />
-                <Typography variant="caption">{type}</Typography>
-              </Box>
-            </Grid>
-          ))}
-        </Grid>
-      </Paper>
-      
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', mt: 2 }}>
-        <InfoIcon color="info" fontSize="small" sx={{ mr: 1 }} />
-        <Typography variant="caption" color="text.secondary">
-          {selectedDoctor === 'all' 
-            ? "The colored bars indicate how many doctors have each availability type for that day." 
-            : "The chip shows the selected doctor's availability for each day."}
-        </Typography>
-      </Box>
     </Box>
   );
 }
