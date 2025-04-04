@@ -26,11 +26,14 @@ function EnhancedCalendar({
   
   // Parse the initial date(s) if provided or use current date + 1 month
   const parseInitialDate = () => {
+    const currentDate = new Date();
+    const systemYear = currentDate.getFullYear();
+    
     // If explicit initialMonth is provided, use it
     if (initialMonth !== undefined) {
       const month = Number(initialMonth);
       if (!isNaN(month) && month >= 0 && month <= 11) {
-        const year = initialYear ? Number(initialYear) : new Date().getFullYear();
+        const year = initialYear ? Number(initialYear) : systemYear;
         return new Date(year, month, 1);
       }
     }
@@ -41,6 +44,10 @@ function EnhancedCalendar({
       if (isRangeMode && Array.isArray(value) && value.length === 2 && value[0]) {
         const [year, month, day] = value[0].split('-').map(Number);
         if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+          // If year doesn't match initialYear, default to January
+          if (initialYear && year !== Number(initialYear)) {
+            return new Date(Number(initialYear), 0, 1); // January 1st of initialYear
+          }
           return new Date(year, month - 1, day);
         }
       }
@@ -48,22 +55,31 @@ function EnhancedCalendar({
       else if (typeof value === 'string' && value) {
         const [year, month, day] = value.split('-').map(Number);
         if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+          // If year doesn't match initialYear, default to January
+          if (initialYear && year !== Number(initialYear)) {
+            return new Date(Number(initialYear), 0, 1); // January 1st of initialYear
+          }
           return new Date(year, month - 1, day);
         }
       }
     }
     
-    // Default: current month + 1 (next month)
-    const currentDate = new Date();
+    // Default: current month + 1 (next month) or January if year doesn't match system year
     if (initialYear) {
+      const yearNum = Number(initialYear);
+      // If initialYear doesn't match system year, default to January
+      if (yearNum !== systemYear) {
+        return new Date(yearNum, 0, 1); // January 1st of initialYear
+      }
+      
       // Use the specified year with next month
       const nextMonth = (currentDate.getMonth() + 1) % 12;
-      const yearToUse = nextMonth === 0 ? Number(initialYear) + 1 : Number(initialYear);
+      const yearToUse = nextMonth === 0 ? yearNum + 1 : yearNum;
       return new Date(yearToUse, nextMonth, 1);
     } else {
       // Fallback to current year and next month
       const nextMonth = (currentDate.getMonth() + 1) % 12;
-      const yearToUse = nextMonth === 0 ? currentDate.getFullYear() + 1 : currentDate.getFullYear();
+      const yearToUse = nextMonth === 0 ? systemYear + 1 : systemYear;
       return new Date(yearToUse, nextMonth, 1);
     }
   };

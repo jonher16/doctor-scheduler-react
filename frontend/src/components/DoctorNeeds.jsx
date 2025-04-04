@@ -86,6 +86,12 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
         
         // Iterate through each date for this doctor
         Object.keys(doctorAvailability).forEach(date => {
+          // Check if the date matches the selected year
+          const dateYear = date.split('-')[0];
+          if (dateYear !== selectedYear.toString()) {
+            return; // Skip dates that don't match the selected year
+          }
+          
           const availStatus = doctorAvailability[date];
           // Only add constraints for non-available days
           if (availStatus !== 'Available') {
@@ -100,7 +106,7 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
       
       setConstraints(constraintsArray);
     }
-  }, [availability]);
+  }, [availability, selectedYear]);
 
   // Merge consecutive days of the same non-availability type
   useEffect(() => {
@@ -510,6 +516,7 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
 
   // Save constraints back to parent component
   const saveConstraints = () => {
+    // Create new availability object only with entries for the current year
     const newAvailability = {};
     
     constraints.forEach(constraint => {
@@ -521,6 +528,23 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
       // Add/update date for this doctor
       newAvailability[constraint.doctor][constraint.date] = constraint.avail;
     });
+    
+    // Preserve entries from other years that aren't in our constraints
+    if (availability) {
+      Object.entries(availability).forEach(([doctor, dates]) => {
+        if (!newAvailability[doctor]) {
+          newAvailability[doctor] = {};
+        }
+        
+        Object.entries(dates).forEach(([date, avail]) => {
+          // Only keep dates from other years (current year dates come from constraints)
+          const dateYear = date.split('-')[0];
+          if (dateYear !== selectedYear.toString()) {
+            newAvailability[doctor][date] = avail;
+          }
+        });
+      });
+    }
     
     setAvailability(newAvailability);
     setSnackbar({

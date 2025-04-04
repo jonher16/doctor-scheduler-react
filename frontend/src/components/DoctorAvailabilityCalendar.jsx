@@ -127,6 +127,7 @@ function DoctorAvailabilityCalendar({ doctors, availability, initialYear, setAva
         // Get availability for all doctors
         doctors.forEach(doc => {
           const doctorName = doc.name;
+          // Filter availability by current year - only check dates that match the current year
           if (localAvailability[doctorName] && localAvailability[doctorName][date]) {
             doctorAvailability[doctorName] = localAvailability[doctorName][date];
           } else {
@@ -135,6 +136,7 @@ function DoctorAvailabilityCalendar({ doctors, availability, initialYear, setAva
         });
       } else {
         // Get availability for selected doctor
+        // Filter availability by current year - only check dates that match the current year
         if (localAvailability[selectedDoctor] && localAvailability[selectedDoctor][date]) {
           doctorAvailability[selectedDoctor] = localAvailability[selectedDoctor][date];
         } else {

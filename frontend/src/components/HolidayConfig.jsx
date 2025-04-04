@@ -148,25 +148,32 @@ function HolidayConfig({ holidays, setHolidays }) {
 
   // Group consecutive holidays of the same type
   useEffect(() => {
-    const holidayArray = Object.entries(localHolidays).map(([date, type]) => ({
-      date,
-      type
-    })).sort((a, b) => a.date.localeCompare(b.date));
+    // First filter holidays by the selected year
+    const filteredHolidays = Object.entries(localHolidays)
+      .filter(([date, _]) => {
+        const dateYear = date.split('-')[0];
+        return dateYear === selectedYear.toString();
+      })
+      .map(([date, type]) => ({
+        date,
+        type
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
     
     const mergedArray = [];
     
-    if (holidayArray.length === 0) {
+    if (filteredHolidays.length === 0) {
       setMergedHolidays([]);
       return;
     }
     
     let currentGroup = {
-      type: holidayArray[0].type,
-      dates: [holidayArray[0].date]
+      type: filteredHolidays[0].type,
+      dates: [filteredHolidays[0].date]
     };
     
-    for (let i = 1; i < holidayArray.length; i++) {
-      const current = holidayArray[i];
+    for (let i = 1; i < filteredHolidays.length; i++) {
+      const current = filteredHolidays[i];
       const lastDateInGroup = currentGroup.dates[currentGroup.dates.length - 1];
       
       // Check if this holiday is consecutive and has the same type
@@ -199,7 +206,7 @@ function HolidayConfig({ holidays, setHolidays }) {
     });
     
     setMergedHolidays(mergedArray);
-  }, [localHolidays]);
+  }, [localHolidays, selectedYear]);
 
   // Handle editing a holiday group
   const handleEditHoliday = (index) => {
