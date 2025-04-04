@@ -28,7 +28,6 @@ import {
   PlayArrow as StartIcon,
   Dashboard as DashboardIcon,
   Tune as TuneIcon,
-  EventNote as EventNoteIcon,
 } from '@mui/icons-material';
 import { getMonthName } from '../utils/dateUtils';
 import { useYear } from '../contexts/YearContext';
@@ -36,9 +35,9 @@ import { useYear } from '../contexts/YearContext';
 const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl }) => {
   const { selectedYear } = useYear();
 
-  // Schedule type: 'monthly', 'weight', or 'yearly' (yearly is commented out)
+  // Schedule type: 'monthly' or 'weight'
   const [scheduleType, setScheduleType] = useState('monthly');
-  const [month, setMonth] = useState(new Date().getMonth() + 1); // Current month (1-12)
+  const [month, setMonth] = useState(new Date().getMonth() + 2); // Current month (1-12)
   const [optimizing, setOptimizing] = useState(false);
   const [taskId, setTaskId] = useState(null);
   const [progress, setProgress] = useState(0);
@@ -100,10 +99,8 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
       
       if (scheduleType === 'weight') {
         await generateWithWeightOptimization();
-      } else if (scheduleType === 'monthly') {
-        await generateMonthlySchedule();
       } else {
-        await generateYearlySchedule();
+        await generateMonthlySchedule();
       }
     } catch (error) {
       console.error('Error generating schedule:', error);
@@ -111,28 +108,6 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
       setOptimizing(false);
       setProgress(0);
       setProgressMessage('');
-    }
-  };
-
-  // Generate yearly schedule
-  const generateYearlySchedule = async () => {
-    try {
-      abortControllerRef.current = new AbortController();
-      const { signal } = abortControllerRef.current;
-      const result = await generateOptimizedSchedule('/optimize', {
-        doctors,
-        holidays,
-        availability,
-        scheduling_mode: 'yearly',
-        year: selectedYear,
-        signal
-      });
-      
-      handleScheduleResult(result);
-    } catch (error) {
-      console.error('Yearly optimization API error:', error);
-      setError(error.toString());
-      setOptimizing(false);
     }
   };
 
@@ -153,7 +128,6 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
         doctors,
         holidays,
         availability,
-        scheduling_mode: 'monthly',
         month,
         year: selectedYear,
         shift_template: shiftTemplate
@@ -386,12 +360,6 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
           description: 'Advanced option that tries multiple weight configurations to find the best possible schedule. Takes longer but may produce better results.',
           icon: <TuneIcon fontSize="large" color="primary" />,
         };
-      case 'yearly':
-        return {
-          title: 'Yearly Schedule',
-          description: 'Generate a schedule for the entire year at once. This option takes longer and is more resource-intensive.',
-          icon: <EventNoteIcon fontSize="large" color="primary" />,
-        };
       default:
         return {
           title: 'Monthly Schedule',
@@ -454,12 +422,6 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
                   control={<Radio />} 
                   label="Monthly Schedule with Weight Optimization" 
                 />
-                {/* Yearly option commented out as requested */}
-                {/* <FormControlLabel 
-                  value="yearly" 
-                  control={<Radio />} 
-                  label="Yearly Schedule (Full Year)" 
-                /> */}
               </RadioGroup>
             </FormControl>
           </Grid>
@@ -652,7 +614,6 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
             
             <Typography variant="caption" color="text.secondary">
               This process may take several minutes depending on the complexity.
-              {scheduleType === 'yearly' && ' Yearly schedules take longer to generate than monthly schedules.'}
               {scheduleType === 'weight' && ' Weight optimization requires additional processing time.'}
             </Typography>
           </CardContent>
@@ -668,9 +629,7 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
             </Typography>
             
             <Typography variant="body2" color="white" sx={{ mb: 2 }}>
-              {scheduleType === 'monthly' || scheduleType === 'weight'
-                ? `Schedule for ${getMonthName(month)} ${selectedYear} has been generated.`
-                : `Yearly schedule for ${selectedYear} has been generated.`}
+              {`Schedule for ${getMonthName(month)} ${selectedYear} has been generated.`}
             </Typography>
             
             <Button

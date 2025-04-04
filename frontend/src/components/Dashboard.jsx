@@ -31,7 +31,7 @@ import {
 } from '@mui/icons-material';
 import MonthlyHours from './MonthlyHours';
 import WeekendHolidayBalance from './WeekendHolidayBalance';
-import YearlySummary from './YearlySummary';
+
 import MonthlyCalendarView from './MonthlyCalendarView';
 import ExcelExportButton from './ExcelExportButton';
 import DoctorShiftTypesChart from './DoctorShiftTypesChart';
@@ -432,12 +432,6 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
                 label="Constraint Violations" 
                 iconPosition="start" 
               />
-              {/* Deactivate temporarily until yearly scheduling its fixed */}
-              {/* <Tab 
-                icon={<AnalyticsIcon />} 
-                label="Yearly Summary" 
-                iconPosition="start" 
-              /> */}
               
             </Tabs>
             
@@ -496,15 +490,6 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
               />
                 
               )}
-              {/* Deactivate temporarily until yearly scheduling its fixed */}
-              {/* {tabValue === 5 && (
-                <YearlySummary 
-                doctors={localDoctors} 
-                schedule={localSchedule} 
-                holidays={localHolidays}
-                selectedYear={scheduleYear}
-              />
-              )} */}
             </Box>
           </Paper>
           

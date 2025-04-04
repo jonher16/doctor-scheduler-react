@@ -21,7 +21,6 @@ import time
 
 
 # Import the optimizers
-from schedule_optimizer import optimize_schedule, ScheduleOptimizer
 from monthly_schedule_optimizer import optimize_monthly_schedule, MonthlyScheduleOptimizer
 from weight_optimizer import optimize_weights
 
@@ -189,9 +188,6 @@ def optimize():
             
             # Run monthly optimization
             result = optimize_monthly_schedule(data, progress_callback=update_progress)
-        else:
-            # Run yearly optimization
-            result = optimize_schedule(data, progress_callback=update_progress)
         
         # Check for errors from the optimizer
         if "error" in result and result["error"]:
@@ -282,9 +278,7 @@ def previous_runs():
                 filepath = os.path.join(RESULTS_DIR, filename)
                 
                 # Extract timestamp and scheduling mode
-                scheduling_mode = "yearly"
-                if filename.startswith("monthly_optimization_"):
-                    scheduling_mode = "monthly"
+                scheduling_mode = "monthly"
                     
                 timestamp_part = filename.split("_")[2] if scheduling_mode == "yearly" else filename.split("_")[2]
                 timestamp = timestamp_part.split(".")[0]
