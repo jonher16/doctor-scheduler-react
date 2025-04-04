@@ -41,6 +41,7 @@ import {
 import EnhancedCalendar from './EnhancedCalendar';
 import HolidayCalendar from './HolidayCalendar';
 import { useYear } from '../contexts/YearContext';
+
 function HolidayConfig({ holidays, setHolidays }) {
   const { selectedYear } = useYear();
   const [localHolidays, setLocalHolidays] = useState(holidays);
@@ -56,6 +57,26 @@ function HolidayConfig({ holidays, setHolidays }) {
   
   // Add state for view mode (table or calendar)
   const [viewMode, setViewMode] = useState('calendar'); // Default to calendar view
+
+  // Get the current month's index (0-11)
+  const getCurrentMonth = () => {
+    return new Date().getMonth();
+  };
+
+  // Get the next month's index (0-11)
+  const getNextMonth = () => {
+    return (getCurrentMonth() + 1) % 12;
+  };
+
+  // Get month from a date string in format 'YYYY-MM-DD'
+  const getMonthFromDateString = (dateString) => {
+    if (!dateString) return null;
+    const [year, month, day] = dateString.split('-').map(Number);
+    if (!isNaN(month)) {
+      return month - 1; // Convert from 1-12 to 0-11
+    }
+    return null;
+  };
 
   // Update local state when holidays prop changes
   useEffect(() => {
@@ -381,6 +402,13 @@ function HolidayConfig({ holidays, setHolidays }) {
                 minDate={new Date().toISOString().split('T')[0]} // Today as min date
                 isRangeMode={isRangeMode}
                 initialYear={selectedYear}
+                initialMonth={
+                  isRangeMode && Array.isArray(selectedDate) && selectedDate[0]
+                    ? getMonthFromDateString(selectedDate[0])
+                    : typeof selectedDate === 'string' && selectedDate
+                      ? getMonthFromDateString(selectedDate)
+                      : getNextMonth()
+                }
               />
             </Grid>
             <Grid item xs={12}>

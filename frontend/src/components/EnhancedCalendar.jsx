@@ -14,24 +14,58 @@ import {
 } from '@mui/icons-material';
 import { isLeapYear, getDaysInMonth, monthNames, dayNames } from '../utils/dateUtils';
 
-function EnhancedCalendar({ value, onChange, minDate, maxDate, isRangeMode = false, initialYear }) {
+function EnhancedCalendar({ 
+  value, 
+  onChange, 
+  minDate, 
+  maxDate, 
+  isRangeMode = false, 
+  initialYear,
+  initialMonth
+}) {
   
-  // Parse the initial date(s) if provided or use current date
+  // Parse the initial date(s) if provided or use current date + 1 month
   const parseInitialDate = () => {
+    // If explicit initialMonth is provided, use it
+    if (initialMonth !== undefined) {
+      const month = Number(initialMonth);
+      if (!isNaN(month) && month >= 0 && month <= 11) {
+        const year = initialYear ? Number(initialYear) : new Date().getFullYear();
+        return new Date(year, month, 1);
+      }
+    }
+    
+    // If in edit mode (value is provided), show the month of the days being edited
     if (value) {
       // For date range mode
-      if (isRangeMode && Array.isArray(value) && value.length === 2) {
-        return new Date(value[0] || new Date(initialYear, 0, 1));
+      if (isRangeMode && Array.isArray(value) && value.length === 2 && value[0]) {
+        const [year, month, day] = value[0].split('-').map(Number);
+        if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+          return new Date(year, month - 1, day);
+        }
       }
       // For single date mode
-      else if (typeof value === 'string') {
+      else if (typeof value === 'string' && value) {
         const [year, month, day] = value.split('-').map(Number);
         if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
           return new Date(year, month - 1, day);
         }
       }
     }
-    return new Date(initialYear, 0, 1);
+    
+    // Default: current month + 1 (next month)
+    const currentDate = new Date();
+    if (initialYear) {
+      // Use the specified year with next month
+      const nextMonth = (currentDate.getMonth() + 1) % 12;
+      const yearToUse = nextMonth === 0 ? Number(initialYear) + 1 : Number(initialYear);
+      return new Date(yearToUse, nextMonth, 1);
+    } else {
+      // Fallback to current year and next month
+      const nextMonth = (currentDate.getMonth() + 1) % 12;
+      const yearToUse = nextMonth === 0 ? currentDate.getFullYear() + 1 : currentDate.getFullYear();
+      return new Date(yearToUse, nextMonth, 1);
+    }
   };
 
   const [currentDate, setCurrentDate] = useState(parseInitialDate());
@@ -53,7 +87,7 @@ function EnhancedCalendar({ value, onChange, minDate, maxDate, isRangeMode = fal
       setRangeStart(start);
       setRangeEnd(end);
       
-      // Set the current view to the first date in the range
+      // Set the current view to the first date in the range if it exists
       if (start) {
         const [year, month, day] = start.split('-').map(Number);
         if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {

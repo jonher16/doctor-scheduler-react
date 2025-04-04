@@ -525,6 +525,26 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
     setViewMode(newMode);
   };
 
+  // Get the current month's index (0-11)
+  const getCurrentMonth = () => {
+    return new Date().getMonth();
+  };
+
+  // Get the next month's index (0-11)
+  const getNextMonth = () => {
+    return (getCurrentMonth() + 1) % 12;
+  };
+
+  // Get month from a date string in format 'YYYY-MM-DD'
+  const getMonthFromDateString = (dateString) => {
+    if (!dateString) return null;
+    const [year, month, day] = dateString.split('-').map(Number);
+    if (!isNaN(month)) {
+      return month - 1; // Convert from 1-12 to 0-11
+    }
+    return null;
+  };
+
   return (
     <Box>
       <Typography variant="h5" component="h2" gutterBottom>
@@ -717,6 +737,11 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
                 minDate={new Date().toISOString().split('T')[0]} // Today as min date
                 isRangeMode={isRangeMode}
                 initialYear={selectedYear}
+                initialMonth={
+                  editConstraintIndex !== null && Array.isArray(newConstraint.date) && newConstraint.date[0]
+                    ? getMonthFromDateString(newConstraint.date[0])
+                    : getNextMonth()
+                }
               />
             </Grid>
             <Grid item xs={12}>
