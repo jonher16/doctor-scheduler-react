@@ -339,6 +339,9 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
     
     // Create a new array of constraints to modify
     let newConstraints = [...constraints];
+    
+    // Create a copy of current availability to update
+    let newAvailability = JSON.parse(JSON.stringify(availability || {}));
 
     if (isRangeMode) {
       // Range mode validation
@@ -383,6 +386,11 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
       // Count new constraints added
       let addedCount = 0;
       
+      // Initialize doctor in newAvailability if needed
+      if (!newAvailability[newConstraint.doctor]) {
+        newAvailability[newConstraint.doctor] = {};
+      }
+      
       // Loop through each date in the range
       while (current <= end) {
         const dateStr = current.toISOString().split('T')[0];
@@ -394,13 +402,22 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
           avail: availStatus
         });
         
+        // Also update availability data for immediate use
+        newAvailability[newConstraint.doctor][dateStr] = availStatus;
+        
         addedCount++;
         
         // Move to next day
         current.setDate(current.getDate() + 1);
       }
       
+      // Update constraints
       setConstraints(newConstraints);
+      
+      // Update parent availability state immediately
+      setAvailability(newAvailability);
+      
+      // Close dialog
       setOpenDialog(false);
       
       setSnackbar({
@@ -421,6 +438,11 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
         return;
       }
       
+      // Initialize doctor in newAvailability if needed
+      if (!newAvailability[newConstraint.doctor]) {
+        newAvailability[newConstraint.doctor] = {};
+      }
+      
       // Check if this constraint already exists
       const existingIndex = newConstraints.findIndex(
         c => c.doctor === newConstraint.doctor && c.date === newConstraint.date
@@ -433,7 +455,13 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
           avail: availStatus
         };
         
+        // Update availability data for immediate use
+        newAvailability[newConstraint.doctor][newConstraint.date] = availStatus;
+        
+        // Update states
         setConstraints(newConstraints);
+        setAvailability(newAvailability);
+        
         setOpenDialog(false);
         
         setSnackbar({
@@ -449,7 +477,13 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
           avail: availStatus
         });
         
+        // Update availability data for immediate use
+        newAvailability[newConstraint.doctor][newConstraint.date] = availStatus;
+        
+        // Update states
         setConstraints(newConstraints);
+        setAvailability(newAvailability);
+        
         setOpenDialog(false);
         
         setSnackbar({
@@ -684,6 +718,7 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
           doctors={doctors}
           availability={availability}
           initialYear={selectedYear}
+          setAvailability={setAvailability}
         />
       )}
 
