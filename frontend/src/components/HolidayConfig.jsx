@@ -36,7 +36,8 @@ import {
   Save as SaveIcon,
   EventNote as EventNoteIcon,
   ViewList as ViewListIcon,
-  CalendarViewMonth as CalendarViewMonthIcon
+  CalendarViewMonth as CalendarViewMonthIcon,
+  Edit as EditIcon
 } from '@mui/icons-material';
 import EnhancedCalendar from './EnhancedCalendar';
 import HolidayCalendar from './HolidayCalendar';
@@ -57,6 +58,13 @@ function HolidayConfig({ holidays, setHolidays }) {
   
   // Add state for view mode (table or calendar)
   const [viewMode, setViewMode] = useState('calendar'); // Default to calendar view
+
+  // Add state to track if we're editing an existing holiday
+  const [editMode, setEditMode] = useState(false);
+  const [editDates, setEditDates] = useState([]);
+
+  // State for merged holidays in the table view
+  const [mergedHolidays, setMergedHolidays] = useState([]);
 
   // Get the current month's index (0-11)
   const getCurrentMonth = () => {
@@ -88,6 +96,8 @@ function HolidayConfig({ holidays, setHolidays }) {
     // Reset selected date when opening dialog
     setSelectedDate(isRangeMode ? [null, null] : '');
     setHolidayType('Short');
+    setEditMode(false);
+    setEditDates([]);
     setOpenDialog(true);
   };
 
@@ -120,6 +130,92 @@ function HolidayConfig({ holidays, setHolidays }) {
     }
   };
 
+  // Helper function to check if a date is consecutive to another date
+  const isConsecutiveDate = (dateStr1, dateStr2) => {
+    const date1 = new Date(dateStr1);
+    const date2 = new Date(dateStr2);
+    
+    // Set both dates to midnight to compare just the dates
+    date1.setHours(0, 0, 0, 0);
+    date2.setHours(0, 0, 0, 0);
+    
+    // Calculate the difference in days
+    const diffTime = date2 - date1;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    return diffDays === 1;
+  };
+
+  // Group consecutive holidays of the same type
+  useEffect(() => {
+    const holidayArray = Object.entries(localHolidays).map(([date, type]) => ({
+      date,
+      type
+    })).sort((a, b) => a.date.localeCompare(b.date));
+    
+    const mergedArray = [];
+    
+    if (holidayArray.length === 0) {
+      setMergedHolidays([]);
+      return;
+    }
+    
+    let currentGroup = {
+      type: holidayArray[0].type,
+      dates: [holidayArray[0].date]
+    };
+    
+    for (let i = 1; i < holidayArray.length; i++) {
+      const current = holidayArray[i];
+      const lastDateInGroup = currentGroup.dates[currentGroup.dates.length - 1];
+      
+      // Check if this holiday is consecutive and has the same type
+      if (
+        current.type === currentGroup.type &&
+        isConsecutiveDate(lastDateInGroup, current.date)
+      ) {
+        // Add to current group
+        currentGroup.dates.push(current.date);
+      } else {
+        // Save the current group and start a new one
+        mergedArray.push({
+          ...currentGroup,
+          startDate: currentGroup.dates[0],
+          endDate: currentGroup.dates[currentGroup.dates.length - 1]
+        });
+        
+        currentGroup = {
+          type: current.type,
+          dates: [current.date]
+        };
+      }
+    }
+    
+    // Add the last group
+    mergedArray.push({
+      ...currentGroup,
+      startDate: currentGroup.dates[0],
+      endDate: currentGroup.dates[currentGroup.dates.length - 1]
+    });
+    
+    setMergedHolidays(mergedArray);
+  }, [localHolidays]);
+
+  // Handle editing a holiday group
+  const handleEditHoliday = (index) => {
+    const holidayToEdit = mergedHolidays[index];
+    
+    // Set the date range to edit
+    const dateRange = [holidayToEdit.startDate, holidayToEdit.endDate];
+    
+    setSelectedDate(dateRange);
+    setHolidayType(holidayToEdit.type);
+    setIsRangeMode(true); // Always use range mode for editing
+    setEditMode(true);
+    setEditDates(holidayToEdit.dates);
+    setOpenDialog(true);
+  };
+
   // Handle adding a new holiday
   const markHoliday = () => {
     if (isRangeMode) {
@@ -139,6 +235,13 @@ function HolidayConfig({ holidays, setHolidays }) {
       // Process date range
       const newHolidays = { ...localHolidays };
       
+      // If we're in edit mode, first remove the old dates
+      if (editMode && editDates.length > 0) {
+        editDates.forEach(date => {
+          delete newHolidays[date];
+        });
+      }
+      
       // Convert dates to Date objects for comparison
       const start = new Date(startDate);
       const end = new Date(endDate);
@@ -150,9 +253,9 @@ function HolidayConfig({ holidays, setHolidays }) {
       while (current <= end) {
         const dateStr = current.toISOString().split('T')[0];
         
-        // Check if this date already exists as a holiday
-        if (newHolidays[dateStr]) {
-          // Skip this date or update it if you prefer
+        // Check if this date already exists as a holiday (skip in edit mode)
+        if (!editMode && newHolidays[dateStr]) {
+          // Skip this date
           current.setDate(current.getDate() + 1);
           continue;
         }
@@ -167,7 +270,9 @@ function HolidayConfig({ holidays, setHolidays }) {
       setLocalHolidays(newHolidays);
       setSnackbar({
         open: true,
-        message: `Added ${holidayType} holidays from ${startDate} to ${endDate}`,
+        message: editMode 
+          ? `Updated ${holidayType} holidays from ${startDate} to ${endDate}`
+          : `Added ${holidayType} holidays from ${startDate} to ${endDate}`,
         severity: 'success'
       });
     } else {
@@ -181,8 +286,8 @@ function HolidayConfig({ holidays, setHolidays }) {
         return;
       }
       
-      // Check if date already exists
-      if (localHolidays[selectedDate]) {
+      // Check if date already exists (not needed in edit mode)
+      if (!editMode && localHolidays[selectedDate]) {
         setSnackbar({
           open: true,
           message: `${selectedDate} is already marked as a holiday`,
@@ -195,7 +300,9 @@ function HolidayConfig({ holidays, setHolidays }) {
       setLocalHolidays(newHolidays);
       setSnackbar({
         open: true,
-        message: `Added ${holidayType} holiday on ${selectedDate}`,
+        message: editMode 
+          ? `Updated ${holidayType} holiday on ${selectedDate}`
+          : `Added ${holidayType} holiday on ${selectedDate}`,
         severity: 'success'
       });
     }
@@ -204,13 +311,24 @@ function HolidayConfig({ holidays, setHolidays }) {
   };
 
   // Handle removing a holiday
-  const removeHoliday = (date) => {
+  const removeHoliday = (dates) => {
     const newHolidays = { ...localHolidays };
-    delete newHolidays[date];
+    
+    // Remove all dates in the group
+    if (Array.isArray(dates)) {
+      dates.forEach(date => {
+        delete newHolidays[date];
+      });
+    } else {
+      delete newHolidays[dates];
+    }
+    
     setLocalHolidays(newHolidays);
     setSnackbar({
       open: true,
-      message: `Removed holiday on ${date}`,
+      message: Array.isArray(dates) && dates.length > 1
+        ? `Removed ${dates.length} holiday dates`
+        : `Removed holiday on ${Array.isArray(dates) ? dates[0] : dates}`,
       severity: 'info'
     });
   };
@@ -288,14 +406,25 @@ function HolidayConfig({ holidays, setHolidays }) {
           />
         </Tabs>
 
-        <Button
-          variant="outlined"
-          startIcon={<SaveIcon />}
-          onClick={saveHolidays}
-          color="primary"
-        >
-          Save Holidays
-        </Button>
+        <Box>
+          <Button
+            variant="contained"
+            startIcon={<EventNoteIcon />}
+            onClick={handleOpenDialog}
+            sx={{ mr: 2 }}
+            color="error"
+          >
+            Add Holiday
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<SaveIcon />}
+            onClick={saveHolidays}
+            color="primary"
+          >
+            Save Holidays
+          </Button>
+        </Box>
       </Box>
 
       {/* Calendar View */}
@@ -308,90 +437,93 @@ function HolidayConfig({ holidays, setHolidays }) {
 
       {/* Table View */}
       {viewMode === 'table' && (
-        <>
-          <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
-            <Button
-              variant="contained"
-              startIcon={<EventNoteIcon />}
-              onClick={handleOpenDialog}
-              sx={{ mr: 2 }}
-            >
-              Add Holiday
-            </Button>
-          </Box>
-
-          <TableContainer component={Paper} sx={{ mb: 4 }}>
-            <Table sx={{ minWidth: 650 }}>
-              <TableHead>
-                <TableRow sx={{ backgroundColor: 'primary.light' }}>
-                  <TableCell sx={{ fontWeight: 'bold', color: 'white' }}>Date</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', color: 'white' }}>Type</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', color: 'white' }}>Actions</TableCell>
+        <TableContainer component={Paper}>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell><Typography variant="subtitle2">Date Range</Typography></TableCell>
+                <TableCell><Typography variant="subtitle2">Type</Typography></TableCell>
+                <TableCell><Typography variant="subtitle2">Actions</Typography></TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {mergedHolidays.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={3} align="center">
+                    <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
+                      No holidays configured. Add a holiday to get started.
+                    </Typography>
+                  </TableCell>
                 </TableRow>
-              </TableHead>
-              <TableBody>
-                {holidaysArray.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={3} align="center">
-                      <Typography variant="body1" sx={{ py: 2 }}>
-                        No holidays configured. Add a holiday to get started.
+              ) : (
+                mergedHolidays.map((holiday, index) => (
+                  <TableRow key={index} hover>
+                    <TableCell>
+                      <Typography variant="body1">
+                        {holiday.startDate === holiday.endDate 
+                          ? holiday.startDate 
+                          : `${holiday.startDate} to ${holiday.endDate} (${holiday.dates.length} days)`}
                       </Typography>
                     </TableCell>
-                  </TableRow>
-                ) : (
-                  holidaysArray.map((holiday) => (
-                    <TableRow key={holiday.date} hover>
-                      <TableCell>
-                        <Typography variant="body1">
-                          {holiday.date}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={holiday.type} 
-                          color={getHolidayTypeColor(holiday.type)}
+                    <TableCell>
+                      <Chip 
+                        label={holiday.type} 
+                        color={getHolidayTypeColor(holiday.type)}
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Tooltip title="Edit">
+                        <IconButton 
+                          color="primary" 
+                          onClick={() => handleEditHoliday(index)}
                           size="small"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Tooltip title="Remove">
-                          <IconButton 
-                            color="error" 
-                            onClick={() => removeHoliday(holiday.date)}
-                            size="small"
-                          >
-                            <DeleteIcon />
-                          </IconButton>
-                        </Tooltip>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </>
+                          sx={{ mr: 1 }}
+                        >
+                          <EditIcon />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Remove">
+                        <IconButton 
+                          color="error" 
+                          onClick={() => removeHoliday(holiday.dates)}
+                          size="small"
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
       )}
 
       {/* Add Holiday Dialog */}
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
         <DialogTitle>
-          {isRangeMode ? 'Add Holiday Range' : 'Add New Holiday'}
+          {editMode 
+            ? 'Edit Holiday' 
+            : (isRangeMode ? 'Add Holiday Range' : 'Add New Holiday')}
         </DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12}>
-              <FormControlLabel
-                control={
-                  <Switch 
-                    checked={isRangeMode}
-                    onChange={handleRangeModeToggle}
-                    color="primary"
-                  />
-                }
-                label="Select Date Range"
-              />
-            </Grid>
+            {!editMode && (
+              <Grid item xs={12}>
+                <FormControlLabel
+                  control={
+                    <Switch 
+                      checked={isRangeMode}
+                      onChange={handleRangeModeToggle}
+                      color="primary"
+                    />
+                  }
+                  label="Select Date Range"
+                />
+              </Grid>
+            )}
             <Grid item xs={12}>
               <Typography variant="subtitle1" gutterBottom>
                 {isRangeMode ? 'Select Date Range' : 'Select Date'}
@@ -399,15 +531,16 @@ function HolidayConfig({ holidays, setHolidays }) {
               <EnhancedCalendar 
                 value={selectedDate}
                 onChange={handleDateChange}
-                minDate={new Date().toISOString().split('T')[0]} // Today as min date
-                isRangeMode={isRangeMode}
+                isRangeMode={isRangeMode || editMode}
                 initialYear={selectedYear}
                 initialMonth={
-                  isRangeMode && Array.isArray(selectedDate) && selectedDate[0]
+                  editMode && Array.isArray(selectedDate) && selectedDate[0]
                     ? getMonthFromDateString(selectedDate[0])
-                    : typeof selectedDate === 'string' && selectedDate
-                      ? getMonthFromDateString(selectedDate)
-                      : getNextMonth()
+                    : isRangeMode && Array.isArray(selectedDate) && selectedDate[0]
+                      ? getMonthFromDateString(selectedDate[0])
+                      : typeof selectedDate === 'string' && selectedDate
+                        ? getMonthFromDateString(selectedDate)
+                        : getNextMonth()
                 }
               />
             </Grid>
@@ -431,7 +564,7 @@ function HolidayConfig({ holidays, setHolidays }) {
         <DialogActions>
           <Button onClick={handleCloseDialog}>Cancel</Button>
           <Button onClick={markHoliday} variant="contained">
-            Add Holiday{isRangeMode ? 's' : ''}
+            {editMode ? 'Update Holiday' : `Add Holiday${isRangeMode ? 's' : ''}`}
           </Button>
         </DialogActions>
       </Dialog>

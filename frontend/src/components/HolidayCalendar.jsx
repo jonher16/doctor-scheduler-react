@@ -50,6 +50,10 @@ function HolidayCalendar({ holidays, setHolidays }) {
   const [holidayType, setHolidayType] = useState('Short');
   const [currentHolidayDate, setCurrentHolidayDate] = useState(null);
   const [isEditMode, setIsEditMode] = useState(false);
+  
+  // State for handling consecutive date selections
+  const [consecutiveDays, setConsecutiveDays] = useState([]);
+  const [selectingConsecutive, setSelectingConsecutive] = useState(false);
 
   // Colors for different holiday types
   const holidayColors = {
@@ -130,6 +134,62 @@ function HolidayCalendar({ holidays, setHolidays }) {
       setCurrentMonth(currentMonth + 1);
     }
   };
+  
+  // Helper function to check if a date is consecutive to another date
+  const isConsecutiveDate = (dateStr1, dateStr2) => {
+    const date1 = new Date(dateStr1);
+    const date2 = new Date(dateStr2);
+    
+    // Set both dates to midnight to compare just the dates
+    date1.setHours(0, 0, 0, 0);
+    date2.setHours(0, 0, 0, 0);
+    
+    // Calculate the difference in days
+    const diffTime = date2 - date1;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    return diffDays === 1;
+  };
+  
+  // Get consecutive days for a given day and type
+  const getConsecutiveDaysGroup = (dayObj) => {
+    if (!dayObj || !dayObj.isHoliday) return [];
+    
+    const consecutiveDays = [dayObj.date];
+    const holidayType = dayObj.holidayType;
+    
+    // Find previous consecutive days with the same holiday type
+    let prevDate = dayObj.date;
+    while (true) {
+      const prevDay = new Date(prevDate);
+      prevDay.setDate(prevDay.getDate() - 1);
+      const prevDateStr = prevDay.toISOString().split('T')[0];
+      
+      if (holidays[prevDateStr] && holidays[prevDateStr] === holidayType) {
+        consecutiveDays.unshift(prevDateStr);
+        prevDate = prevDateStr;
+      } else {
+        break;
+      }
+    }
+    
+    // Find next consecutive days with the same holiday type
+    let nextDate = dayObj.date;
+    while (true) {
+      const nextDay = new Date(nextDate);
+      nextDay.setDate(nextDay.getDate() + 1);
+      const nextDateStr = nextDay.toISOString().split('T')[0];
+      
+      if (holidays[nextDateStr] && holidays[nextDateStr] === holidayType) {
+        consecutiveDays.push(nextDateStr);
+        nextDate = nextDateStr;
+      } else {
+        break;
+      }
+    }
+    
+    return consecutiveDays;
+  };
 
   // Handle right-click on a day to open context menu
   const handleDayRightClick = (event, dayObj) => {
@@ -138,6 +198,14 @@ function HolidayCalendar({ holidays, setHolidays }) {
     event.preventDefault();
     
     setSelectedDay(dayObj);
+    
+    // Get all consecutive days if this is a holiday
+    if (dayObj.isHoliday) {
+      setConsecutiveDays(getConsecutiveDaysGroup(dayObj));
+    } else {
+      setConsecutiveDays([]);
+    }
+    
     setContextMenu({
       mouseX: event.clientX - 2,
       mouseY: event.clientY - 4,
@@ -155,10 +223,12 @@ function HolidayCalendar({ holidays, setHolidays }) {
       // Edit existing holiday
       setHolidayType(dayObj.holidayType);
       setIsEditMode(true);
+      setConsecutiveDays(getConsecutiveDaysGroup(dayObj));
     } else {
       // Add new holiday
       setHolidayType('Short');
       setIsEditMode(false);
+      setConsecutiveDays([]);
     }
     
     setDialogOpen(true);
@@ -169,12 +239,23 @@ function HolidayCalendar({ holidays, setHolidays }) {
     setContextMenu(null);
   };
 
-  // Remove holiday
+  // Remove holiday (single day or group)
   const handleRemoveHoliday = () => {
-    if (!selectedDay || !selectedDay.isHoliday) return;
+    if (!selectedDay) return;
     
     const newHolidays = { ...holidays };
-    delete newHolidays[selectedDay.date];
+    
+    // If it's a single day
+    if (!selectingConsecutive || consecutiveDays.length === 0) {
+      if (selectedDay.isHoliday) {
+        delete newHolidays[selectedDay.date];
+      }
+    } else {
+      // Remove entire consecutive group
+      consecutiveDays.forEach(date => {
+        delete newHolidays[date];
+      });
+    }
     
     setHolidays(newHolidays);
     handleCloseContextMenu();
@@ -187,7 +268,19 @@ function HolidayCalendar({ holidays, setHolidays }) {
     setCurrentHolidayDate(selectedDay.date);
     setHolidayType(selectedDay.isHoliday ? selectedDay.holidayType : 'Short');
     setIsEditMode(selectedDay.isHoliday);
+    
+    // If in consecutive mode and we're editing a holiday
+    if (selectingConsecutive && selectedDay.isHoliday && consecutiveDays.length > 0) {
+      // This will be handled by the dialog's range mode
+    }
+    
     setDialogOpen(true);
+    handleCloseContextMenu();
+  };
+  
+  // Toggle selection of consecutive days
+  const handleToggleConsecutive = () => {
+    setSelectingConsecutive(!selectingConsecutive);
     handleCloseContextMenu();
   };
   
@@ -201,7 +294,17 @@ function HolidayCalendar({ holidays, setHolidays }) {
     if (!currentHolidayDate || !holidayType) return;
     
     const newHolidays = { ...holidays };
-    newHolidays[currentHolidayDate] = holidayType;
+    
+    // If we're in consecutive mode and editing
+    if (isEditMode && selectingConsecutive && consecutiveDays.length > 0) {
+      // Update all consecutive days with the new holiday type
+      consecutiveDays.forEach(date => {
+        newHolidays[date] = holidayType;
+      });
+    } else {
+      // Just update/add the single date
+      newHolidays[currentHolidayDate] = holidayType;
+    }
     
     setHolidays(newHolidays);
     setDialogOpen(false);
@@ -222,6 +325,7 @@ function HolidayCalendar({ holidays, setHolidays }) {
             setCurrentHolidayDate(null);
             setHolidayType('Short');
             setIsEditMode(false);
+            setConsecutiveDays([]);
             setDialogOpen(true);
           }}
         >
@@ -322,12 +426,35 @@ function HolidayCalendar({ holidays, setHolidays }) {
                             deleteIcon={<DeleteIcon fontSize="small" />}
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleDayClick(dayObj);
+                              // Check if we should handle consecutive days
+                              const group = getConsecutiveDaysGroup(dayObj);
+                              if (group.length > 1) {
+                                setConsecutiveDays(group);
+                                setSelectedDay(dayObj);
+                                setSelectingConsecutive(true);
+                                handleDayClick(dayObj);
+                              } else {
+                                handleDayClick(dayObj);
+                              }
                             }}
                             onDelete={(e) => {
                               e.stopPropagation();
                               setSelectedDay(dayObj);
-                              handleRemoveHoliday();
+                              // Check if we should handle consecutive days
+                              const group = getConsecutiveDaysGroup(dayObj);
+                              if (group.length > 1) {
+                                setConsecutiveDays(group);
+                                setSelectedDay(dayObj);
+                                
+                                // Ask user if they want to delete all consecutive days
+                                const newHolidays = { ...holidays };
+                                group.forEach(date => {
+                                  delete newHolidays[date];
+                                });
+                                setHolidays(newHolidays);
+                              } else {
+                                handleRemoveHoliday();
+                              }
                             }}
                           />
                         </Zoom>
@@ -408,7 +535,14 @@ function HolidayCalendar({ holidays, setHolidays }) {
             <MenuItem key="delete" onClick={handleRemoveHoliday}>
               <DeleteIcon fontSize="small" sx={{ mr: 1 }} />
               Remove Holiday
-            </MenuItem>
+            </MenuItem>,
+            // Only show the consecutive option if there are consecutive days
+            getConsecutiveDaysGroup(selectedDay).length > 1 ? (
+              <MenuItem key="consecutive" onClick={handleToggleConsecutive}>
+                <EventNoteIcon fontSize="small" sx={{ mr: 1 }} />
+                {selectingConsecutive ? "Select Single Day" : "Select Consecutive Days"}
+              </MenuItem>
+            ) : null
           ]
         ) : (
           <MenuItem onClick={handleEditHoliday}>
@@ -421,17 +555,21 @@ function HolidayCalendar({ holidays, setHolidays }) {
       {/* Add/Edit Holiday Dialog */}
       <Dialog open={dialogOpen} onClose={handleCloseDialog}>
         <DialogTitle>
-          {isEditMode ? 'Edit Holiday' : 'Add Holiday'}
+          {isEditMode 
+            ? (selectingConsecutive && consecutiveDays.length > 1 
+                ? 'Edit Holiday Group' 
+                : 'Edit Holiday')
+            : 'Add Holiday'}
         </DialogTitle>
         <DialogContent sx={{ minWidth: 300 }}>
-          {!currentHolidayDate && (
+          {!currentHolidayDate && !isEditMode && (
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               Please select a date for this holiday:
             </Typography>
           )}
           
           {/* If adding without a preselected date, show date input */}
-          {!currentHolidayDate && (
+          {!currentHolidayDate && !isEditMode && (
             <TextField
               label="Date"
               type="date"
@@ -443,10 +581,12 @@ function HolidayCalendar({ holidays, setHolidays }) {
             />
           )}
           
-          {/* Show selected date */}
+          {/* Show selected date or date range for consecutive days */}
           {currentHolidayDate && (
             <Typography variant="body1" sx={{ mb: 2 }}>
-              Date: <strong>{currentHolidayDate}</strong>
+              {selectingConsecutive && consecutiveDays.length > 1 
+                ? `Date Range: ${consecutiveDays[0]} to ${consecutiveDays[consecutiveDays.length - 1]} (${consecutiveDays.length} days)`
+                : `Date: ${currentHolidayDate}`}
             </Typography>
           )}
           
