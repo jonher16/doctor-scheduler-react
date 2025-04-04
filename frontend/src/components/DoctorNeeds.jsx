@@ -41,7 +41,8 @@ import {
   Event as EventIcon,
   CalendarToday as CalendarTodayIcon,
   ViewList as ViewListIcon,
-  CalendarViewMonth as CalendarViewMonthIcon
+  CalendarViewMonth as CalendarViewMonthIcon,
+  Edit as EditIcon
 } from '@mui/icons-material';
 import EnhancedCalendar from './EnhancedCalendar';
 import DoctorAvailabilityCalendar from './DoctorAvailabilityCalendar';
@@ -53,7 +54,9 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
 
   // Store constraints with support for date ranges
   const [constraints, setConstraints] = useState([]);
+  const [mergedConstraints, setMergedConstraints] = useState([]);
   const [openDialog, setOpenDialog] = useState(false);
+  const [editConstraintIndex, setEditConstraintIndex] = useState(null);
   const [newConstraint, setNewConstraint] = useState({
     doctor: '',
     date: '',
@@ -83,17 +86,140 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
         
         // Iterate through each date for this doctor
         Object.keys(doctorAvailability).forEach(date => {
-          constraintsArray.push({
-            doctor: doctor,
-            date: date,
-            avail: doctorAvailability[date]
-          });
+          const availStatus = doctorAvailability[date];
+          // Only add constraints for non-available days
+          if (availStatus !== 'Available') {
+            constraintsArray.push({
+              doctor: doctor,
+              date: date,
+              avail: availStatus
+            });
+          }
         });
       });
       
       setConstraints(constraintsArray);
     }
   }, [availability]);
+
+  // Merge consecutive days of the same non-availability type
+  useEffect(() => {
+    // Group constraints by doctor and availability type
+    const mergedArray = [];
+    
+    // Sort constraints by doctor, then by date
+    const sortedConstraints = [...constraints].sort((a, b) => {
+      if (a.doctor !== b.doctor) return a.doctor.localeCompare(b.doctor);
+      return a.date.localeCompare(b.date);
+    });
+    
+    if (sortedConstraints.length === 0) {
+      setMergedConstraints([]);
+      return;
+    }
+    
+    let currentGroup = {
+      doctor: sortedConstraints[0].doctor,
+      avail: sortedConstraints[0].avail,
+      dates: [sortedConstraints[0].date]
+    };
+    
+    // Helper function to check if a date is consecutive to the last date in the group
+    const isConsecutiveDate = (dateStr1, dateStr2) => {
+      const date1 = new Date(dateStr1);
+      const date2 = new Date(dateStr2);
+      
+      // Set both dates to midnight to compare just the dates
+      date1.setHours(0, 0, 0, 0);
+      date2.setHours(0, 0, 0, 0);
+      
+      // Calculate the difference in days
+      const diffTime = date2 - date1;
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      return diffDays === 1;
+    };
+    
+    // Group consecutive days with the same doctor and availability
+    for (let i = 1; i < sortedConstraints.length; i++) {
+      const current = sortedConstraints[i];
+      const lastDateInGroup = currentGroup.dates[currentGroup.dates.length - 1];
+      
+      // Check if this constraint is consecutive and has the same doctor and availability
+      if (
+        current.doctor === currentGroup.doctor && 
+        current.avail === currentGroup.avail &&
+        isConsecutiveDate(lastDateInGroup, current.date)
+      ) {
+        // Add to current group
+        currentGroup.dates.push(current.date);
+      } else {
+        // Save the current group and start a new one
+        mergedArray.push({
+          ...currentGroup,
+          startDate: currentGroup.dates[0],
+          endDate: currentGroup.dates[currentGroup.dates.length - 1]
+        });
+        
+        currentGroup = {
+          doctor: current.doctor,
+          avail: current.avail,
+          dates: [current.date]
+        };
+      }
+    }
+    
+    // Add the last group
+    mergedArray.push({
+      ...currentGroup,
+      startDate: currentGroup.dates[0],
+      endDate: currentGroup.dates[currentGroup.dates.length - 1]
+    });
+    
+    setMergedConstraints(mergedArray);
+  }, [constraints]);
+
+  // Handle opening the edit constraint dialog
+  const handleEditConstraint = (index) => {
+    const constraintToEdit = mergedConstraints[index];
+    
+    // Set the date range to edit
+    const dateRange = [constraintToEdit.startDate, constraintToEdit.endDate];
+    
+    // Parse the availability status to set unavailable shifts
+    const unavailableShifts = {
+      Day: false,
+      Evening: false,
+      Night: false
+    };
+    
+    if (constraintToEdit.avail === 'Not Available') {
+      // All shifts are unavailable
+      unavailableShifts.Day = true;
+      unavailableShifts.Evening = true;
+      unavailableShifts.Night = true;
+    } else if (constraintToEdit.avail.startsWith('Not Available: ')) {
+      // Specific shifts are unavailable
+      const unavailableShiftsText = constraintToEdit.avail.substring('Not Available: '.length);
+      const unavailableShiftsList = unavailableShiftsText.split(', ');
+      
+      unavailableShiftsList.forEach(shift => {
+        if (shift === 'Day' || shift === 'Evening' || shift === 'Night') {
+          unavailableShifts[shift] = true;
+        }
+      });
+    }
+    
+    setNewConstraint({
+      doctor: constraintToEdit.doctor,
+      date: dateRange,
+      unavailableShifts
+    });
+    
+    setIsRangeMode(true); // Always use range mode for editing
+    setEditConstraintIndex(index);
+    setOpenDialog(true);
+  };
 
   // Handle opening the add constraint dialog
   const handleOpenDialog = () => {
@@ -106,6 +232,7 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
         Night: false
       }
     });
+    setEditConstraintIndex(null);
     setOpenDialog(true);
   };
 
@@ -185,7 +312,7 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
     return `Not Available: ${unavailableShiftNames.join(", ")}`;
   };
 
-  // Handle adding a new constraint
+  // Modified addConstraint to handle edit mode
   const addConstraint = () => {
     if (!newConstraint.doctor) {
       setSnackbar({
@@ -207,6 +334,12 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
       return;
     }
 
+    // Convert unavailable shifts to availability status
+    const availStatus = getAvailabilityStatus(newConstraint.unavailableShifts);
+    
+    // Create a new array of constraints to modify
+    let newConstraints = [...constraints];
+
     if (isRangeMode) {
       // Range mode validation
       if (!newConstraint.date || !Array.isArray(newConstraint.date) || 
@@ -222,8 +355,23 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
       // Extract start and end dates from the range
       const [startDate, endDate] = newConstraint.date;
       
-      // Add constraints for each date in the range
-      const newConstraints = [...constraints];
+      // If we're editing, first remove all existing dates for this constraint
+      if (editConstraintIndex !== null) {
+        const constraintToEdit = mergedConstraints[editConstraintIndex];
+        
+        // Remove all existing dates for this doctor in the date range
+        newConstraints = constraints.filter(c => {
+          // Keep constraint if it's not for the same doctor
+          if (c.doctor !== constraintToEdit.doctor) return true;
+          
+          // Keep constraint if date is outside the edited range
+          const date = new Date(c.date);
+          const startDateObj = new Date(constraintToEdit.startDate);
+          const endDateObj = new Date(constraintToEdit.endDate);
+          
+          return date < startDateObj || date > endDateObj;
+        });
+      }
       
       // Convert dates to Date objects for comparison
       const start = new Date(startDate);
@@ -234,88 +382,76 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
       
       // Count new constraints added
       let addedCount = 0;
-      let updatedCount = 0;
-      
-      // Convert unavailable shifts to availability status
-      const availStatus = getAvailabilityStatus(newConstraint.unavailableShifts);
       
       // Loop through each date in the range
       while (current <= end) {
         const dateStr = current.toISOString().split('T')[0];
         
-        // Check if constraint already exists for this doctor and date
-        const existingIndex = newConstraints.findIndex(
-          c => c.doctor === newConstraint.doctor && c.date === dateStr
-        );
+        // Add the new constraint for this date
+        newConstraints.push({
+          doctor: newConstraint.doctor,
+          date: dateStr,
+          avail: availStatus
+        });
         
-        if (existingIndex !== -1) {
-          // Update existing constraint
-          newConstraints[existingIndex] = {
-            ...newConstraints[existingIndex],
-            avail: availStatus
-          };
-          updatedCount++;
-        } else {
-          // Add new constraint
-          newConstraints.push({
-            doctor: newConstraint.doctor,
-            date: dateStr,
-            avail: availStatus
-          });
-          addedCount++;
-        }
+        addedCount++;
         
         // Move to next day
         current.setDate(current.getDate() + 1);
       }
       
       setConstraints(newConstraints);
+      setOpenDialog(false);
+      
       setSnackbar({
         open: true,
-        message: `Updated non-availability for Dr. ${newConstraint.doctor}: ${addedCount} new entries, ${updatedCount} updated entries`,
+        message: editConstraintIndex !== null 
+          ? `Availability updated for ${addedCount} days` 
+          : `Non-availability added for ${addedCount} days`,
         severity: 'success'
       });
-      
     } else {
       // Single date validation
-      if (!newConstraint.date || !isValidDate(newConstraint.date)) {
+      if (!newConstraint.date) {
         setSnackbar({
           open: true,
-          message: 'Please enter a valid date in YYYY-MM-DD format',
+          message: 'Please select a date',
           severity: 'error'
         });
         return;
       }
       
-      // Convert unavailable shifts to availability status
-      const availStatus = getAvailabilityStatus(newConstraint.unavailableShifts);
-      
-      // Check if constraint already exists
-      const existingIndex = constraints.findIndex(
+      // Check if this constraint already exists
+      const existingIndex = newConstraints.findIndex(
         c => c.doctor === newConstraint.doctor && c.date === newConstraint.date
       );
-
+      
       if (existingIndex !== -1) {
         // Update existing constraint
-        const newConstraints = [...constraints];
         newConstraints[existingIndex] = {
           ...newConstraints[existingIndex],
           avail: availStatus
         };
+        
         setConstraints(newConstraints);
+        setOpenDialog(false);
+        
         setSnackbar({
           open: true,
           message: `Updated non-availability for Dr. ${newConstraint.doctor} on ${newConstraint.date}`,
-          severity: 'info'
+          severity: 'success'
         });
       } else {
         // Add new constraint
-        const constraintToAdd = {
+        newConstraints.push({
           doctor: newConstraint.doctor,
           date: newConstraint.date,
           avail: availStatus
-        };
-        setConstraints([...constraints, constraintToAdd]);
+        });
+        
+        setConstraints(newConstraints);
+        setOpenDialog(false);
+        
         setSnackbar({
           open: true,
           message: `Added non-availability for Dr. ${newConstraint.doctor} on ${newConstraint.date}`,
@@ -323,8 +459,6 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
         });
       }
     }
-    
-    setOpenDialog(false);
   };
 
   // Handle removing a constraint
@@ -446,20 +580,20 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
         </Box>
       </Box>
 
-      {/* Table View */}
+      {/* Table View - modified to show merged constraints */}
       {viewMode === 'table' && (
         <TableContainer component={Paper}>
           <Table size="small">
             <TableHead>
               <TableRow>
                 <TableCell><Typography variant="subtitle2">Doctor</Typography></TableCell>
-                <TableCell><Typography variant="subtitle2">Date</Typography></TableCell>
+                <TableCell><Typography variant="subtitle2">Date Range</Typography></TableCell>
                 <TableCell><Typography variant="subtitle2">Availability</Typography></TableCell>
                 <TableCell><Typography variant="subtitle2">Actions</Typography></TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {constraints.length === 0 ? (
+              {mergedConstraints.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={4} align="center">
                     <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
@@ -468,7 +602,7 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
                   </TableCell>
                 </TableRow>
               ) : (
-                constraints.map((constraint, index) => (
+                mergedConstraints.map((constraint, index) => (
                   <TableRow key={index} hover>
                     <TableCell>
                       <Typography variant="body1">
@@ -477,7 +611,9 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
                     </TableCell>
                     <TableCell>
                       <Typography variant="body1">
-                        {constraint.date}
+                        {constraint.startDate === constraint.endDate 
+                          ? constraint.startDate 
+                          : `${constraint.startDate} to ${constraint.endDate} (${constraint.dates.length} days)`}
                       </Typography>
                     </TableCell>
                     <TableCell>
@@ -488,10 +624,26 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
                       />
                     </TableCell>
                     <TableCell>
+                      <Tooltip title="Edit">
+                        <IconButton 
+                          color="primary" 
+                          onClick={() => handleEditConstraint(index)}
+                          size="small"
+                          sx={{ mr: 1 }}
+                        >
+                          <EditIcon />
+                        </IconButton>
+                      </Tooltip>
                       <Tooltip title="Remove">
                         <IconButton 
                           color="error" 
-                          onClick={() => removeConstraint(index)}
+                          onClick={() => {
+                            // Remove all constraints in this merged group
+                            const newConstraints = constraints.filter(c => 
+                              !(constraint.doctor === c.doctor && constraint.dates.includes(c.date))
+                            );
+                            setConstraints(newConstraints);
+                          }}
                           size="small"
                         >
                           <DeleteIcon />
@@ -515,10 +667,12 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
         />
       )}
 
-      {/* Add Non-Availability Dialog */}
+      {/* Dialog title now reflects add or edit mode */}
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
         <DialogTitle>
-          {isRangeMode ? 'Add Non-Availability Range' : 'Add Doctor Non-Availability'}
+          {editConstraintIndex !== null 
+            ? 'Edit Non-Availability' 
+            : (isRangeMode ? 'Add Non-Availability Range' : 'Add Doctor Non-Availability')}
         </DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
@@ -539,18 +693,20 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
                 )}
               />
             </Grid>
-            <Grid item xs={12}>
-              <FormControlLabel
-                control={
-                  <Switch 
-                    checked={isRangeMode}
-                    onChange={handleRangeModeToggle}
-                    color="primary"
-                  />
-                }
-                label="Select Date Range"
-              />
-            </Grid>
+            {editConstraintIndex === null && (
+              <Grid item xs={12}>
+                <FormControlLabel
+                  control={
+                    <Switch 
+                      checked={isRangeMode}
+                      onChange={handleRangeModeToggle}
+                      color="primary"
+                    />
+                  }
+                  label="Select Date Range"
+                />
+              </Grid>
+            )}
             <Grid item xs={12}>
               <Typography variant="subtitle1" gutterBottom>
                 {isRangeMode ? 'Select Date Range' : 'Select Date'}
@@ -611,7 +767,7 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
         <DialogActions>
           <Button onClick={handleCloseDialog}>Cancel</Button>
           <Button onClick={addConstraint} variant="contained">
-            {isRangeMode ? 'Add Range' : 'Add'}
+            {editConstraintIndex !== null ? 'Update' : (isRangeMode ? 'Add Range' : 'Add')}
           </Button>
         </DialogActions>
       </Dialog>

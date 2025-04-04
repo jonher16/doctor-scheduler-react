@@ -158,14 +158,18 @@ function DoctorAvailabilityCalendar({ doctors, availability, initialYear }) {
 
   // Get availability summary for a day, including doctor names
   const getAvailabilitySummary = (doctorAvailability) => {
-    // Initialize summary with default categories
+    // Initialize summary with default categories - but only include not available statuses
     const summary = {
-      'Available': { count: 0, doctors: [] },
       'Not Available': { count: 0, doctors: [] }
       // Custom "Not Available: X, Y" statuses will be added dynamically
     };
     
     Object.entries(doctorAvailability).forEach(([doctor, avail]) => {
+      // Skip doctors who are available
+      if (avail === 'Available') {
+        return;
+      }
+      
       // Handle standard availability types
       if (summary[avail] !== undefined) {
         summary[avail].count++;
@@ -195,9 +199,15 @@ function DoctorAvailabilityCalendar({ doctors, availability, initialYear }) {
 
   // Render availability indicators for a day
   const renderAvailabilityIndicators = (doctorAvailability) => {
-    // If a specific doctor is selected, show their availability
+    // If a specific doctor is selected, show their availability only if they are not available
     if (selectedDoctor !== 'all') {
       const availability = doctorAvailability[selectedDoctor] || 'Available';
+      
+      // Only show non-available statuses
+      if (availability === 'Available') {
+        return null;
+      }
+      
       return (
         <Box sx={{ mt: 1, display: 'flex', justifyContent: 'center' }}>
           <Chip 
@@ -216,6 +226,12 @@ function DoctorAvailabilityCalendar({ doctors, availability, initialYear }) {
     
     // For "all" view, show a summary of doctors' availability
     const summary = getAvailabilitySummary(doctorAvailability);
+    
+    // If there are no non-available doctors, return null
+    if (Object.keys(summary).length === 0 || 
+        Object.values(summary).every(({ count }) => count === 0)) {
+      return null;
+    }
     
     return (
       <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
@@ -343,12 +359,12 @@ function DoctorAvailabilityCalendar({ doctors, availability, initialYear }) {
                     {/* Render availability indicators */}
                     {renderAvailabilityIndicators(dayObj.doctorAvailability)}
                     
-                    {/* Show number of available doctors when in "all" view */}
+                    {/* Show number of non-available doctors when in "all" view */}
                     {selectedDoctor === 'all' && (
                       <Tooltip 
                         title={
                           <Typography variant="caption">
-                            {Object.values(dayObj.doctorAvailability).filter(a => a === 'Available').length} fully available doctors
+                            {Object.values(dayObj.doctorAvailability).filter(a => a !== 'Available').length} unavailable doctors
                           </Typography>
                         }
                       >
@@ -363,9 +379,11 @@ function DoctorAvailabilityCalendar({ doctors, availability, initialYear }) {
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          fontSize: '0.7rem'
+                          fontSize: '0.7rem',
+                          // Only show if there are unavailable doctors
+                          visibility: Object.values(dayObj.doctorAvailability).some(a => a !== 'Available') ? 'visible' : 'hidden'
                         }}>
-                          {Object.values(dayObj.doctorAvailability).filter(a => a === 'Available').length}
+                          {Object.values(dayObj.doctorAvailability).filter(a => a !== 'Available').length}
                         </Box>
                       </Tooltip>
                     )}
@@ -376,7 +394,7 @@ function DoctorAvailabilityCalendar({ doctors, availability, initialYear }) {
           ))}
         </Grid>
         
-        {/* Legend */}
+        {/* Legend - updated to only show non-availability statuses */}
         <Box sx={{ mt: 3, display: 'flex', flexWrap: 'wrap', gap: 2 }}>
           <Typography variant="subtitle2" sx={{ width: '100%', mb: 1 }}>
             Legend:
@@ -385,38 +403,24 @@ function DoctorAvailabilityCalendar({ doctors, availability, initialYear }) {
             <Box sx={{ 
               width: 16, 
               height: 16, 
-              backgroundColor: availabilityColors['Available'],
-              marginRight: 1
-            }} />
-            <Typography variant="caption">
-              Available
-            </Typography>
-          </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <Box sx={{ 
-              width: 16, 
-              height: 16, 
               backgroundColor: availabilityColors['Not Available'],
               marginRight: 1
             }} />
             <Typography variant="caption">
-              Not Available (All Shifts)
+              Not Available
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <Box sx={{ 
               width: 16, 
               height: 16, 
-              backgroundColor: '#ff9800',
+              backgroundColor: '#ff9800', // Partial unavailability
               marginRight: 1
             }} />
             <Typography variant="caption">
-              Partially Not Available
+              Partially Available
             </Typography>
           </Box>
-          <Typography variant="body2" color="text.secondary" sx={{ width: '100%', mt: 1, fontSize: '0.75rem' }}>
-            Note: By default, all doctors are considered available on all days for all shifts unless specified otherwise.
-          </Typography>
         </Box>
       </Paper>
     </Box>
