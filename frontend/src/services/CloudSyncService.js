@@ -117,6 +117,7 @@ export const CloudSyncService = {
     try {
       const completionStatus = await this.fetchMonthCompletionStatus();
       const doctors = await this.fetchDoctorPreferences();
+      const availability = await this.fetchDoctorAvailability();
       
       const monthKey = `${year}-${String(month).padStart(2, '0')}`;
       const incompleteCount = {
@@ -125,22 +126,70 @@ export const CloudSyncService = {
         incomplete: []
       };
       
+      // Create an array to track each doctor's completion percentage
+      const doctorCompletionDetails = [];
+      
+      // Get the number of days in the selected month
+      const daysInMonth = new Date(year, month, 0).getDate();
+      
+      // Track overall completion
+      let totalDaysCompleted = 0;
+      const totalPossibleDays = doctors.length * daysInMonth;
+      
       // Check if each doctor has completed the specified month
       for (const doctor of doctors) {
         const doctorName = doctor.name;
-        const hasCompleted = completionStatus[doctorName] && 
+        const monthFullyCompleted = completionStatus[doctorName] && 
                             completionStatus[doctorName][monthKey] === true;
         
-        if (hasCompleted) {
+        // Check how many days have been completed in the availability data
+        let daysCompleted = 0;
+        if (availability[doctorName]) {
+          // For each day in the month, check if it exists in the availability data
+          for (let day = 1; day <= daysInMonth; day++) {
+            const dateKey = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            if (availability[doctorName][dateKey] !== undefined) {
+              daysCompleted++;
+            }
+          }
+        }
+        
+        // Add to overall completion
+        totalDaysCompleted += daysCompleted;
+        
+        // Calculate percentage based on days completed
+        const percentComplete = Math.round((daysCompleted / daysInMonth) * 100);
+        
+        // Add doctor's completion details
+        doctorCompletionDetails.push({
+          name: doctorName,
+          completed: monthFullyCompleted,
+          percentComplete: percentComplete,
+          daysCompleted: daysCompleted,
+          totalDays: daysInMonth
+        });
+        
+        if (monthFullyCompleted) {
           incompleteCount.completed++;
         } else {
           incompleteCount.incomplete.push(doctorName);
         }
       }
       
+      // Calculate overall percentage
+      const overallPercentage = totalPossibleDays > 0 
+        ? Math.round((totalDaysCompleted / totalPossibleDays) * 100) 
+        : 0;
+      
       return {
         isComplete: incompleteCount.completed === incompleteCount.total,
-        stats: incompleteCount
+        stats: {
+          ...incompleteCount,
+          totalDaysCompleted,
+          totalPossibleDays,
+          overallPercentage
+        },
+        doctorDetails: doctorCompletionDetails
       };
     } catch (error) {
       console.error("Error checking month completion status:", error);

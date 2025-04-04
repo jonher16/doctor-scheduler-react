@@ -428,20 +428,26 @@ const SyncPage = ({ doctors, setDoctors, availability, setAvailability }) => {
             <Box sx={{ mb: 3 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                 <Typography variant="body2" sx={{ flexGrow: 1 }}>
-                  {completionStatus.stats.completed} of {completionStatus.stats.total} doctors have completed their schedule
+                  {completionStatus.stats.completed} of {completionStatus.stats.total} doctors have fully completed their schedule
                 </Typography>
                 
                 <Typography variant="body2" color="text.secondary">
-                  {Math.round((completionStatus.stats.completed / completionStatus.stats.total) * 100)}% Complete
+                  {completionStatus.stats.overallPercentage}% Complete overall
                 </Typography>
               </Box>
               
               <LinearProgress 
                 variant="determinate" 
-                value={(completionStatus.stats.completed / completionStatus.stats.total) * 100}
-                color={completionStatus.isComplete ? "success" : "warning"}
+                value={completionStatus.stats.overallPercentage}
+                color={completionStatus.stats.overallPercentage === 100 ? "success" : 
+                       completionStatus.stats.overallPercentage > 75 ? "info" :
+                       completionStatus.stats.overallPercentage > 50 ? "warning" : "error"}
                 sx={{ height: 8, borderRadius: 4 }}
               />
+              
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1, textAlign: 'center' }}>
+                {completionStatus.stats.totalDaysCompleted} of {completionStatus.stats.totalPossibleDays} total days completed across all doctors
+              </Typography>
             </Box>
             
             {!completionStatus.isComplete && (
@@ -458,41 +464,61 @@ const SyncPage = ({ doctors, setDoctors, availability, setAvailability }) => {
             <Box sx={{ mb: 2 }}>
               <Typography variant="subtitle2" gutterBottom>
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <ErrorIcon fontSize="small" color="error" sx={{ mr: 1 }} />
-                  Doctors with incomplete schedules:
+                  {completionStatus.isComplete ? 
+                    <CheckIcon fontSize="small" color="success" sx={{ mr: 1 }} /> :
+                    <ErrorIcon fontSize="small" color="error" sx={{ mr: 1 }} />
+                  }
+                  Doctors completion status:
                 </Box>
               </Typography>
               
-              {completionStatus.stats.incomplete.length === 0 ? (
-                <Typography variant="body2" color="success.main" sx={{ fontWeight: 500 }}>
-                  All doctors have completed their schedules for this month!
-                </Typography>
-              ) : (
-                <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 300 }}>
-                  <Table size="small" stickyHeader>
-                    <TableHead>
-                      <TableRow>
-                        <TableCell width="70%">Doctor Name</TableCell>
-                        <TableCell align="center">Status</TableCell>
+              <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 300 }}>
+                <Table size="small" stickyHeader>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell width="50%">Doctor Name</TableCell>
+                      <TableCell align="center">Status</TableCell>
+                      <TableCell align="center">Completion</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {completionStatus.doctorDetails.map((doctor, index) => (
+                      <TableRow key={index} hover>
+                        <TableCell>{doctor.name}</TableCell>
+                        <TableCell align="center">
+                          <Chip 
+                            label={doctor.completed ? "Completed" : "Not Completed"} 
+                            size="small" 
+                            color={doctor.completed ? "success" : "error"}
+                          />
+                        </TableCell>
+                        <TableCell align="center">
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <Box sx={{ width: '100%', mr: 1 }}>
+                              <LinearProgress
+                                variant="determinate"
+                                value={doctor.percentComplete}
+                                color={doctor.percentComplete === 100 ? "success" : 
+                                       doctor.percentComplete > 75 ? "info" :
+                                       doctor.percentComplete > 50 ? "warning" : "error"}
+                                sx={{ height: 8, borderRadius: 4 }}
+                              />
+                            </Box>
+                            <Box sx={{ minWidth: 65, textAlign: 'right' }}>
+                              <Typography variant="body2" color="text.secondary">
+                                {`${doctor.percentComplete}%`}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {`${doctor.daysCompleted}/${doctor.totalDays} days`}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        </TableCell>
                       </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {completionStatus.stats.incomplete.map((doctorName, index) => (
-                        <TableRow key={index} hover>
-                          <TableCell>{doctorName}</TableCell>
-                          <TableCell align="center">
-                            <Chip 
-                              label="Not Completed" 
-                              size="small" 
-                              color="error"
-                            />
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              )}
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
             </Box>
             
             <Box sx={{ textAlign: 'center', mt: 3 }}>
