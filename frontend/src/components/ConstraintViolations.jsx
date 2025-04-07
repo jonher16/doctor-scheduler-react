@@ -866,6 +866,9 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
             <Typography variant="body2" sx={{ mb: 2, fontStyle: 'italic', color: 'warning.main' }}>
               Soft violation: Monthly workload variance must not exceed 10 hours.
             </Typography>
+            <Typography variant="body2" sx={{ mb: 2, fontStyle: 'italic' }}>
+              Note: Doctors with very limited availability (≤ 2 days per month) are automatically excluded from this constraint. The scheduler then uses an improved balancing approach for the remaining doctors to distribute workload more evenly.
+            </Typography>
             {violations.monthlyVariance.details.length > 0 ? (
               <Box>
                 {violations.monthlyVariance.details.map((violation, index) => (

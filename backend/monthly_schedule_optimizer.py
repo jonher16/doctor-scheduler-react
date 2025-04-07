@@ -104,7 +104,7 @@ class MonthlyScheduleOptimizer:
         self.w_rest = 999999     # UPGRADED to super hard constraint (no shift after night)
         self.w_consec_night = 999999  # NEW: Even higher penalty for consecutive night shifts
         self.w_senior_holiday = 1000  # Senior working on long holidays - hard constraint
-        self.w_balance = 1000      # Increased for monthly (was 30 in yearly)
+        self.w_balance = 5000      # Increased for monthly (was 30 in yearly)
         self.w_wh = 40           # Increased for monthly (was 30 in yearly)
         self.w_pref = {          # Preference violations with seniors getting priority
             "Junior": 10000,     # UPGRADED to super hard constraint
@@ -628,19 +628,63 @@ class MonthlyScheduleOptimizer:
         junior_hours = {doc: monthly_hours[doc].get(self.month, 0) for doc in self.junior_doctors}
         senior_hours = {doc: monthly_hours[doc].get(self.month, 0) for doc in self.senior_doctors}
         
-        # Calculate overall monthly variance across all doctors
-        all_hours = [hours.get(self.month, 0) for doctor, hours in monthly_hours.items()]
-        active_hours = [h for h in all_hours if h > 0]
+        # Identify doctors with very limited availability (≤ 2 days per month)
+        limited_availability_doctors = set()
+        doctor_working_days = {doctor: 0 for doctor in monthly_hours.keys()}
         
-        if active_hours:
+        # Count working days for each doctor in this month
+        for date in self.all_dates:
+            if date not in schedule:
+                continue
+                
+            for shift_name, doctors in schedule[date].items():
+                for doctor in doctors:
+                    doctor_working_days[doctor] = doctor_working_days.get(doctor, 0) + 1
+        
+        # Identify doctors with ≤ 2 working days in the month
+        for doctor, days in doctor_working_days.items():
+            if days <= 2:
+                limited_availability_doctors.add(doctor)
+        
+        # Log information about doctors with limited availability
+        if limited_availability_doctors:
+            logger.info(f"Monthly optimizer: Excluding {len(limited_availability_doctors)} doctors with limited availability (≤ 2 days) from monthly variance: {', '.join(limited_availability_doctors)}")
+        
+        # Calculate overall monthly variance across all doctors, excluding limited availability docs
+        active_hours = []
+        active_doctor_hours = {}
+        for doctor, hours in monthly_hours.items():
+            month_hours = hours.get(self.month, 0)
+            if doctor not in limited_availability_doctors and month_hours > 0:
+                active_hours.append(month_hours)
+                active_doctor_hours[doctor] = month_hours
+        
+        if active_hours and len(active_hours) > 1:
+            # Calculate target hours for better distribution
+            total_hours = sum(active_hours)
+            num_active_doctors = len(active_hours)
+            target_hours_per_doctor = total_hours / num_active_doctors
+            
+            logger.info(f"Target hours per doctor: {target_hours_per_doctor:.2f}h (total: {total_hours}h, active doctors: {num_active_doctors})")
+            
+            # Calculate variance from target rather than just max-min
+            variance_from_target = 0
+            for doctor, hours in active_doctor_hours.items():
+                deviation = abs(hours - target_hours_per_doctor)
+                variance_from_target += deviation ** 2
+            
+            # Also check max-min variance for the original constraint
             max_hours = max(active_hours)
             min_hours = min(active_hours)
-            variance = max_hours - min_hours
+            max_min_variance = max_hours - min_hours
             
-            # Stronger penalty for monthly variance exceeding target
-            if variance > self.max_monthly_variance:
-                excess = variance - self.max_monthly_variance
+            # Apply penalty if either type of variance is too high
+            if max_min_variance > self.max_monthly_variance:
+                excess = max_min_variance - self.max_monthly_variance
                 cost += self.w_balance * (excess ** 2)
+                
+            # Add additional penalty for variance from target
+            cost += (self.w_balance / 2) * (variance_from_target / num_active_doctors)
         
         # Calculate average hours for junior and senior doctors
         avg_junior = sum(junior_hours.values()) / max(len(junior_hours), 1)
