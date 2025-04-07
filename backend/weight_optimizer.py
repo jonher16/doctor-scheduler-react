@@ -268,6 +268,12 @@ class WeightOptimizer:
         if day_evening_to_night_violations > 0:
             hard_violation_details.append(f"Day/Evening pref assigned to Night shifts: {day_evening_to_night_violations}")
         
+        # 1k. Check for Night-Off-Day pattern violations (hard constraint)
+        night_off_day_violations = self._check_night_off_day_pattern(schedule)
+        hard_violations += night_off_day_violations
+        if night_off_day_violations > 0:
+            hard_violation_details.append(f"Night-Off-Day pattern: {night_off_day_violations}")
+        
         # PART 2: Calculate soft constraint score
         soft_score, _, _ = self._calculate_soft_score(schedule, stats)
         
