@@ -62,7 +62,7 @@ class WeightOptimizer:
                  doctors: List[Dict], 
                  holidays: Dict[str, str],
                  availability: Dict[str, Dict[str, str]],
-                 month: int = None,
+                 month: int,
                  year: int = None,
                  max_iterations: int = 20,
                  parallel_jobs: int = 1,
@@ -76,7 +76,7 @@ class WeightOptimizer:
             doctors: List of doctor dictionaries
             holidays: Dictionary mapping dates to holiday types
             availability: Doctor availability constraints
-            month: Specific month to optimize (None for full year)
+            month: Specific month to optimize (required)
             year: The year to optimize for
             max_iterations: Maximum number of weight configurations to try
             parallel_jobs: Number of parallel optimization jobs to run
@@ -86,15 +86,15 @@ class WeightOptimizer:
         self.holidays = holidays
         self.availability = availability
         
-        # Handle the case where month or year might be None or non-integer
+        # Handle the case where month or year might be non-integer
         try:
-            self.month = int(month) if month is not None else None
+            self.month = int(month)
             self.year = int(year) if year is not None else None
         except (ValueError, TypeError) as e:
             logger.warning(f"Invalid month or year value: month={month}, year={year}. Error: {e}")
             # Default to current month and year if invalid
             current_date = datetime.date.today()
-            self.month = self.month if self.month is not None else current_date.month
+            self.month = current_date.month
             self.year = self.year if self.year is not None else current_date.year
             
         logger.info(f"Weight Optimizer initialized with month={self.month}, year={self.year}")
@@ -330,7 +330,7 @@ class WeightOptimizer:
         
         # Log limited availability doctors once before checking coverage
         if limited_availability_doctors:
-            logger.info(f"The following doctors have limited availability (≤4 days) and are exempted from coverage requirements:")
+            logger.info(f"The following doctors have limited availability and are exempted from coverage requirements:")
             for doctor, days in limited_availability_doctors.items():
                 logger.info(f"  {doctor}: {days} available days")
         
@@ -372,7 +372,7 @@ class WeightOptimizer:
 
     def _get_limited_availability_doctors(self, schedule, dates_to_check):
         """
-        Find doctors with limited availability (≤4 days in the month).
+        Find doctors with limited availability.
         
         Args:
             schedule: Schedule dictionary
@@ -393,7 +393,7 @@ class WeightOptimizer:
                 if avail != "Not Available":
                     availability_counts[doctor] = availability_counts.get(doctor, 0) + 1
         
-        # Find doctors with limited availability (≤4 days)
+        # Find doctors with limited availability (≤4 days right now, but it can change in the future)
         limited_availability = {}
         for doctor, days in availability_counts.items():
             if days <= 4:
@@ -448,7 +448,7 @@ class WeightOptimizer:
             month_int = int(month_key) if isinstance(month_key, str) else month_key
             
             # Specific month filter for monthly optimization
-            if self.month is not None and month_int != self.month:
+            if month_int != self.month:
                 continue
             
             # Identify doctors with very limited availability (≤ 2 days per month)
@@ -464,14 +464,14 @@ class WeightOptimizer:
                         for doctor in doctors:
                             doctor_working_days[doctor] = doctor_working_days.get(doctor, 0) + 1
             
-            # Identify doctors with ≤ 2 working days in the month
+            # Identify doctors with limited availability in a month
             for doctor, days in doctor_working_days.items():
                 if days <= 4:
                     limited_availability_doctors.add(doctor)
             
             # Log information about doctors with limited availability
             if limited_availability_doctors:
-                logger.info(f"Excluding {len(limited_availability_doctors)} doctors with limited availability (≤ 2 days) from monthly variance: {', '.join(limited_availability_doctors)}")
+                logger.info(f"Excluding {len(limited_availability_doctors)} doctors with limited availability from monthly variance: {', '.join(limited_availability_doctors)}")
             
             # Check if max - min > 10 hours (monthly balance constraint)
             # but exclude doctors with very limited availability
@@ -504,10 +504,12 @@ class WeightOptimizer:
                 # Check for violation based on max-min variance
                 if max_min_variance > 10.0:
                     has_monthly_variance_violation = True
-                    monthly_variance_score += (max_min_variance - 10.0) ** 2
+                    # Increase the penalty for monthly variance by using a higher exponent (3 instead of 2)
+                    # and a multiplier (5) to make it much more important than preference violations
+                    monthly_variance_score += 5 * (max_min_variance - 10.0) ** 3
                 
-                # Also add penalty for overall variance from target
-                monthly_variance_score += (variance_from_target / num_active_doctors) / 2
+                # Also add penalty for overall variance from target - increased importance
+                monthly_variance_score += (variance_from_target / num_active_doctors) * 2
                 
                 # Log detailed information
                 logger.info(f"Monthly variance: max-min={max_min_variance:.2f}h, target deviation={variance_from_target/num_active_doctors:.2f}h")
@@ -593,15 +595,14 @@ class WeightOptimizer:
         # Get all dates in chronological order
         dates = sorted(schedule.keys())
         
-        # Filter dates by month AND year if monthly optimization
-        if self.month is not None:
-            if self.year is not None:
-                # Filter by both month and year
-                dates = [d for d in dates if datetime.date.fromisoformat(d).month == self.month and 
-                                              datetime.date.fromisoformat(d).year == self.year]
-            else:
-                # If year is None, just filter by month
-                dates = [d for d in dates if datetime.date.fromisoformat(d).month == self.month]
+        # Filter dates by month AND year
+        if self.year is not None:
+            # Filter by both month and year
+            dates = [d for d in dates if datetime.date.fromisoformat(d).month == self.month and 
+                                          datetime.date.fromisoformat(d).year == self.year]
+        else:
+            # If year is None, just filter by month
+            dates = [d for d in dates if datetime.date.fromisoformat(d).month == self.month]
         
         for i in range(len(dates) - 1):
             current_date = dates[i]
@@ -631,15 +632,14 @@ class WeightOptimizer:
         # Get all dates in chronological order
         dates = sorted(schedule.keys())
         
-        # Filter dates by month AND year if monthly optimization
-        if self.month is not None:
-            if self.year is not None:
-                # Filter by both month and year
-                dates = [d for d in dates if datetime.date.fromisoformat(d).month == self.month and 
-                                              datetime.date.fromisoformat(d).year == self.year]
-            else:
-                # If year is None, just filter by month
-                dates = [d for d in dates if datetime.date.fromisoformat(d).month == self.month]
+        # Filter dates by month AND year
+        if self.year is not None:
+            # Filter by both month and year
+            dates = [d for d in dates if datetime.date.fromisoformat(d).month == self.month and 
+                                          datetime.date.fromisoformat(d).year == self.year]
+        else:
+            # If year is None, just filter by month
+            dates = [d for d in dates if datetime.date.fromisoformat(d).month == self.month]
         
         for i in range(len(dates) - 1):
             current_date = dates[i]
@@ -856,15 +856,14 @@ class WeightOptimizer:
         # Get all dates in chronological order
         dates = sorted(schedule.keys())
         
-        # Filter dates by month AND year if monthly optimization
-        if self.month is not None:
-            if self.year is not None:
-                # Filter by both month and year
-                dates = [d for d in dates if datetime.date.fromisoformat(d).month == self.month and 
-                                              datetime.date.fromisoformat(d).year == self.year]
-            else:
-                # If year is None, just filter by month
-                dates = [d for d in dates if datetime.date.fromisoformat(d).month == self.month]
+        # Filter dates by month AND year
+        if self.year is not None:
+            # Filter by both month and year
+            dates = [d for d in dates if datetime.date.fromisoformat(d).month == self.month and 
+                                          datetime.date.fromisoformat(d).year == self.year]
+        else:
+            # If year is None, just filter by month
+            dates = [d for d in dates if datetime.date.fromisoformat(d).month == self.month]
         
         for i in range(len(dates) - 1):
             current_date = dates[i]
@@ -888,15 +887,14 @@ class WeightOptimizer:
         # Get all dates in chronological order
         dates = sorted(schedule.keys())
         
-        # Filter dates by month AND year if monthly optimization
-        if self.month is not None:
-            if self.year is not None:
-                # Filter by both month and year
-                dates = [d for d in dates if datetime.date.fromisoformat(d).month == self.month and 
-                                            datetime.date.fromisoformat(d).year == self.year]
-            else:
-                # If year is None, just filter by month
-                dates = [d for d in dates if datetime.date.fromisoformat(d).month == self.month]
+        # Filter dates by month AND year
+        if self.year is not None:
+            # Filter by both month and year
+            dates = [d for d in dates if datetime.date.fromisoformat(d).month == self.month and 
+                                        datetime.date.fromisoformat(d).year == self.year]
+        else:
+            # If year is None, just filter by month
+            dates = [d for d in dates if datetime.date.fromisoformat(d).month == self.month]
         
         for date in dates:
             # Skip if no Night shift on this date
@@ -1016,57 +1014,35 @@ class WeightOptimizer:
             if progress % 20 == 0:  # Only log occasionally to reduce verbosity
                 logger.info(f"Iteration {iteration}, Progress: {progress}%, {message}")
         
-        # Run either monthly or yearly optimizer based on whether month is specified
-        if self.month is not None:
-            # Log the parameters for debugging
-            logger.info(f"Creating MonthlyScheduleOptimizer with month={self.month}, year={self.year}")
-            
-            try:
-                # Create instance with default settings first
-                optimizer = MonthlyScheduleOptimizer(
-                    self.doctors,
-                    self.holidays,
-                    self.availability,
-                    self.month,
-                    self.year
-                )
-            except Exception as e:
-                logger.error(f"Error creating MonthlyScheduleOptimizer: {e}")
-                # Re-raise the exception
-                raise
-            
-            # Set shift template if available
-            if hasattr(self, 'shift_template') and self.shift_template:
-                # Make sure to copy the shift template to avoid modifications
-                optimizer.shift_template = copy.deepcopy(self.shift_template)
-                logger.info(f"Applied shift template with {len(self.shift_template)} days to optimizer")
-            
-            # Override weights
-            for key, value in weights.items():
-                if hasattr(optimizer, key):
-                    setattr(optimizer, key, value)
-            
-            schedule, stats = optimizer.optimize(progress_callback=progress_callback)
-        else:
+        # Log the parameters for debugging
+        logger.info(f"Creating MonthlyScheduleOptimizer with month={self.month}, year={self.year}")
+        
+        try:
             # Create instance with default settings first
-            optimizer = ScheduleOptimizer(
+            optimizer = MonthlyScheduleOptimizer(
                 self.doctors,
                 self.holidays,
-                self.availability
+                self.availability,
+                self.month,
+                self.year
             )
-
-            # Set shift template if available
-            if hasattr(self, 'shift_template') and self.shift_template:
-                # Make sure to copy the shift template to avoid modifications
-                optimizer.shift_template = copy.deepcopy(self.shift_template)
-                logger.info(f"Applied shift template with {len(self.shift_template)} days to optimizer")
-                        
-            # Override weights
-            for key, value in weights.items():
-                if hasattr(optimizer, key):
-                    setattr(optimizer, key, value)
-            
-            schedule, stats = optimizer.optimize(progress_callback=progress_callback)
+        except Exception as e:
+            logger.error(f"Error creating MonthlyScheduleOptimizer: {e}")
+            # Re-raise the exception
+            raise
+        
+        # Set shift template if available
+        if hasattr(self, 'shift_template') and self.shift_template:
+            # Make sure to copy the shift template to avoid modifications
+            optimizer.shift_template = copy.deepcopy(self.shift_template)
+            logger.info(f"Applied shift template with {len(self.shift_template)} days to optimizer")
+        
+        # Override weights
+        for key, value in weights.items():
+            if hasattr(optimizer, key):
+                setattr(optimizer, key, value)
+        
+        schedule, stats = optimizer.optimize(progress_callback=progress_callback)
         
         # Calculate a score for this configuration 
         total_score, hard_violations, soft_score = self._calculate_score(schedule, stats)
@@ -1201,9 +1177,6 @@ class WeightOptimizer:
                 self.best_preference_violations, self.best_soft_score
             ):
                 logger.info(f"New best solution! Score: {total_score:.2f} (was {self.best_score:.2f})")
-                logger.info(f"Hard violations: {hard_violations} (was {self.best_hard_violations}), "
-                           f"Monthly variance: {has_monthly_variance} (was {self.best_has_monthly_variance}), "
-                           f"Preference violations: {preference_violations} (was {self.best_preference_violations})")
                 
                 self.best_score = total_score
                 self.best_hard_violations = hard_violations
@@ -1222,12 +1195,25 @@ class WeightOptimizer:
                 progress = max(time_percent, iter_percent)
                 
                 status_msg = f"Iteration {iteration}/{self.max_iterations}, Best score: {self.best_score:.2f}"
+                # Clearly separate the different constraint types
+                constraints_msg = []
+                
+                # Hard constraints - most critical
                 if self.best_hard_violations > 0:
-                    status_msg += f" (WARNING: {self.best_hard_violations} hard violations!)"
-                elif self.best_has_monthly_variance:
-                    status_msg += f" (Monthly variance > 10h, Preference violations: {self.best_preference_violations})"
+                    constraints_msg.append(f"HARD CONSTRAINTS: {self.best_hard_violations} violations!")
                 else:
-                    status_msg += f" (No hard/monthly violations, Preference violations: {self.best_preference_violations})"
+                    constraints_msg.append("HARD CONSTRAINTS: None")
+                    
+                # Monthly variance - second priority
+                if self.best_has_monthly_variance:
+                    constraints_msg.append("MONTHLY HOURS: Variance >10h")
+                else:
+                    constraints_msg.append("MONTHLY HOURS: Balanced")
+                    
+                # Preference violations - lowest priority
+                constraints_msg.append(f"PREFERENCES: {self.best_preference_violations} violations")
+                
+                status_msg += f" ({' | '.join(constraints_msg)})"
                 
                 progress_callback(progress, status_msg)
     
@@ -1302,9 +1288,6 @@ class WeightOptimizer:
                             self.best_preference_violations, self.best_soft_score
                         ):
                             logger.info(f"New best solution! Score: {total_score:.2f} (was {self.best_score:.2f})")
-                            logger.info(f"Hard violations: {hard_violations} (was {self.best_hard_violations}), "
-                                       f"Monthly variance: {has_monthly_variance} (was {self.best_has_monthly_variance}), "
-                                       f"Preference violations: {preference_violations} (was {self.best_preference_violations})")
                             
                             self.best_score = total_score
                             self.best_hard_violations = hard_violations
@@ -1314,10 +1297,8 @@ class WeightOptimizer:
                             self.best_weights = copy.deepcopy(current_weights)
                             self.best_schedule = copy.deepcopy(schedule)
                             self.best_stats = copy.deepcopy(stats)
-                            
-                    except Exception as exc:
-                        logger.error(f"Iteration generated an exception: {exc}")
-                        completed += 1
+                    except Exception as e:
+                        logger.error(f"Error processing future: {e}")
                 
                 # Report progress
                 if progress_callback:
@@ -1327,12 +1308,25 @@ class WeightOptimizer:
                     progress = max(time_percent, iter_percent)
                     
                     status_msg = f"Completed {completed}/{self.max_iterations}, Best score: {self.best_score:.2f}"
+                    # Clearly separate the different constraint types
+                    constraints_msg = []
+                    
+                    # Hard constraints - most critical
                     if self.best_hard_violations > 0:
-                        status_msg += f" (WARNING: {self.best_hard_violations} hard violations!)"
-                    elif self.best_has_monthly_variance:
-                        status_msg += f" (Monthly variance > 10h, Preference violations: {self.best_preference_violations})"
+                        constraints_msg.append(f"HARD CONSTRAINTS: {self.best_hard_violations} violations!")
                     else:
-                        status_msg += f" (No hard/monthly violations, Preference violations: {self.best_preference_violations})"
+                        constraints_msg.append("HARD CONSTRAINTS: None")
+                        
+                    # Monthly variance - second priority
+                    if self.best_has_monthly_variance:
+                        constraints_msg.append("MONTHLY HOURS: Variance >10h")
+                    else:
+                        constraints_msg.append("MONTHLY HOURS: Balanced")
+                        
+                    # Preference violations - lowest priority
+                    constraints_msg.append(f"PREFERENCES: {self.best_preference_violations} violations")
+                    
+                    status_msg += f" ({' | '.join(constraints_msg)})"
                     
                     progress_callback(progress, status_msg)
             
@@ -1425,12 +1419,25 @@ class WeightOptimizer:
                             progress = max(time_percent, iter_percent)
                             
                             status_msg = f"Completed {completed}/{self.max_iterations}, Best score: {self.best_score:.2f}"
+                            # Clearly separate the different constraint types
+                            constraints_msg = []
+                            
+                            # Hard constraints - most critical
                             if self.best_hard_violations > 0:
-                                status_msg += f" (WARNING: {self.best_hard_violations} hard violations!)"
-                            elif self.best_has_monthly_variance:
-                                status_msg += f" (Monthly variance > 10h, Preference violations: {self.best_preference_violations})"
+                                constraints_msg.append(f"HARD CONSTRAINTS: {self.best_hard_violations} violations!")
                             else:
-                                status_msg += f" (No hard/monthly violations, Preference violations: {self.best_preference_violations})"
+                                constraints_msg.append("HARD CONSTRAINTS: None")
+                                
+                            # Monthly variance - second priority
+                            if self.best_has_monthly_variance:
+                                constraints_msg.append("MONTHLY HOURS: Variance >10h")
+                            else:
+                                constraints_msg.append("MONTHLY HOURS: Balanced")
+                                
+                            # Preference violations - lowest priority
+                            constraints_msg.append(f"PREFERENCES: {self.best_preference_violations} violations")
+                            
+                            status_msg += f" ({' | '.join(constraints_msg)})"
                             
                             progress_callback(progress, status_msg)
                 
@@ -1466,10 +1473,10 @@ class WeightOptimizer:
 
 def optimize_weights(data: Dict[str, Any], progress_callback: Callable = None) -> Dict[str, Any]:
     """
-    Main function to optimize the weights for the schedule optimizer.
+    Optimize weights for schedule optimization.
     
     Args:
-        data: Dictionary containing doctors, holidays, availability, and meta-optimization parameters
+        data: Dictionary with doctors, holidays, availability, month, year, and optimization parameters
         progress_callback: Optional function to report progress
         
     Returns:
@@ -1486,12 +1493,11 @@ def optimize_weights(data: Dict[str, Any], progress_callback: Callable = None) -
         logger.info(f"optimize_weights received: month={month}, year={year}")
         
         # Ensure month and year are integers if provided
-        if month is not None:
-            try:
-                month = int(month)
-            except (ValueError, TypeError):
-                logger.warning(f"Invalid month value: {month}, using current month")
-                month = datetime.date.today().month
+        try:
+            month = int(month)
+        except (ValueError, TypeError):
+            logger.warning(f"Invalid month value: {month}, using current month")
+            month = datetime.date.today().month
                 
         if year is not None:
             try:
@@ -1636,25 +1642,16 @@ def optimize_weights(data: Dict[str, Any], progress_callback: Callable = None) -
                 
                 try:
                     # Create an optimizer instance with these weights
-                    if month is not None:
-                        # Log parameters for debugging
-                        logger.info(f"Creating alternative MonthlyScheduleOptimizer with month={month}, year={year}")
-                        
-                        # For monthly optimization
-                        optimizer_instance = MonthlyScheduleOptimizer(
-                            doctors,
-                            holidays,
-                            availability,
-                            month,
-                            year  # Make sure we pass the year parameter here
-                        )
-                    else:
-                        # For yearly optimization
-                        optimizer_instance = ScheduleOptimizer(
-                            doctors,
-                            holidays,
-                            availability
-                        )
+                    logger.info(f"Creating alternative MonthlyScheduleOptimizer with month={month}, year={year}")
+                    
+                    # For monthly optimization
+                    optimizer_instance = MonthlyScheduleOptimizer(
+                        doctors,
+                        holidays,
+                        availability,
+                        month,
+                        year  # Make sure we pass the year parameter here
+                    )
                         
                     # Apply the weights
                     for key, value in weights.items():
@@ -1751,9 +1748,9 @@ def optimize_weights(data: Dict[str, Any], progress_callback: Callable = None) -
                 if progress_callback:
                     status = "Found valid solution with no hard constraints"
                     if not best_solution["has_monthly_variance"]:
-                        status += f" and no monthly variance (Preference violations: {best_solution['preference_violations']})"
+                        status += f" and no monthly variance violations (Preference violations: {best_solution['preference_violations']})"
                     else:
-                        status += f" but with monthly variance (Preference violations: {best_solution['preference_violations']})"
+                        status += f" but with MONTHLY VARIANCE >10h VIOLATION (Preference violations: {best_solution['preference_violations']})"
                     progress_callback(100, status)
             else:
                 logger.warning("Could not find a solution without hard violations!")
@@ -1770,9 +1767,9 @@ def optimize_weights(data: Dict[str, Any], progress_callback: Callable = None) -
             if progress_callback:
                 status = "Optimization complete. Solution has no hard violations"
                 if not has_monthly_variance:
-                    status += f" and no monthly variance (Preference violations: {preference_violations})"
+                    status += f" and no monthly variance violations (Preference violations: {preference_violations})"
                 else:
-                    status += f" but has monthly variance (Preference violations: {preference_violations})"
+                    status += f" but has MONTHLY VARIANCE >10h VIOLATION (Preference violations: {preference_violations})"
                 progress_callback(100, status)
         
         # ---- Add detailed reporting of top solutions ----

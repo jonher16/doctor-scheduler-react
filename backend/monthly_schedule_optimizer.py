@@ -683,7 +683,6 @@ class MonthlyScheduleOptimizer:
                 excess = max_min_variance - self.max_monthly_variance
                 cost += self.w_balance * (excess ** 2)
                 
-            # Add additional penalty for variance from target
             cost += (self.w_balance / 2) * (variance_from_target / num_active_doctors)
         
         # Calculate average hours for junior and senior doctors

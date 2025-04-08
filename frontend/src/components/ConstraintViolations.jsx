@@ -309,17 +309,45 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
     if (Object.keys(doctorHours).length > 0) {
       console.log("Calculating monthly variance with hours:", doctorHours);
       
+      // Count working days for each doctor in this month
+      const doctorWorkingDays = {};
+      for (const date of monthDates) {
+        if (!schedule[date]) continue;
+        
+        for (const shift of ['Day', 'Evening', 'Night']) {
+          if (!schedule[date][shift]) continue;
+          
+          for (const doctor of schedule[date][shift]) {
+            doctorWorkingDays[doctor] = (doctorWorkingDays[doctor] || 0) + 1;
+          }
+        }
+      }
+      
+      // Identify doctors with limited availability (≤ 4 days in the month)
+      const limitedAvailabilityDoctors = new Set();
+      for (const [doctor, days] of Object.entries(doctorWorkingDays)) {
+        if (days <= 4) {
+          limitedAvailabilityDoctors.add(doctor);
+        }
+      }
+      
+      if (limitedAvailabilityDoctors.size > 0) {
+        console.log(`Excluding ${limitedAvailabilityDoctors.size} doctors with limited availability (≤ 4 days):`, 
+          Array.from(limitedAvailabilityDoctors).join(', '));
+      }
+      
       // Only consider doctors who actually have hours in this month
+      // AND exclude doctors with limited availability
       const activeDoctorHours = {};
       for (const [doctor, hours] of Object.entries(doctorHours)) {
-        if (hours > 0) {
+        if (hours > 0 && !limitedAvailabilityDoctors.has(doctor)) {
           activeDoctorHours[doctor] = hours;
         }
       }
       
-      console.log("Active doctor hours:", activeDoctorHours);
+      console.log("Active doctor hours (excluding limited availability):", activeDoctorHours);
       
-      // Only proceed if we have active doctors
+      // Only proceed if we have multiple active doctors
       if (Object.keys(activeDoctorHours).length > 1) {
         const activeHours = Object.values(activeDoctorHours);
         const maxHours = Math.max(...activeHours);
@@ -350,7 +378,8 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
             minHours,
             doctorsWithMax,
             doctorsWithMin,
-            message: `Monthly variance of ${variance}h exceeds the 10h maximum`
+            message: `Monthly variance of ${variance}h exceeds the 10h maximum`,
+            excludedDoctors: Array.from(limitedAvailabilityDoctors)
           });
         }
       }
@@ -867,7 +896,7 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
               Soft violation: Monthly workload variance must not exceed 10 hours.
             </Typography>
             <Typography variant="body2" sx={{ mb: 2, fontStyle: 'italic' }}>
-              Note: Doctors with very limited availability (≤ 2 days per month) are automatically excluded from this constraint. The scheduler then uses an improved balancing approach for the remaining doctors to distribute workload more evenly.
+              Note: Doctors with very limited availability (≤ 4 days per month) are automatically excluded from this constraint. The scheduler then uses an improved balancing approach for the remaining doctors to distribute workload more evenly.
             </Typography>
             {violations.monthlyVariance.details.length > 0 ? (
               <Box>
@@ -881,6 +910,18 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
                     <Divider sx={{ my: 1 }} />
                     <Typography variant="body2">Max Hours: {violation.maxHours}h ({violation.maxHours/8} shifts) by {violation.doctorsWithMax.join(', ')}</Typography>
                     <Typography variant="body2">Min Hours: {violation.minHours}h ({violation.minHours/8} shifts) by {violation.doctorsWithMin.join(', ')}</Typography>
+                    
+                    {violation.excludedDoctors && violation.excludedDoctors.length > 0 && (
+                      <>
+                        <Divider sx={{ my: 1 }} />
+                        <Typography variant="body2">
+                          <strong>Excluded from variance calculation</strong>: {violation.excludedDoctors.length} doctors with limited availability (≤ 4 days):
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontStyle: 'italic' }}>
+                          {violation.excludedDoctors.join(', ')}
+                        </Typography>
+                      </>
+                    )}
                   </Box>
                 ))}
               </Box>

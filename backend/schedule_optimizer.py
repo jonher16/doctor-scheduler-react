@@ -492,9 +492,10 @@ class ScheduleOptimizer:
                 
                 # Stronger penalty for exceeding the target variance
                 if variance > self.max_monthly_variance:
-                    # Quadratic penalty to more aggressively enforce this constraint
+                    # Increase to cubic penalty with a large multiplier to aggressively enforce this constraint
+                    # This makes monthly variance much more important than preference violations
                     excess = variance - self.max_monthly_variance
-                    cost += self.w_balance * (excess ** 2)
+                    cost += self.w_balance * 5 * (excess ** 3)
             
             # Calculate average hours for junior and senior doctors
             avg_junior = sum(junior_hours.values()) / max(len(junior_hours), 1)
@@ -805,7 +806,6 @@ class ScheduleOptimizer:
                                 old_doctor = old_doc
                                 new_doctor = new_doc
                                 move_successful = True
-                                break
                     
                     if duplicates_found and move_successful:
                         break
