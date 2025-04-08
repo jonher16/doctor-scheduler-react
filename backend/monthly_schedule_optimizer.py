@@ -65,7 +65,7 @@ class MonthlyScheduleOptimizer:
 
         # Workload balance thresholds 
         # More strict for monthly scheduling since we're focusing on a single month
-        self.max_monthly_variance = 8  # Tighter than yearly (was 10)
+        self.max_doctor_hour_balance = 8  # Maximum difference in hours between doctors (1 shift)
         
         # Target daily workload difference between juniors and seniors
         # Seniors should work less per month
@@ -679,8 +679,8 @@ class MonthlyScheduleOptimizer:
             max_min_variance = max_hours - min_hours
             
             # Apply penalty if either type of variance is too high
-            if max_min_variance > self.max_monthly_variance:
-                excess = max_min_variance - self.max_monthly_variance
+            if max_min_variance > self.max_doctor_hour_balance:
+                excess = max_min_variance - self.max_doctor_hour_balance
                 cost += self.w_balance * (excess ** 2)
                 
             cost += (self.w_balance / 2) * (variance_from_target / num_active_doctors)

@@ -117,7 +117,7 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
         count: 0,
         details: []
       },
-      monthlyVariance: {
+      doctor_hour_balance: {
         count: 0,
         details: []
       },
@@ -305,9 +305,9 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
       }
     }
     
-    // 6a. Check monthly variance more than 10h
+    // 6a. Check doctor hour balance - more than 1 shift (8h) difference
     if (Object.keys(doctorHours).length > 0) {
-      console.log("Calculating monthly variance with hours:", doctorHours);
+      console.log("Calculating doctor hour balance with hours:", doctorHours);
       
       // Count working days for each doctor in this month
       const doctorWorkingDays = {};
@@ -356,9 +356,9 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
         
         console.log(`Max hours: ${maxHours}, Min hours: ${minHours}, Variance: ${variance}`);
         
-        // Per the requirements, variance should be no more than 10 hours
-        if (variance > 10) {
-          violationsData.monthlyVariance.count = 1;
+        // Per the requirements, variance should be no more than 8 hours (1 shift)
+        if (variance > 8) {
+          violationsData.doctor_hour_balance.count = 1;
           
           // Find doctors with max and min hours
           const doctorsWithMax = Object.entries(activeDoctorHours)
@@ -372,13 +372,13 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
           console.log("Doctors with max hours:", doctorsWithMax);
           console.log("Doctors with min hours:", doctorsWithMin);
             
-          violationsData.monthlyVariance.details.push({
+          violationsData.doctor_hour_balance.details.push({
             variance,
             maxHours,
             minHours,
             doctorsWithMax,
             doctorsWithMin,
-            message: `Monthly variance of ${variance}h exceeds the 10h maximum`,
+            message: `Doctor hour balance variance of ${variance}h exceeds the 8h maximum (1 shift)`,
             excludedDoctors: Array.from(limitedAvailabilityDoctors)
           });
         }
@@ -636,9 +636,9 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
                 <Grid item xs={4}>
                   <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                     <Chip 
-                      icon={violations.monthlyVariance.count > 0 ? <ErrorIcon /> : <CheckIcon />}
-                      label={`Monthly Variance > 10h: ${violations.monthlyVariance.count}`}
-                      color={violations.monthlyVariance.count > 0 ? "warning" : "success"}
+                      icon={violations.doctor_hour_balance.count > 0 ? <ErrorIcon /> : <CheckIcon />}
+                      label={`Doctor Hour Balance > 8h: ${violations.doctor_hour_balance.count}`}
+                      color={violations.doctor_hour_balance.count > 0 ? "warning" : "success"}
                       sx={{ width: '100%', justifyContent: 'flex-start' }}
                     />
                   </Box>
@@ -879,33 +879,33 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
         </Accordion>
         
         <Accordion 
-          disabled={violations.monthlyVariance.count === 0}
+          disabled={violations.doctor_hour_balance.count === 0}
           sx={{
-            borderLeft: violations.monthlyVariance.count > 0 ? '4px solid' : 'none',
+            borderLeft: violations.doctor_hour_balance.count > 0 ? '4px solid' : 'none',
             borderColor: 'warning.main',
           }}
         >
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
             <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-              <Typography sx={{ flexGrow: 1 }}>Monthly Variance + 10h ({violations.monthlyVariance.count})</Typography>
+              <Typography sx={{ flexGrow: 1 }}>Doctor Hour Balance + 8h ({violations.doctor_hour_balance.count})</Typography>
               <Chip size="small" color="warning" label="Soft Constraint" sx={{ ml: 2 }} />
             </Box>
           </AccordionSummary>
           <AccordionDetails>
             <Typography variant="body2" sx={{ mb: 2, fontStyle: 'italic', color: 'warning.main' }}>
-              Soft violation: Monthly workload variance must not exceed 10 hours.
+              Soft violation: Doctor hour balance should not exceed 8 hours (1 shift) difference between doctors.
             </Typography>
             <Typography variant="body2" sx={{ mb: 2, fontStyle: 'italic' }}>
               Note: Doctors with very limited availability (≤ 4 days per month) are automatically excluded from this constraint. The scheduler then uses an improved balancing approach for the remaining doctors to distribute workload more evenly.
             </Typography>
-            {violations.monthlyVariance.details.length > 0 ? (
+            {violations.doctor_hour_balance.details.length > 0 ? (
               <Box>
-                {violations.monthlyVariance.details.map((violation, index) => (
+                {violations.doctor_hour_balance.details.map((violation, index) => (
                   <Box key={`variance-${index}`}>
                     <Typography variant="subtitle1" color="warning">Variance: {violation.variance}h</Typography>
                     <Typography variant="body2" sx={{ mt: 1 }}>
                       <strong>Note</strong>: The dashboard shows variance in shifts (1 shift = 8h). 
-                      The constraint requires monthly hours variance to be ≤ 10h.
+                      The constraint requires doctor hour balance to be ≤ 8h (1 shift) difference.
                     </Typography>
                     <Divider sx={{ my: 1 }} />
                     <Typography variant="body2">Max Hours: {violation.maxHours}h ({violation.maxHours/8} shifts) by {violation.doctorsWithMax.join(', ')}</Typography>

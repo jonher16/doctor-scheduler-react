@@ -110,7 +110,7 @@ class WeightOptimizer:
         self.best_score = float('inf')
         self.best_hard_violations = float('inf')  # Track hard violations separately
         self.best_soft_score = float('inf')       # Track soft score separately
-        self.best_has_monthly_variance = True     # Track monthly variance violations
+        self.best_has_doctor_hour_balance_violation = True     # Track doctor hour balance violations
         self.best_preference_violations = float('inf')  # Track preference violations
         
         # Define weight parameter ranges
@@ -434,14 +434,14 @@ class WeightOptimizer:
             stats: The statistics for the schedule
             
         Returns:
-            Tuple of (total_soft_score, has_monthly_variance_violation, preference_violations_count)
+            Tuple of (total_soft_score, has_doctor_hour_balance_violation, preference_violations_count)
         """
         # Initialize counters
-        has_monthly_variance_violation = False
+        has_doctor_hour_balance_violation = False
         preference_violations_count = 0
         
-        # 1. Monthly balance (soft constraint, higher priority)
-        monthly_variance_score = 0.0
+        # 1. Doctor hour balance (soft constraint, higher priority)
+        doctor_hour_balance_score = 0.0
         monthly_stats = stats.get("monthly_stats", {})
         for month_key, month_stats in monthly_stats.items():
             # Convert month key to int if needed
@@ -471,9 +471,9 @@ class WeightOptimizer:
             
             # Log information about doctors with limited availability
             if limited_availability_doctors:
-                logger.info(f"Excluding {len(limited_availability_doctors)} doctors with limited availability from monthly variance: {', '.join(limited_availability_doctors)}")
+                logger.info(f"Excluding {len(limited_availability_doctors)} doctors with limited availability from doctor hour balance: {', '.join(limited_availability_doctors)}")
             
-            # Check if max - min > 10 hours (monthly balance constraint)
+            # Check if max - min > 8 hours (1 shift)
             # but exclude doctors with very limited availability
             active_hours = []
             active_doctor_hours = {}
@@ -486,7 +486,7 @@ class WeightOptimizer:
                 # Calculate both max-min variance and variance from target
                 max_hours = max(active_hours)
                 min_hours = min(active_hours)
-                max_min_variance = max_hours - min_hours
+                hours_difference = max_hours - min_hours
                 
                 # Calculate target hours for better distribution
                 total_hours = sum(active_hours)
@@ -496,23 +496,32 @@ class WeightOptimizer:
                 logger.info(f"Weight optimizer: Target hours per doctor: {target_hours_per_doctor:.2f}h (total: {total_hours}h, active doctors: {num_active_doctors})")
                 
                 # Calculate variance from target
-                variance_from_target = 0
+                hours_variance = 0
                 for doctor, hours in active_doctor_hours.items():
                     deviation = abs(hours - target_hours_per_doctor)
-                    variance_from_target += deviation ** 2
+                    hours_variance += deviation ** 2
                 
-                # Check for violation based on max-min variance
-                if max_min_variance > 10.0:
-                    has_monthly_variance_violation = True
-                    # Increase the penalty for monthly variance by using a higher exponent (3 instead of 2)
-                    # and a multiplier (5) to make it much more important than preference violations
-                    monthly_variance_score += 5 * (max_min_variance - 10.0) ** 3
+                # Check for violation based on max-min difference - EXACTLY as in UI
+                # Using 8.0 hours (one shift) threshold
+                if hours_difference > 8.0:
+                    has_doctor_hour_balance_violation = True
+                    # Increase the penalty for doctor hour imbalance 
+                    doctor_hour_balance_score += 5 * (hours_difference - 8.0) ** 3
+                    
+                    # Find doctors with max and min hours for logging
+                    doctors_with_max = [d for d, h in active_doctor_hours.items() if h == max_hours]
+                    doctors_with_min = [d for d, h in active_doctor_hours.items() if h == min_hours]
+                    
+                    logger.info(f"Doctor hour balance violation: max={max_hours}h by {', '.join(doctors_with_max)}, min={min_hours}h by {', '.join(doctors_with_min)}, difference={hours_difference:.2f}h")
                 
                 # Also add penalty for overall variance from target - increased importance
-                monthly_variance_score += (variance_from_target / num_active_doctors) * 2
+                doctor_hour_balance_score += (hours_variance / num_active_doctors) * 2
                 
                 # Log detailed information
-                logger.info(f"Monthly variance: max-min={max_min_variance:.2f}h, target deviation={variance_from_target/num_active_doctors:.2f}h")
+                logger.info(f"Doctor hour balance: max-min={hours_difference:.2f}h, target deviation={hours_variance/num_active_doctors:.2f}h")
+            else:
+                # Not enough active doctors to make a meaningful balance comparison
+                logger.info(f"Not enough active doctors ({len(active_hours)}) for meaningful hour balance calculation - skipping this check")
         
         # 2. Preference satisfaction (soft constraint, lower priority)
         preference_score = 0.0
@@ -535,34 +544,34 @@ class WeightOptimizer:
                         preference_score += (1.0 - percentage) * 50.0
         
         # Calculate total soft score (still needed for comparing solutions with same category)
-        total_soft_score = monthly_variance_score + preference_score
+        total_soft_score = doctor_hour_balance_score + preference_score
         
         # Log detailed information about soft constraints
-        if has_monthly_variance_violation:
-            logger.info(f"Monthly variance violation detected. Score: {monthly_variance_score:.2f}")
+        if has_doctor_hour_balance_violation:
+            logger.info(f"Doctor hour balance violation detected. Score: {doctor_hour_balance_score:.2f}")
         else:
-            logger.info(f"No monthly variance violation.")
+            logger.info(f"No doctor hour balance violation.")
             
         logger.info(f"Preference violations: {preference_violations_count}. Score: {preference_score:.2f}")
         logger.info(f"Total soft score: {total_soft_score:.2f}")
         
-        return (total_soft_score, has_monthly_variance_violation, preference_violations_count)
+        return (total_soft_score, has_doctor_hour_balance_violation, preference_violations_count)
 
-    def _is_better_solution(self, new_hard, new_monthly, new_pref, new_soft, 
-                       current_hard, current_monthly, current_pref, current_soft) -> bool:
+    def _is_better_solution(self, new_hard, new_doctor_hour_balance, new_pref, new_soft, 
+                       current_hard, current_doctor_hour_balance, current_pref, current_soft) -> bool:
         """
         Determine if the new solution is better according to our hierarchy:
         1. No hard violations (highest priority)
-        2. No monthly variance > 10h (next priority)
+        2. No doctor hour balance violation (> 8h / 1 shift) (next priority)
         3. Minimum preference violations (next priority)
         4. Lower overall soft score (for solutions equal in above)
         
         Args:
             new_hard: Hard violations in new solution
-            new_monthly: Whether new solution has monthly variance violation
+            new_doctor_hour_balance: Whether new solution has doctor hour balance violation
             new_pref: Preference violations in new solution
             new_soft: Overall soft score for new solution
-            current_hard, current_monthly, current_pref, current_soft: Same for current best
+            current_hard, current_doctor_hour_balance, current_pref, current_soft: Same for current best
             
         Returns:
             True if the new solution is better, False otherwise
@@ -573,13 +582,13 @@ class WeightOptimizer:
         elif new_hard > current_hard:
             return False
         
-        # 2. If hard violations are equal, check monthly variance
-        if not new_monthly and current_monthly:
-            return True  # New solution has no monthly variance violation but current does
-        elif new_monthly and not current_monthly:
-            return False  # Current solution has no monthly variance violation but new does
+        # 2. If hard violations are equal, check doctor hour balance
+        if not new_doctor_hour_balance and current_doctor_hour_balance:
+            return True  # New solution has no doctor hour balance violation but current does
+        elif new_doctor_hour_balance and not current_doctor_hour_balance:
+            return False  # Current solution has no doctor hour balance violation but new does
         
-        # 3. If both have same monthly variance status, compare preference violations
+        # 3. If both have same doctor hour balance status, compare preference violations
         if new_pref < current_pref:
             return True
         elif new_pref > current_pref:
@@ -846,8 +855,77 @@ class WeightOptimizer:
 
     def _verify_no_weekend_holiday_violations(self, schedule, stats):
         """Verify that seniors don't work more weekend/holiday hours than juniors."""
-        # Use the same checking method but with strict logging enabled
         return self._check_senior_more_weekend_holiday(stats, strict_check=True) == 0
+
+    def _verify_no_doctor_hour_balance_violations(self, schedule, stats):
+        """
+        Verify doctor hour balance using the same criteria as in _calculate_soft_score.
+        Returns True if there are no violations, False if there are violations.
+        """
+        logger.info("Running doctor hour balance verification with same criteria as UI...")
+        monthly_stats = stats.get("monthly_stats", {})
+        for month_key, month_stats in monthly_stats.items():
+            # Convert month key to int if needed
+            month_int = int(month_key) if isinstance(month_key, str) else month_key
+            
+            # Specific month filter for monthly optimization
+            if month_int != self.month:
+                continue
+            
+            # Identify doctors with very limited availability (≤ 4 days per month)
+            limited_availability_doctors = set()
+            doctor_working_days = {}
+            
+            # Count working days for each doctor in this month
+            for day_stats in stats.get("daily_stats", {}).values():
+                date = day_stats.get("date", "")
+                if date and datetime.date.fromisoformat(date).month == month_int:
+                    # For each shift on this day
+                    for shift_name, doctors in schedule.get(date, {}).items():
+                        for doctor in doctors:
+                            doctor_working_days[doctor] = doctor_working_days.get(doctor, 0) + 1
+            
+            # Identify doctors with limited availability in a month
+            for doctor, days in doctor_working_days.items():
+                if days <= 4:
+                    limited_availability_doctors.add(doctor)
+                    
+            logger.info(f"Excluding {len(limited_availability_doctors)} doctors with limited availability (≤ 4 days): {', '.join(limited_availability_doctors)}")
+            
+            # Get active hours, excluding doctors with limited availability
+            active_doctor_hours = {}
+            for doctor, hours in month_stats.get("doctor_hours", {}).items():
+                if doctor not in limited_availability_doctors and hours > 0:
+                    active_doctor_hours[doctor] = hours
+            
+            logger.info(f"Active doctor hours (excluding limited availability): {active_doctor_hours}")
+            
+            # Only proceed if we have multiple active doctors
+            if len(active_doctor_hours) > 1:
+                active_hours = list(active_doctor_hours.values())
+                max_hours = max(active_hours)
+                min_hours = min(active_hours)
+                hours_difference = max_hours - min_hours
+                
+                # Find doctors with max and min hours for logging
+                doctors_with_max = [d for d, h in active_doctor_hours.items() if h == max_hours]
+                doctors_with_min = [d for d, h in active_doctor_hours.items() if h == min_hours]
+                
+                logger.info(f"Max hours: {max_hours}h by {', '.join(doctors_with_max)}")
+                logger.info(f"Min hours: {min_hours}h by {', '.join(doctors_with_min)}")
+                logger.info(f"Hour difference: {hours_difference}h")
+                
+                # Check if max-min is > 8 hours (one shift) - EXACTLY as in UI
+                if hours_difference > 8.0:
+                    logger.info(f"VIOLATION: Doctor hour balance difference ({hours_difference:.2f}h) exceeds 8h threshold")
+                    return False
+                else:
+                    logger.info(f"PASS: Doctor hour balance difference ({hours_difference:.2f}h) within 8h threshold")
+            else:
+                logger.info(f"Not enough active doctors ({len(active_doctor_hours)}) for meaningful hour balance calculation")
+        
+        # No imbalance found
+        return True
 
     def _check_consecutive_night_shifts(self, schedule: Dict) -> int:
         """Check for doctors working consecutive night shifts."""
@@ -1005,7 +1083,7 @@ class WeightOptimizer:
             
         Returns:
             Tuple of (weights, schedule, statistics, total_score, hard_violations, soft_score, 
-                     has_monthly_variance, preference_violations)
+                     has_doctor_hour_balance_violation, preference_violations)
         """
         start_time = time.time()
         
@@ -1048,15 +1126,15 @@ class WeightOptimizer:
         total_score, hard_violations, soft_score = self._calculate_score(schedule, stats)
         
         # Calculate detailed soft constraint metrics
-        soft_score, has_monthly_variance, preference_violations = self._calculate_soft_score(schedule, stats)
+        soft_score, has_doctor_hour_balance_violation, preference_violations = self._calculate_soft_score(schedule, stats)
         
         elapsed = time.time() - start_time
         logger.info(f"Iteration {iteration} completed in {elapsed:.2f}s with score {total_score:.2f} "
-              f"(hard violations: {hard_violations}, monthly variance: {has_monthly_variance}, "
+              f"(hard violations: {hard_violations}, doctor hour balance: {has_doctor_hour_balance_violation}, "
               f"preference violations: {preference_violations})")
         
         return (weights, schedule, stats, total_score, hard_violations, soft_score, 
-                has_monthly_variance, preference_violations)
+                has_doctor_hour_balance_violation, preference_violations)
 
     def optimize(self, progress_callback: Callable = None) -> Dict[str, Any]:
         """
@@ -1093,7 +1171,7 @@ class WeightOptimizer:
         solution_time = time.time() - start_time
         logger.info(f"Weight optimization completed in {solution_time:.2f}s")
         logger.info(f"Best score: {self.best_score:.2f} (hard violations: {self.best_hard_violations}, "
-                   f"monthly variance: {self.best_has_monthly_variance}, "
+                   f"doctor hour balance: {self.best_has_doctor_hour_balance_violation}, "
                    f"preference violations: {self.best_preference_violations})")
         
         # Verify the best solution doesn't have hard constraint violations
@@ -1101,15 +1179,26 @@ class WeightOptimizer:
             logger.warning("WARNING: Best solution still has hard constraint violations!")
             logger.warning("Hard constraint violations: " + str(self.best_hard_violations))
         
+        # Verify doctor hour balance using the specialized verification method for final check
+        has_hour_balance_violation = not self._verify_no_doctor_hour_balance_violations(self.best_schedule, self.best_stats)
+        
+        if self.best_has_doctor_hour_balance_violation != has_hour_balance_violation:
+            logger.warning(f"!!! IMPORTANT: Final verification updated doctor hour balance violation status from {self.best_has_doctor_hour_balance_violation} to {has_hour_balance_violation}")
+            logger.warning(f"!!! This means the UI and backend may show different balance violations")
+            self.best_has_doctor_hour_balance_violation = has_hour_balance_violation
+            logger.warning(f"!!! Updated doctor hour balance violation in result to: {has_hour_balance_violation}")
+        else:
+            logger.info(f"Doctor hour balance verification confirms optimization result: {has_hour_balance_violation}")
+        
         if progress_callback:
             progress_callback(100, "Weight optimization complete")
             
-        # Sort results by hierarchy: hard violations, monthly variance, preference violations
+        # Sort results by hierarchy: hard violations, doctor hour balance, preference violations
         sorted_results = sorted(
             self.results, 
             key=lambda x: (
                 x.get("hard_violations", float('inf')), 
-                1 if x.get("has_monthly_variance", True) else 0,
+                1 if x.get("has_doctor_hour_balance_violation", True) else 0,
                 x.get("preference_violations", float('inf')),
                 x.get("soft_score", float('inf'))
             )
@@ -1121,7 +1210,7 @@ class WeightOptimizer:
             "weights": self.best_weights,
             "score": self.best_score,
             "hard_violations": self.best_hard_violations,
-            "has_monthly_variance": self.best_has_monthly_variance,
+            "has_doctor_hour_balance_violation": self.best_has_doctor_hour_balance_violation,
             "preference_violations": self.best_preference_violations,
             "soft_score": self.best_soft_score,
             "all_results": sorted_results[:10],  # Return top 10 results
@@ -1138,7 +1227,7 @@ class WeightOptimizer:
         
         # Initialize tracking for best solution with soft constraint hierarchy
         self.best_hard_violations = float('inf')
-        self.best_has_monthly_variance = True
+        self.best_has_doctor_hour_balance_violation = True
         self.best_preference_violations = float('inf')
         self.best_soft_score = float('inf')
         
@@ -1152,14 +1241,14 @@ class WeightOptimizer:
                 
             # Evaluate this weight configuration
             current_weights, schedule, stats, total_score, hard_violations, soft_score, \
-            has_monthly_variance, preference_violations = self._evaluate_weights(weights, iteration)
+            has_doctor_hour_balance_violation, preference_violations = self._evaluate_weights(weights, iteration)
             
             # Store results
             self.results.append({
                 "weights": copy.deepcopy(current_weights),
                 "score": total_score,
                 "hard_violations": hard_violations,
-                "has_monthly_variance": has_monthly_variance,
+                "has_doctor_hour_balance_violation": has_doctor_hour_balance_violation,
                 "preference_violations": preference_violations,
                 "soft_score": soft_score,
                 "stats": {
@@ -1172,15 +1261,15 @@ class WeightOptimizer:
             
             # Update best if improved
             if self._is_better_solution(
-                hard_violations, has_monthly_variance, preference_violations, soft_score,
-                self.best_hard_violations, self.best_has_monthly_variance, 
+                hard_violations, has_doctor_hour_balance_violation, preference_violations, soft_score,
+                self.best_hard_violations, self.best_has_doctor_hour_balance_violation, 
                 self.best_preference_violations, self.best_soft_score
             ):
                 logger.info(f"New best solution! Score: {total_score:.2f} (was {self.best_score:.2f})")
                 
                 self.best_score = total_score
                 self.best_hard_violations = hard_violations
-                self.best_has_monthly_variance = has_monthly_variance
+                self.best_has_doctor_hour_balance_violation = has_doctor_hour_balance_violation
                 self.best_preference_violations = preference_violations
                 self.best_soft_score = soft_score
                 self.best_weights = copy.deepcopy(current_weights)
@@ -1204,11 +1293,11 @@ class WeightOptimizer:
                 else:
                     constraints_msg.append("HARD CONSTRAINTS: None")
                     
-                # Monthly variance - second priority
-                if self.best_has_monthly_variance:
-                    constraints_msg.append("MONTHLY HOURS: Variance >10h")
+                # Doctor hour balance - second priority
+                if self.best_has_doctor_hour_balance_violation:
+                    constraints_msg.append("DOCTOR HOUR BALANCE: >8h Difference (UI will show violation)")
                 else:
-                    constraints_msg.append("MONTHLY HOURS: Balanced")
+                    constraints_msg.append("DOCTOR HOUR BALANCE: Balanced (≤8h difference)")
                     
                 # Preference violations - lowest priority
                 constraints_msg.append(f"PREFERENCES: {self.best_preference_violations} violations")
@@ -1235,7 +1324,7 @@ class WeightOptimizer:
         
         # Initialize tracking for best solution with soft constraint hierarchy
         self.best_hard_violations = float('inf')
-        self.best_has_monthly_variance = True
+        self.best_has_doctor_hour_balance_violation = True
         self.best_preference_violations = float('inf')
         self.best_soft_score = float('inf')
         
@@ -1261,7 +1350,7 @@ class WeightOptimizer:
                 for future in done:
                     try:
                         current_weights, schedule, stats, total_score, hard_violations, soft_score, \
-                        has_monthly_variance, preference_violations = future.result()
+                        has_doctor_hour_balance_violation, preference_violations = future.result()
                         
                         completed += 1
                         
@@ -1270,7 +1359,7 @@ class WeightOptimizer:
                             "weights": copy.deepcopy(current_weights),
                             "score": total_score,
                             "hard_violations": hard_violations,
-                            "has_monthly_variance": has_monthly_variance,
+                            "has_doctor_hour_balance_violation": has_doctor_hour_balance_violation,
                             "preference_violations": preference_violations,
                             "soft_score": soft_score,
                             "stats": {
@@ -1283,15 +1372,15 @@ class WeightOptimizer:
                         
                         # Update best if improved
                         if self._is_better_solution(
-                            hard_violations, has_monthly_variance, preference_violations, soft_score,
-                            self.best_hard_violations, self.best_has_monthly_variance, 
+                            hard_violations, has_doctor_hour_balance_violation, preference_violations, soft_score,
+                            self.best_hard_violations, self.best_has_doctor_hour_balance_violation, 
                             self.best_preference_violations, self.best_soft_score
                         ):
                             logger.info(f"New best solution! Score: {total_score:.2f} (was {self.best_score:.2f})")
                             
                             self.best_score = total_score
                             self.best_hard_violations = hard_violations
-                            self.best_has_monthly_variance = has_monthly_variance
+                            self.best_has_doctor_hour_balance_violation = has_doctor_hour_balance_violation
                             self.best_preference_violations = preference_violations
                             self.best_soft_score = soft_score
                             self.best_weights = copy.deepcopy(current_weights)
@@ -1317,11 +1406,11 @@ class WeightOptimizer:
                     else:
                         constraints_msg.append("HARD CONSTRAINTS: None")
                         
-                    # Monthly variance - second priority
-                    if self.best_has_monthly_variance:
-                        constraints_msg.append("MONTHLY HOURS: Variance >10h")
+                    # Doctor hour balance - second priority
+                    if self.best_has_doctor_hour_balance_violation:
+                        constraints_msg.append("DOCTOR HOUR BALANCE: >8h Difference (UI will show violation)")
                     else:
-                        constraints_msg.append("MONTHLY HOURS: Balanced")
+                        constraints_msg.append("DOCTOR HOUR BALANCE: Balanced (≤8h difference)")
                         
                     # Preference violations - lowest priority
                     constraints_msg.append(f"PREFERENCES: {self.best_preference_violations} violations")
@@ -1353,7 +1442,7 @@ class WeightOptimizer:
         
         # Initialize tracking for best solution
         self.best_hard_violations = float('inf')
-        self.best_has_monthly_variance = True
+        self.best_has_doctor_hour_balance_violation = True
         self.best_preference_violations = float('inf')
         self.best_soft_score = float('inf')
         
@@ -1376,14 +1465,14 @@ class WeightOptimizer:
                         completed += 1
                         
                         current_weights, schedule, stats, total_score, hard_violations, soft_score, \
-                        has_monthly_variance, preference_violations = result
+                        has_doctor_hour_balance_violation, preference_violations = result
                         
                         # Store result
                         self.results.append({
                             "weights": copy.deepcopy(current_weights),
                             "score": total_score,
                             "hard_violations": hard_violations,
-                            "has_monthly_variance": has_monthly_variance,
+                            "has_doctor_hour_balance_violation": has_doctor_hour_balance_violation,
                             "preference_violations": preference_violations,
                             "soft_score": soft_score,
                             "stats": {
@@ -1396,15 +1485,15 @@ class WeightOptimizer:
                         
                         # Update best if improved
                         if self._is_better_solution(
-                            hard_violations, has_monthly_variance, preference_violations, soft_score,
-                            self.best_hard_violations, self.best_has_monthly_variance, 
+                            hard_violations, has_doctor_hour_balance_violation, preference_violations, soft_score,
+                            self.best_hard_violations, self.best_has_doctor_hour_balance_violation, 
                             self.best_preference_violations, self.best_soft_score
                         ):
                             logger.info(f"New best solution! Score: {total_score:.2f} (was {self.best_score:.2f})")
                             
                             self.best_score = total_score
                             self.best_hard_violations = hard_violations
-                            self.best_has_monthly_variance = has_monthly_variance
+                            self.best_has_doctor_hour_balance_violation = has_doctor_hour_balance_violation
                             self.best_preference_violations = preference_violations
                             self.best_soft_score = soft_score
                             self.best_weights = copy.deepcopy(current_weights)
@@ -1428,11 +1517,11 @@ class WeightOptimizer:
                             else:
                                 constraints_msg.append("HARD CONSTRAINTS: None")
                                 
-                            # Monthly variance - second priority
-                            if self.best_has_monthly_variance:
-                                constraints_msg.append("MONTHLY HOURS: Variance >10h")
+                            # Doctor hour balance - second priority
+                            if self.best_has_doctor_hour_balance_violation:
+                                constraints_msg.append("DOCTOR HOUR BALANCE: >8h Difference (UI will show violation)")
                             else:
-                                constraints_msg.append("MONTHLY HOURS: Balanced")
+                                constraints_msg.append("DOCTOR HOUR BALANCE: Balanced (≤8h difference)")
                                 
                             # Preference violations - lowest priority
                             constraints_msg.append(f"PREFERENCES: {self.best_preference_violations} violations")
@@ -1553,7 +1642,7 @@ def optimize_weights(data: Dict[str, Any], progress_callback: Callable = None) -
         )
         
         # Initialize additional tracking for soft constraint hierarchy
-        optimizer.best_has_monthly_variance = True
+        optimizer.best_has_doctor_hour_balance_violation = True
         optimizer.best_preference_violations = float('inf')
         
         result = optimizer.optimize(progress_callback=progress_callback)
@@ -1577,6 +1666,16 @@ def optimize_weights(data: Dict[str, Any], progress_callback: Callable = None) -
                 # Make sure this is reflected in the hard_violations count
                 result["hard_violations"] = 1
                 has_issues = True
+                
+            # Verify doctor hour balance 
+            has_hour_balance_violation = not optimizer._verify_no_doctor_hour_balance_violations(result["schedule"], result["statistics"])
+            if has_hour_balance_violation != result["has_doctor_hour_balance_violation"]:
+                logger.warning(f"!!! IMPORTANT: Final verification updated doctor hour balance violation status from {result['has_doctor_hour_balance_violation']} to {has_hour_balance_violation}")
+                logger.warning(f"!!! This means the UI and backend may show different balance violations")
+                result["has_doctor_hour_balance_violation"] = has_hour_balance_violation
+                logger.warning(f"!!! Updated doctor hour balance violation in result to: {has_hour_balance_violation}")
+            else:
+                logger.info(f"Doctor hour balance verification confirms optimization result: {has_hour_balance_violation}")
                 
             # Recheck other critical hard constraints
             schedule = result["schedule"]
@@ -1691,19 +1790,19 @@ def optimize_weights(data: Dict[str, Any], progress_callback: Callable = None) -
                     # Only include if NO hard violations
                     if hard_violations == 0:
                         # Calculate soft constraint metrics
-                        soft_score, has_monthly_variance, preference_violations = optimizer._calculate_soft_score(schedule, stats)
+                        soft_score, has_doctor_hour_balance_violation, preference_violations = optimizer._calculate_soft_score(schedule, stats)
                         
                         solutions_without_hard_violations.append({
                             "weights": weights,
                             "schedule": schedule,
                             "stats": stats,
                             "soft_score": soft_score,
-                            "has_monthly_variance": has_monthly_variance,
+                            "has_doctor_hour_balance_violation": has_doctor_hour_balance_violation,
                             "preference_violations": preference_violations
                         })
                         
                         logger.info(f"Found a solution with no hard violations - "
-                                   f"Monthly variance: {has_monthly_variance}, "
+                                   f"Doctor hour balance: {has_doctor_hour_balance_violation}, "
                                    f"Preference violations: {preference_violations}, "
                                    f"Soft score: {soft_score:.2f}")
                 except Exception as e:
@@ -1712,28 +1811,28 @@ def optimize_weights(data: Dict[str, Any], progress_callback: Callable = None) -
             
             # If we found solutions without hard violations, select the best one
             if solutions_without_hard_violations:
-                # First, prioritize solutions without monthly variance
-                solutions_without_monthly_variance = [
+                # First, prioritize solutions without doctor hour balance violation
+                solutions_without_doctor_hour_balance = [
                     s for s in solutions_without_hard_violations 
-                    if not s["has_monthly_variance"]
+                    if not s["has_doctor_hour_balance_violation"]
                 ]
                 
-                if solutions_without_monthly_variance:
+                if solutions_without_doctor_hour_balance:
                     # Sort by preference violations (ascending)
-                    solutions_without_monthly_variance.sort(
+                    solutions_without_doctor_hour_balance.sort(
                         key=lambda x: (x["preference_violations"], x["soft_score"])
                     )
-                    best_solution = solutions_without_monthly_variance[0]
-                    logger.info(f"Selected best solution with no monthly variance violation and "
+                    best_solution = solutions_without_doctor_hour_balance[0]
+                    logger.info(f"Selected best solution with no doctor hour balance violation and "
                                f"{best_solution['preference_violations']} preference violations")
                 else:
-                    # If all solutions have monthly variance, sort by preference violations
+                    # If all solutions have doctor hour balance violation, sort by preference violations
                     solutions_without_hard_violations.sort(
                         key=lambda x: (x["preference_violations"], x["soft_score"])
                     )
                     best_solution = solutions_without_hard_violations[0]
                     logger.info(f"Selected best solution with {best_solution['preference_violations']} "
-                               f"preference violations (all solutions have monthly variance)")
+                               f"preference violations (all solutions have doctor hour balance violation)")
                 
                 # Update the result
                 result["schedule"] = best_solution["schedule"]
@@ -1742,15 +1841,15 @@ def optimize_weights(data: Dict[str, Any], progress_callback: Callable = None) -
                 result["score"] = best_solution["soft_score"]
                 result["hard_violations"] = 0
                 result["soft_score"] = best_solution["soft_score"]
-                result["has_monthly_variance"] = best_solution["has_monthly_variance"]
+                result["has_doctor_hour_balance_violation"] = best_solution["has_doctor_hour_balance_violation"]
                 result["preference_violations"] = best_solution["preference_violations"]
                 
                 if progress_callback:
                     status = "Found valid solution with no hard constraints"
-                    if not best_solution["has_monthly_variance"]:
-                        status += f" and no monthly variance violations (Preference violations: {best_solution['preference_violations']})"
+                    if not best_solution["has_doctor_hour_balance_violation"]:
+                        status += f" and no doctor hour balance violations (Preference violations: {best_solution['preference_violations']})"
                     else:
-                        status += f" but with MONTHLY VARIANCE >10h VIOLATION (Preference violations: {best_solution['preference_violations']})"
+                        status += f" but with DOCTOR HOUR BALANCE >8h (1 shift) VIOLATION (Preference violations: {best_solution['preference_violations']})"
                     progress_callback(100, status)
             else:
                 logger.warning("Could not find a solution without hard violations!")
@@ -1758,18 +1857,18 @@ def optimize_weights(data: Dict[str, Any], progress_callback: Callable = None) -
                     progress_callback(100, "Warning: Could not find a solution without hard violations!")
         else:
             # No hard violations in the best solution - calculate soft metrics
-            soft_score, has_monthly_variance, preference_violations = optimizer._calculate_soft_score(
+            soft_score, has_doctor_hour_balance_violation, preference_violations = optimizer._calculate_soft_score(
                 result["schedule"], result["statistics"]
             )
-            result["has_monthly_variance"] = has_monthly_variance
+            result["has_doctor_hour_balance_violation"] = has_doctor_hour_balance_violation
             result["preference_violations"] = preference_violations
             
             if progress_callback:
                 status = "Optimization complete. Solution has no hard violations"
-                if not has_monthly_variance:
-                    status += f" and no monthly variance violations (Preference violations: {preference_violations})"
+                if not has_doctor_hour_balance_violation:
+                    status += f" and no doctor hour balance violations (Preference violations: {preference_violations})"
                 else:
-                    status += f" but has MONTHLY VARIANCE >10h VIOLATION (Preference violations: {preference_violations})"
+                    status += f" but has DOCTOR HOUR BALANCE >8h (1 shift) VIOLATION (Preference violations: {preference_violations})"
                 progress_callback(100, status)
         
         # ---- Add detailed reporting of top solutions ----
@@ -1780,7 +1879,7 @@ def optimize_weights(data: Dict[str, Any], progress_callback: Callable = None) -
         # Sort all results by score for reporting
         all_results = sorted(optimizer.results, key=lambda x: (
             x.get("hard_violations", float('inf')),
-            1 if x.get("has_monthly_variance", True) else 0,
+            1 if x.get("has_doctor_hour_balance_violation", True) else 0,
             x.get("preference_violations", float('inf')),
             x.get("soft_score", float('inf'))
         ))
@@ -1939,13 +2038,13 @@ def optimize_weights(data: Dict[str, Any], progress_callback: Callable = None) -
         
         for i, solution in enumerate(all_results[:5]):
             hard_violations = solution.get("hard_violations", 0)
-            has_monthly_variance = solution.get("has_monthly_variance", True)
+            has_doctor_hour_balance_violation = solution.get("has_doctor_hour_balance_violation", True)
             pref_violations = solution.get("preference_violations", 0)
             soft_score = solution.get("soft_score", 0)
             
             logger.info(f"\nSolution #{i+1}:")
             logger.info(f"  Hard Violations: {hard_violations}")
-            logger.info(f"  Monthly Variance: {'Yes' if has_monthly_variance else 'No'}")
+            logger.info(f"  Doctor Hour Balance Violation: {'Yes' if has_doctor_hour_balance_violation else 'No'}")
             logger.info(f"  Preference Violations: {pref_violations}")
             logger.info(f"  Soft Score: {soft_score:.2f}")
             
@@ -2038,7 +2137,7 @@ if __name__ == "__main__":
             print(f"  {key}: {value}")
         print(f"Best score: {result['score']:.2f}")
         print(f"Hard violations: {result.get('hard_violations', 'N/A')}")
-        print(f"Monthly variance: {result.get('has_monthly_variance', 'N/A')}")
+        print(f"Doctor hour balance: {result.get('has_doctor_hour_balance_violation', 'N/A')}")
         print(f"Preference violations: {result.get('preference_violations', 'N/A')}")
         print(f"Solution time: {result['solution_time_seconds']:.2f} seconds")
     except Exception as e:
@@ -2051,6 +2150,6 @@ if __name__ == "__main__":
         print(f"  {key}: {value}")
     print(f"Best score: {result['score']:.2f}")
     print(f"Hard violations: {result.get('hard_violations', 'N/A')}")
-    print(f"Monthly variance: {result.get('has_monthly_variance', 'N/A')}")
+    print(f"Doctor hour balance: {result.get('has_doctor_hour_balance_violation', 'N/A')}")
     print(f"Preference violations: {result.get('preference_violations', 'N/A')}")
     print(f"Solution time: {result['solution_time_seconds']:.2f} seconds")
