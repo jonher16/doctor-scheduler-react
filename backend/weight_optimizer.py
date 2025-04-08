@@ -21,7 +21,6 @@ import json
 import threading
 
 # Import the optimizers
-from schedule_optimizer import optimize_schedule, ScheduleOptimizer
 from monthly_schedule_optimizer import optimize_monthly_schedule, MonthlyScheduleOptimizer
 
 # Configure logging
@@ -369,6 +368,21 @@ class WeightOptimizer:
                     coverage_errors += 1
         
         return coverage_errors
+    
+    @staticmethod
+    def _extract_doctor_hours_for_month(stats: Dict[str, Any], month: int) -> Dict[str, float]:
+        """Return *doctor → hours* for *month* from *stats* (robust)."""
+        ms = stats.get("monthly_stats", {})
+        key = str(month) if str(month) in ms else month
+        if (
+            key in ms
+            and isinstance(ms[key], dict)
+            and ms[key].get("doctor_hours")
+        ):
+            return ms[key]["doctor_hours"]
+        # fallback – rebuild from monthly_hours
+        mh = stats.get("monthly_hours", {})
+        return {doc: hours.get(month, 0) for doc, hours in mh.items()}
 
     def _get_limited_availability_doctors(self, schedule, dates_to_check):
         """
@@ -425,138 +439,49 @@ class WeightOptimizer:
                 
         return available_doctors
 
-    def _calculate_soft_score(self, schedule: Dict, stats: Dict) -> Tuple[float, bool, int]:
-        """
-        Calculate soft constraint scores with a hierarchy.
-        
-        Args:
-            schedule: The schedule to evaluate
-            stats: The statistics for the schedule
-            
-        Returns:
-            Tuple of (total_soft_score, has_doctor_hour_balance_violation, preference_violations_count)
-        """
-        # Initialize counters
-        has_doctor_hour_balance_violation = False
-        preference_violations_count = 0
-        
-        # 1. Doctor hour balance (soft constraint, higher priority)
-        doctor_hour_balance_score = 0.0
-        monthly_stats = stats.get("monthly_stats", {})
-        for month_key, month_stats in monthly_stats.items():
-            # Convert month key to int if needed
-            month_int = int(month_key) if isinstance(month_key, str) else month_key
-            
-            # Specific month filter for monthly optimization
-            if month_int != self.month:
-                continue
-            
-            # Identify doctors with very limited availability (≤ 2 days per month)
-            limited_availability_doctors = set()
-            doctor_working_days = {}
-            
-            # Count working days for each doctor in this month
-            for day_stats in stats.get("daily_stats", {}).values():
-                date = day_stats.get("date", "")
-                if date and datetime.date.fromisoformat(date).month == month_int:
-                    # For each shift on this day
-                    for shift_name, doctors in schedule.get(date, {}).items():
-                        for doctor in doctors:
-                            doctor_working_days[doctor] = doctor_working_days.get(doctor, 0) + 1
-            
-            # Identify doctors with limited availability in a month
-            for doctor, days in doctor_working_days.items():
-                if days <= 4:
-                    limited_availability_doctors.add(doctor)
-            
-            # Log information about doctors with limited availability
-            if limited_availability_doctors:
-                logger.info(f"Excluding {len(limited_availability_doctors)} doctors with limited availability from doctor hour balance: {', '.join(limited_availability_doctors)}")
-            
-            # Check if max - min > 8 hours (1 shift)
-            # but exclude doctors with very limited availability
-            active_hours = []
-            active_doctor_hours = {}
-            for doctor, hours in month_stats.get("doctor_hours", {}).items():
-                if doctor not in limited_availability_doctors and hours > 0:
-                    active_hours.append(hours)
-                    active_doctor_hours[doctor] = hours
-            
-            if active_hours and len(active_hours) > 1:
-                # Calculate both max-min variance and variance from target
-                max_hours = max(active_hours)
-                min_hours = min(active_hours)
-                hours_difference = max_hours - min_hours
-                
-                # Calculate target hours for better distribution
-                total_hours = sum(active_hours)
-                num_active_doctors = len(active_hours)
-                target_hours_per_doctor = total_hours / num_active_doctors
-                
-                logger.info(f"Weight optimizer: Target hours per doctor: {target_hours_per_doctor:.2f}h (total: {total_hours}h, active doctors: {num_active_doctors})")
-                
-                # Calculate variance from target
-                hours_variance = 0
-                for doctor, hours in active_doctor_hours.items():
-                    deviation = abs(hours - target_hours_per_doctor)
-                    hours_variance += deviation ** 2
-                
-                # Check for violation based on max-min difference - EXACTLY as in UI
-                # Using 8.0 hours (one shift) threshold
-                if hours_difference > 8.0:
-                    has_doctor_hour_balance_violation = True
-                    # Increase the penalty for doctor hour imbalance 
-                    doctor_hour_balance_score += 5 * (hours_difference - 8.0) ** 3
-                    
-                    # Find doctors with max and min hours for logging
-                    doctors_with_max = [d for d, h in active_doctor_hours.items() if h == max_hours]
-                    doctors_with_min = [d for d, h in active_doctor_hours.items() if h == min_hours]
-                    
-                    logger.info(f"Doctor hour balance violation: max={max_hours}h by {', '.join(doctors_with_max)}, min={min_hours}h by {', '.join(doctors_with_min)}, difference={hours_difference:.2f}h")
-                
-                # Also add penalty for overall variance from target - increased importance
-                doctor_hour_balance_score += (hours_variance / num_active_doctors) * 2
-                
-                # Log detailed information
-                logger.info(f"Doctor hour balance: max-min={hours_difference:.2f}h, target deviation={hours_variance/num_active_doctors:.2f}h")
-            else:
-                # Not enough active doctors to make a meaningful balance comparison
-                logger.info(f"Not enough active doctors ({len(active_hours)}) for meaningful hour balance calculation - skipping this check")
-        
-        # 2. Preference satisfaction (soft constraint, lower priority)
-        preference_score = 0.0
-        preference_metrics = stats.get("preference_metrics", {})
-        
-        for doctor, metrics in preference_metrics.items():
-            if metrics.get("preference") != "None":
-                # Calculate preference violations
-                other = int(metrics.get("other_shifts", 0))
-                preference_violations_count += other
-                
-                # Calculate percentage of preferred shifts
-                preferred = float(metrics.get("preferred_shifts", 0))
-                total = preferred + float(other)
-                
-                if total > 0:
-                    percentage = preferred / total
-                    if percentage < 1.0:  # If not 100% preference satisfaction
-                        # Penalize based on how far from 100% preference satisfaction
-                        preference_score += (1.0 - percentage) * 50.0
-        
-        # Calculate total soft score (still needed for comparing solutions with same category)
-        total_soft_score = doctor_hour_balance_score + preference_score
-        
-        # Log detailed information about soft constraints
-        if has_doctor_hour_balance_violation:
-            logger.info(f"Doctor hour balance violation detected. Score: {doctor_hour_balance_score:.2f}")
-        else:
-            logger.info(f"No doctor hour balance violation.")
-            
-        logger.info(f"Preference violations: {preference_violations_count}. Score: {preference_score:.2f}")
-        logger.info(f"Total soft score: {total_soft_score:.2f}")
-        
-        return (total_soft_score, has_doctor_hour_balance_violation, preference_violations_count)
+    def _calculate_soft_score(
+        self, schedule: Dict, stats: Dict
+    ) -> Tuple[float, bool, int]:
+        has_balance_violation = False
+        pref_violation_count = 0
+        doctor_balance_score = 0.0
 
+        doctor_hours = self._extract_doctor_hours_for_month(stats, self.month)
+        if doctor_hours:
+            # build working‑day map
+            working_days: Dict[str, int] = defaultdict(int)
+            for date, shifts in schedule.items():
+                d = datetime.date.fromisoformat(date)
+                if d.month != self.month:
+                    continue
+                for docs in shifts.values():
+                    for doc in docs:
+                        working_days[doc] += 1
+            limited = {d for d, days in working_days.items() if days <= 4}
+            active = {d: h for d, h in doctor_hours.items() if d not in limited and h > 0}
+            if len(active) > 1:
+                diff = max(active.values()) - min(active.values())
+                if diff > 8.0:
+                    has_balance_violation = True
+                    doctor_balance_score += 5 * (diff - 8.0) ** 3
+                target = sum(active.values()) / len(active)
+                var = sum((h - target) ** 2 for h in active.values()) / len(active)
+                doctor_balance_score += var * 2
+
+        # preference score (unchanged)
+        pref_metrics = stats.get("preference_metrics", {})
+        for doc, m in pref_metrics.items():
+            if m.get("preference") == "None":
+                continue
+            other = int(m.get("other_shifts", 0))
+            pref_violation_count += other
+            pref = float(m.get("preferred_shifts", 0))
+            total = pref + other
+            if total and pref / total < 1.0:
+                doctor_balance_score += (1.0 - pref / total) * 50
+
+        return doctor_balance_score, has_balance_violation, pref_violation_count
+    
     def _is_better_solution(self, new_hard, new_doctor_hour_balance, new_pref, new_soft, 
                        current_hard, current_doctor_hour_balance, current_pref, current_soft) -> bool:
         """
@@ -857,75 +782,21 @@ class WeightOptimizer:
         """Verify that seniors don't work more weekend/holiday hours than juniors."""
         return self._check_senior_more_weekend_holiday(stats, strict_check=True) == 0
 
-    def _verify_no_doctor_hour_balance_violations(self, schedule, stats):
-        """
-        Verify doctor hour balance using the same criteria as in _calculate_soft_score.
-        Returns True if there are no violations, False if there are violations.
-        """
-        logger.info("Running doctor hour balance verification with same criteria as UI...")
-        monthly_stats = stats.get("monthly_stats", {})
-        for month_key, month_stats in monthly_stats.items():
-            # Convert month key to int if needed
-            month_int = int(month_key) if isinstance(month_key, str) else month_key
-            
-            # Specific month filter for monthly optimization
-            if month_int != self.month:
+    def _verify_no_doctor_hour_balance_violations(self, schedule: Dict, stats: Dict) -> bool:
+        doctor_hours = self._extract_doctor_hours_for_month(stats, self.month)
+        if not doctor_hours:
+            return True
+        working_days: Dict[str, int] = defaultdict(int)
+        for date, shifts in schedule.items():
+            d = datetime.date.fromisoformat(date)
+            if d.month != self.month:
                 continue
-            
-            # Identify doctors with very limited availability (≤ 4 days per month)
-            limited_availability_doctors = set()
-            doctor_working_days = {}
-            
-            # Count working days for each doctor in this month
-            for day_stats in stats.get("daily_stats", {}).values():
-                date = day_stats.get("date", "")
-                if date and datetime.date.fromisoformat(date).month == month_int:
-                    # For each shift on this day
-                    for shift_name, doctors in schedule.get(date, {}).items():
-                        for doctor in doctors:
-                            doctor_working_days[doctor] = doctor_working_days.get(doctor, 0) + 1
-            
-            # Identify doctors with limited availability in a month
-            for doctor, days in doctor_working_days.items():
-                if days <= 4:
-                    limited_availability_doctors.add(doctor)
-                    
-            logger.info(f"Excluding {len(limited_availability_doctors)} doctors with limited availability (≤ 4 days): {', '.join(limited_availability_doctors)}")
-            
-            # Get active hours, excluding doctors with limited availability
-            active_doctor_hours = {}
-            for doctor, hours in month_stats.get("doctor_hours", {}).items():
-                if doctor not in limited_availability_doctors and hours > 0:
-                    active_doctor_hours[doctor] = hours
-            
-            logger.info(f"Active doctor hours (excluding limited availability): {active_doctor_hours}")
-            
-            # Only proceed if we have multiple active doctors
-            if len(active_doctor_hours) > 1:
-                active_hours = list(active_doctor_hours.values())
-                max_hours = max(active_hours)
-                min_hours = min(active_hours)
-                hours_difference = max_hours - min_hours
-                
-                # Find doctors with max and min hours for logging
-                doctors_with_max = [d for d, h in active_doctor_hours.items() if h == max_hours]
-                doctors_with_min = [d for d, h in active_doctor_hours.items() if h == min_hours]
-                
-                logger.info(f"Max hours: {max_hours}h by {', '.join(doctors_with_max)}")
-                logger.info(f"Min hours: {min_hours}h by {', '.join(doctors_with_min)}")
-                logger.info(f"Hour difference: {hours_difference}h")
-                
-                # Check if max-min is > 8 hours (one shift) - EXACTLY as in UI
-                if hours_difference > 8.0:
-                    logger.info(f"VIOLATION: Doctor hour balance difference ({hours_difference:.2f}h) exceeds 8h threshold")
-                    return False
-                else:
-                    logger.info(f"PASS: Doctor hour balance difference ({hours_difference:.2f}h) within 8h threshold")
-            else:
-                logger.info(f"Not enough active doctors ({len(active_doctor_hours)}) for meaningful hour balance calculation")
-        
-        # No imbalance found
-        return True
+            for docs in shifts.values():
+                for doc in docs:
+                    working_days[doc] += 1
+        limited = {d for d, days in working_days.items() if days <= 4}
+        active = [h for d, h in doctor_hours.items() if d not in limited and h > 0]
+        return len(active) <= 1 or max(active) - min(active) <= 8.0
 
     def _check_consecutive_night_shifts(self, schedule: Dict) -> int:
         """Check for doctors working consecutive night shifts."""
