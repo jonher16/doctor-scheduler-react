@@ -791,21 +791,31 @@ class MonthlyScheduleOptimizer:
         
         # Check if seniors are working more than juniors
         if junior_hours and senior_hours:
-            # Penalize if seniors work more than juniors
-            if avg_senior > avg_junior:
-                cost += self.w_senior_workload * ((avg_senior - avg_junior) ** 2)
+            # Calculate active senior and junior doctors (excluding those with limited availability)
+            active_junior_hours = {doc: hrs for doc, hrs in junior_hours.items() if doc not in limited_availability_doctors}
+            active_senior_hours = {doc: hrs for doc, hrs in senior_hours.items() if doc not in limited_availability_doctors}
             
-            # Also penalize if seniors are not working less by the target amount
-            if avg_senior > (avg_junior - self.senior_junior_monthly_diff):
-                diff_gap = (avg_senior - (avg_junior - self.senior_junior_monthly_diff))
-                cost += self.w_senior_workload * diff_gap
+            # Only proceed if we have active doctors in both groups
+            if active_junior_hours and active_senior_hours:
+                # Calculate averages for active doctors only
+                avg_active_junior = sum(active_junior_hours.values()) / len(active_junior_hours)
+                avg_active_senior = sum(active_senior_hours.values()) / len(active_senior_hours)
+                
+                # Penalize if seniors work more than juniors
+                if avg_active_senior > avg_active_junior:
+                    cost += self.w_senior_workload * ((avg_active_senior - avg_active_junior) ** 2)
+                
+                # Also penalize if seniors are not working less by the target amount
+                if avg_active_senior > (avg_active_junior - self.senior_junior_monthly_diff):
+                    diff_gap = (avg_active_senior - (avg_active_junior - self.senior_junior_monthly_diff))
+                    cost += self.w_senior_workload * diff_gap
 
         # 7. Weekend/Holiday fairness
         wh_hours = self._calculate_weekend_holiday_hours(schedule)
 
-        # Calculate hours for each group
-        junior_wh_hours = {doc: wh_hours[doc] for doc in self.junior_doctors}
-        senior_wh_hours = {doc: wh_hours[doc] for doc in self.senior_doctors}
+        # Calculate hours for each group, excluding doctors with limited availability
+        junior_wh_hours = {doc: wh_hours[doc] for doc in self.junior_doctors if doc not in limited_availability_doctors}
+        senior_wh_hours = {doc: wh_hours[doc] for doc in self.senior_doctors if doc not in limited_availability_doctors}
 
         # Calculate within-group variance to ensure fairness within each group
         if junior_wh_hours:
@@ -875,10 +885,13 @@ class MonthlyScheduleOptimizer:
         for pref_type in ["Evening Only", "Day Only", "Night Only"]:
             doctors_with_pref = self.doctors_by_preference.get(pref_type, [])
             
-            if len(doctors_with_pref) > 1:  # Only check if multiple doctors share a preference
-                # Get counts of preferred shifts for each doctor
+            # Only include active doctors (exclude those with limited availability)
+            active_doctors_with_pref = [doc for doc in doctors_with_pref if doc not in limited_availability_doctors]
+            
+            if len(active_doctors_with_pref) > 1:  # Only check if multiple active doctors share a preference
+                # Get counts of preferred shifts for each active doctor
                 counts = {}
-                for doc in doctors_with_pref:
+                for doc in active_doctors_with_pref:
                     # Count shifts of this doctor's preference
                     shift_type = pref_type.split()[0]  # "Evening", "Day", "Night"
                     
@@ -898,7 +911,7 @@ class MonthlyScheduleOptimizer:
                         variance = max_val - min_val
                         
                         # Penalize unfair distribution among same-preference doctors
-                        multiplier = len(doctors_with_pref) / 2 
+                        multiplier = len(active_doctors_with_pref) / 2 
                         if variance > 3:  # Allow small differences
                             cost += self.w_preference_fairness * multiplier * ((variance - 3) ** 2)
         
@@ -908,14 +921,16 @@ class MonthlyScheduleOptimizer:
         weeks_in_month = len(self.all_dates) // 7 + (1 if len(self.all_dates) % 7 > 0 else 0)
         
         if weeks_in_month > 1:
-            # Get doctor's total shifts in the month
-            doctor_total_shifts = {doctor: 0 for doctor in doctor_names}
+            # Get doctor's total shifts in the month (only for active doctors)
+            doctor_total_shifts = {doctor: 0 for doctor in doctor_names if doctor not in limited_availability_doctors}
             
             for date in self.all_dates:
                 if date in schedule:
                     for shift in self.shifts:
-                        if shift in schedule[date]:
-                            for doctor in schedule[date][shift]:
+                        if shift not in schedule[date]:
+                            continue
+                        for doctor in schedule[date][shift]:
+                            if doctor in doctor_total_shifts:  # Only count active doctors
                                 doctor_total_shifts[doctor] = doctor_total_shifts.get(doctor, 0) + 1
             
             # Group dates by week
@@ -926,16 +941,18 @@ class MonthlyScheduleOptimizer:
                 week_num = (d.day - 1) // 7
                 week_dates[week_num].append(date)
             
-            # Count shifts per doctor per week
+            # Count shifts per doctor per week (only for active doctors)
             doctor_week_shifts = {doctor: {week: 0 for week in range(weeks_in_month)} 
-                                for doctor in doctor_names}
+                                for doctor in doctor_total_shifts.keys()}
             
             for week, dates in week_dates.items():
                 for date in dates:
                     if date in schedule:
                         for shift in self.shifts:
-                            if shift in schedule[date]:
-                                for doctor in schedule[date][shift]:
+                            if shift not in schedule[date]:
+                                continue
+                            for doctor in schedule[date][shift]:
+                                if doctor in doctor_week_shifts:  # Only count active doctors
                                     doctor_week_shifts[doctor][week] += 1
             
             # Penalize uneven distribution across weeks
