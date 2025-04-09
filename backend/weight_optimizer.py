@@ -559,23 +559,19 @@ class WeightOptimizer:
         
         return violations
 
-    def _check_senior_more_hours(self, stats: Dict, strict_check: bool = False) -> int:
+    def _check_senior_more_hours(self, stats: Dict) -> int:
         """
-        Check if senior doctors work more hours than juniors using EXACT UI calculation method.
+        Check if senior doctors work more hours than juniors.
         
         This method directly mirrors the calculation in ConstraintViolations.jsx 
         to ensure complete consistency.
         
         Args:
             stats: Statistics dictionary containing doctor hours
-            strict_check: If True, produces more detailed logs for verification
             
         Returns:
             1 if constraint is violated, 0 otherwise
         """
-        if strict_check:
-            logger.info("EXACT UI METHOD: Checking senior vs junior hours")
-            
         # Get monthly hours from stats
         monthly_hours = stats.get("monthly_hours", {})
         
@@ -586,10 +582,6 @@ class WeightOptimizer:
         # Get the month we're evaluating - critical for correct filtering
         target_month = self.month if self.month is not None else datetime.date.today().month
         
-        if strict_check:
-            logger.info(f"Calculating for Month {target_month}, Year {self.year}")
-            logger.info(f"Total doctors: {len(senior_doctors)} seniors, {len(junior_doctors)} juniors")
-        
         # Exactly mirror UI calculation - collect hours only for doctors who worked in this month
         senior_month_hours = []
         for doctor in senior_doctors:
@@ -597,8 +589,6 @@ class WeightOptimizer:
                 hours = monthly_hours[doctor][target_month]
                 if hours > 0:  # Only include doctors who actually worked
                     senior_month_hours.append(hours)
-                    if strict_check:
-                        logger.info(f"  Senior: {doctor} worked {hours} hours")
         
         junior_month_hours = []
         for doctor in junior_doctors:
@@ -606,13 +596,9 @@ class WeightOptimizer:
                 hours = monthly_hours[doctor][target_month]
                 if hours > 0:  # Only include doctors who actually worked
                     junior_month_hours.append(hours)
-                    if strict_check:
-                        logger.info(f"  Junior: {doctor} worked {hours} hours")
         
         # If either group has no hours, no violation is possible
         if not senior_month_hours or not junior_month_hours:
-            if strict_check:
-                logger.info("No hours data for either senior or junior doctors - no violation possible")
             return 0
         
         # Calculate average hours - EXACT same way the UI does it
@@ -623,12 +609,6 @@ class WeightOptimizer:
         # The UI checks: if (avgSeniorHours > avgJuniorHours)
         is_violation = avg_senior > avg_junior
         
-        if strict_check:
-            logger.info(f"Senior avg: {avg_senior:.6f}h ({len(senior_month_hours)} doctors)")
-            logger.info(f"Junior avg: {avg_junior:.6f}h ({len(junior_month_hours)} doctors)")
-            logger.info(f"Diff (Junior - Senior): {avg_junior - avg_senior:.6f}h")
-            logger.info(f"VIOLATION: {is_violation}")
-        
         if is_violation:
             logger.warning(f"HARD CONSTRAINT VIOLATION: Seniors working more than juniors")
             logger.warning(f"Senior avg: {avg_senior:.6f}h, Junior avg: {avg_junior:.6f}h")
@@ -636,12 +616,7 @@ class WeightOptimizer:
         
         return 0
 
-    def _verify_no_senior_hour_violations(self, schedule, stats):
-        """Verify that seniors don't work more hours than juniors using exact criteria."""
-        # Use the same checking method but with strict logging enabled
-        return self._check_senior_more_hours(stats, strict_check=True) == 0
-
-    def _check_senior_more_weekend_holiday(self, stats: Dict, strict_check: bool = False) -> int:
+    def _check_senior_more_weekend_holiday(self, stats: Dict) -> int:
         """
         Check if senior doctors have more weekend/holiday hours than juniors.
         
@@ -649,14 +624,10 @@ class WeightOptimizer:
         
         Args:
             stats: Statistics dictionary containing weekend/holiday metrics
-            strict_check: If True, produces more detailed logs for verification
             
         Returns:
             1 if constraint is violated, 0 otherwise
         """
-        if strict_check:
-            logger.info("EXACT UI METHOD: Checking senior vs junior weekend/holiday hours")
-            
         weekend_metrics = stats.get("weekend_metrics", {})
         holiday_metrics = stats.get("holiday_metrics", {})
         
@@ -671,8 +642,6 @@ class WeightOptimizer:
             if wh_shifts > 0:  # Only include doctors who worked weekends/holidays
                 wh_hours = wh_shifts * 8  # Each shift is 8 hours
                 senior_wh_hours.append(wh_hours)
-                if strict_check:
-                    logger.info(f"  Senior: {doctor} worked {wh_hours} W/H hours ({wh_shifts} shifts)")
         
         junior_wh_hours = []
         for doctor in junior_doctors:
@@ -680,13 +649,9 @@ class WeightOptimizer:
             if wh_shifts > 0:  # Only include doctors who worked weekends/holidays
                 wh_hours = wh_shifts * 8  # Each shift is 8 hours
                 junior_wh_hours.append(wh_hours)
-                if strict_check:
-                    logger.info(f"  Junior: {doctor} worked {wh_hours} W/H hours ({wh_shifts} shifts)")
         
         # If either group has no hours, no violation is possible
         if not senior_wh_hours or not junior_wh_hours:
-            if strict_check:
-                logger.info("No weekend/holiday data for either senior or junior doctors - no violation possible")
             return 0
         
         # Calculate averages - EXACT same way the UI does it
@@ -697,22 +662,12 @@ class WeightOptimizer:
         # The UI checks: if (avgSeniorWHHours > avgJuniorWHHours)
         is_violation = avg_senior_wh > avg_junior_wh
         
-        if strict_check:
-            logger.info(f"Senior W/H avg: {avg_senior_wh:.6f}h ({len(senior_wh_hours)} doctors)")
-            logger.info(f"Junior W/H avg: {avg_junior_wh:.6f}h ({len(junior_wh_hours)} doctors)")
-            logger.info(f"Diff (Junior - Senior): {avg_junior_wh - avg_senior_wh:.6f}h")
-            logger.info(f"VIOLATION: {is_violation}")
-        
         if is_violation:
             logger.warning(f"HARD CONSTRAINT VIOLATION: Seniors have more weekend/holiday hours")
             logger.warning(f"Senior W/H avg: {avg_senior_wh:.6f}h, Junior W/H avg: {avg_junior_wh:.6f}h")
             return 1
         
         return 0
-
-    def _verify_no_weekend_holiday_violations(self, schedule, stats):
-        """Verify that seniors don't work more weekend/holiday hours than juniors."""
-        return self._check_senior_more_weekend_holiday(stats, strict_check=True) == 0
 
     def _verify_no_doctor_hour_balance_violations(self, schedule: Dict, stats: Dict) -> bool:
         doctor_hours = self._extract_doctor_hours_for_month(stats, self.month)
@@ -729,10 +684,6 @@ class WeightOptimizer:
         limited = {d for d, days in working_days.items() if days <= 4}
         active = [h for d, h in doctor_hours.items() if d not in limited and h > 0]
         return len(active) <= 1 or max(active) - min(active) <= 8.0
-
-    def _verify_no_night_off_day_violations(self, schedule):
-        """Verify that no doctors work Night → Off → Day pattern."""
-        return self._check_night_off_day_pattern(schedule, strict_check=True) == 0
 
     def _check_consecutive_night_shifts(self, schedule: Dict) -> int:
         """Check for doctors working consecutive night shifts."""
@@ -800,7 +751,7 @@ class WeightOptimizer:
         
         return violations
 
-    def _check_night_off_day_pattern(self, schedule: Dict, strict_check: bool = False) -> int:
+    def _check_night_off_day_pattern(self, schedule: Dict) -> int:
         """
         Check for Night → Off → Day pattern violations.
         
@@ -809,15 +760,11 @@ class WeightOptimizer:
         
         Args:
             schedule: The schedule to check
-            strict_check: If True, produces more detailed logs for verification
             
         Returns:
             Number of violations found
         """
         violations = 0
-        
-        if strict_check:
-            logger.info("EXACT UI METHOD: Checking Night → Off → Day pattern")
         
         # Get all dates in the target month in chronological order
         all_dates = sorted(schedule.keys())
@@ -837,9 +784,6 @@ class WeightOptimizer:
         else:
             dates = all_dates
             
-        if strict_check:
-            logger.info(f"Checking {len(dates)} dates for Night → Off → Day pattern")
-        
         # This needs at least 3 consecutive days to check
         for i in range(len(dates) - 2):
             first_date = dates[i]      # Night shift day
@@ -865,14 +809,6 @@ class WeightOptimizer:
                 # If doctor doesn't work second day but works day shift on third day, it's a violation
                 if not works_second_day and doctor in schedule[third_date]["Day"]:
                     violations += 1
-                    if strict_check:
-                        logger.info(f"VIOLATION: {doctor} works {first_date} (Night) → {second_date} (Off) → {third_date} (Day)")
-        
-        if strict_check:
-            if violations > 0:
-                logger.info(f"Found {violations} Night → Off → Day pattern violations")
-            else:
-                logger.info("No Night → Off → Day pattern violations found")
                 
         return violations
 
@@ -1295,15 +1231,15 @@ class WeightOptimizer:
         verification_results = {}
         
         # Senior hours check
-        verification_results["senior_hours"] = self._check_senior_more_hours(stats, strict_check=log_details) == 0
+        verification_results["senior_hours"] = self._check_senior_more_hours(stats) == 0
         
         # Senior weekend/holiday hours check
-        verification_results["senior_wh_hours"] = self._check_senior_more_weekend_holiday(stats, strict_check=log_details) == 0
+        verification_results["senior_wh_hours"] = self._check_senior_more_weekend_holiday(stats) == 0
         
         # Schedule pattern constraints
         verification_results["night_followed"] = self._check_night_followed_by_work(schedule) == 0
         verification_results["evening_day"] = self._check_evening_to_day(schedule) == 0
-        verification_results["night_off_day"] = self._check_night_off_day_pattern(schedule, strict_check=log_details) == 0
+        verification_results["night_off_day"] = self._check_night_off_day_pattern(schedule) == 0
         verification_results["consecutive_night"] = self._check_consecutive_night_shifts(schedule) == 0
         verification_results["day_evening_to_night"] = self._check_day_evening_to_night(schedule) == 0
         
@@ -1419,14 +1355,14 @@ def optimize_weights(data: Dict[str, Any], progress_callback: Callable = None) -
         # Second comprehensive verification for all hard constraints
         if not has_issues:
             # Verify senior hours constraint with detailed logging
-            if not optimizer._verify_no_senior_hour_violations(result["schedule"], result["statistics"]):
+            if optimizer._check_senior_more_hours(result["statistics"]) > 0:
                 logger.warning("Final verification found senior hour violations!")
                 # Make sure this is reflected in the hard_violations count
                 result["hard_violations"] = 1
                 has_issues = True
             
             # Verify weekend/holiday hours constraint
-            if not optimizer._verify_no_weekend_holiday_violations(result["schedule"], result["statistics"]):
+            if optimizer._check_senior_more_weekend_holiday(result["statistics"]) > 0:
                 logger.warning("Final verification found senior weekend/holiday hour violations!")
                 # Make sure this is reflected in the hard_violations count
                 result["hard_violations"] = 1
@@ -1530,12 +1466,12 @@ def optimize_weights(data: Dict[str, Any], progress_callback: Callable = None) -
                     
                     # Check specifically for senior hour violations using the same method
                     # that's used in the initial check, just with strict logging
-                    has_senior_violation = not optimizer._verify_no_senior_hour_violations(schedule, stats)
+                    has_senior_violation = optimizer._check_senior_more_hours(stats) > 0
                     if has_senior_violation:
                         hard_violations += 1
                     
                     # Check senior weekend/holiday hours violation
-                    has_senior_wh_violation = not optimizer._verify_no_weekend_holiday_violations(schedule, stats)
+                    has_senior_wh_violation = optimizer._check_senior_more_weekend_holiday(stats) > 0
                     if has_senior_wh_violation:
                         hard_violations += 1
                     
@@ -1676,31 +1612,16 @@ def optimize_weights(data: Dict[str, Any], progress_callback: Callable = None) -
         if len(month_dates) > 0:
             logger.info(f"First date: {month_dates[0]}, Last date: {month_dates[-1]}")
         
-        # Create a new class instance to match how the UI would use it
-        ui_simulator = WeightOptimizer(
-            doctors=doctor_list,
-            holidays=data.get("holidays", {}),
-            availability=data.get("availability", {}),
-            month=month,
-            year=year
-        )
-        
         # Get limited availability doctors info for final report
-        limited_availability_doctors = ui_simulator._get_limited_availability_doctors(schedule, month_dates)
+        limited_availability_doctors = optimizer._get_limited_availability_doctors(schedule, month_dates)
         
-        # Run exact UI-style checks with full tracing enabled
-        logger.info("\n[SIMULATING EXACT UI CALCULATIONS]")
-        ui_senior_hours_violation = ui_simulator._check_senior_more_hours(stats, strict_check=True)
-        ui_senior_wh_violation = ui_simulator._check_senior_more_weekend_holiday(stats, strict_check=True)
-        ui_night_off_day_violation = ui_simulator._check_night_off_day_pattern(schedule, strict_check=True)
-        
-        # Continue with other verification checks - exclude coverage errors for limited availability doctors
+        # Continue with verification checks - exclude coverage errors for limited availability doctors
         verification_results = {
-            "senior_hours": ui_senior_hours_violation == 0,
-            "senior_wh_hours": ui_senior_wh_violation == 0,
+            "senior_hours": optimizer._check_senior_more_hours(stats) == 0,
+            "senior_wh_hours": optimizer._check_senior_more_weekend_holiday(stats) == 0,
             "night_followed": optimizer._check_night_followed_by_work(schedule) == 0,
             "evening_day": optimizer._check_evening_to_day(schedule) == 0,
-            "night_off_day": ui_night_off_day_violation == 0,
+            "night_off_day": optimizer._check_night_off_day_pattern(schedule) == 0,
             "senior_holiday": optimizer._check_senior_on_long_holiday(schedule) == 0,
             "consecutive_night": optimizer._check_consecutive_night_shifts(schedule) == 0,
             "day_evening_to_night": optimizer._check_day_evening_to_night(schedule) == 0,
@@ -1820,8 +1741,8 @@ def optimize_weights(data: Dict[str, Any], progress_callback: Callable = None) -
                 stats = solution.get("stats", {})
                 
                 violations_breakdown = {
-                    "Senior Hours": not optimizer._verify_no_senior_hour_violations(schedule, stats),
-                    "Senior W/H Hours": not optimizer._verify_no_weekend_holiday_violations(schedule, stats),
+                    "Senior Hours": optimizer._check_senior_more_hours(stats) > 0,
+                    "Senior W/H Hours": optimizer._check_senior_more_weekend_holiday(stats) > 0,
                     "Night Followed": optimizer._check_night_followed_by_work(schedule) > 0,
                     "Evening->Day": optimizer._check_evening_to_day(schedule) > 0,
                     "Night->Off->Day": optimizer._check_night_off_day_pattern(schedule) > 0,
