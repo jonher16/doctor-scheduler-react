@@ -192,7 +192,6 @@ echo     datas=[], >> app.spec
 echo     hiddenimports=[ >> app.spec
 echo         'flask',  >> app.spec
 echo         'flask_cors',  >> app.spec
-echo         'schedule_optimizer', >> app.spec
 echo         'random', >> app.spec
 echo         'copy', >> app.spec
 echo         'time', >> app.spec
@@ -252,7 +251,6 @@ if exist "backend\dist\hospital_backend.exe" (
 
 :: Copy key Python files as fallback
 copy "backend\app.py" "bundled_backend\" >nul
-copy "backend\schedule_optimizer.py" "bundled_backend\" >nul
 copy "backend\monthly_schedule_optimizer.py" "bundled_backend\" >nul
 
 :: Create the Windows-optimized run_backend.bat file

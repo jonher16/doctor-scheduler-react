@@ -203,92 +203,24 @@ class WeightOptimizer:
         Returns:
             Tuple of (total_score, hard_violations, soft_score)
         """
-        # PART 1: Check for hard constraint violations
-        hard_violations = 0
-        hard_violation_details = []
+        # Check all constraints in one pass
+        verification_results = self._verify_constraints(schedule, stats)
         
-        # 1a. Availability violations (hard constraint)
-        avail_violations = stats.get("availability_violations", 0)
-        hard_violations += avail_violations
-        if avail_violations > 0:
-            hard_violation_details.append(f"Availability violations: {avail_violations}")
+        # Count hard violations
+        hard_violations = sum(1 for constraint, passed in verification_results.items() 
+                             if not passed and constraint != "doctor_balance")
         
-        # 1b. Duplicate doctors (hard constraint)
-        duplicate_doctors = stats.get("duplicate_doctors", 0)
-        hard_violations += duplicate_doctors
-        if duplicate_doctors > 0:
-            hard_violation_details.append(f"Duplicate doctors: {duplicate_doctors}")
-        
-        # 1c. Coverage errors - now using our template-aware method
-        coverage_errors = self._check_coverage_errors(schedule)
-        hard_violations += coverage_errors
-        if coverage_errors > 0:
-            hard_violation_details.append(f"Coverage errors: {coverage_errors}")
-        
-        # 1d. Check for Night shift followed by Day/Evening shift (hard constraint)
-        night_followed_violations = self._check_night_followed_by_work(schedule)
-        hard_violations += night_followed_violations
-        if night_followed_violations > 0:
-            hard_violation_details.append(f"Night shift followed by work: {night_followed_violations}")
-        
-        # 1e. Check for Evening to Day shift pattern (hard constraint)
-        evening_to_day_violations = self._check_evening_to_day(schedule)
-        hard_violations += evening_to_day_violations
-        if evening_to_day_violations > 0:
-            hard_violation_details.append(f"Evening to Day shift: {evening_to_day_violations}")
-        
-        # 1f. Check for seniors working on long holidays (hard constraint)
-        senior_holiday_violations = self._check_senior_on_long_holiday(schedule)
-        hard_violations += senior_holiday_violations
-        if senior_holiday_violations > 0:
-            hard_violation_details.append(f"Senior on long holiday: {senior_holiday_violations}")
-        
-        # 1g. Check if seniors work more hours than juniors (hard constraint)
-        senior_more_hours = self._check_senior_more_hours(stats)
-        hard_violations += senior_more_hours
-        if senior_more_hours > 0:
-            hard_violation_details.append("Seniors working more hours than juniors")
-        
-        # 1h. Check if seniors have more weekend/holiday hours (hard constraint)
-        senior_more_wh = self._check_senior_more_weekend_holiday(stats)
-        hard_violations += senior_more_wh
-        if senior_more_wh > 0:
-            hard_violation_details.append("Seniors with more weekend/holiday hours than juniors")
-        
-        # 1i. Check for consecutive night shifts (hard constraint)
-        consecutive_night_violations = self._check_consecutive_night_shifts(schedule)
-        hard_violations += consecutive_night_violations
-        if consecutive_night_violations > 0:
-            hard_violation_details.append(f"Consecutive night shifts: {consecutive_night_violations}")
-
-        # 1j. Check for Day/Evening preference doctors assigned to Night shifts (hard constraint)
-        day_evening_to_night_violations = self._check_day_evening_to_night(schedule)
-        hard_violations += day_evening_to_night_violations
-        if day_evening_to_night_violations > 0:
-            hard_violation_details.append(f"Day/Evening pref assigned to Night shifts: {day_evening_to_night_violations}")
-        
-        # 1k. Check for Night-Off-Day pattern violations (hard constraint)
-        night_off_day_violations = self._check_night_off_day_pattern(schedule)
-        hard_violations += night_off_day_violations
-        if night_off_day_violations > 0:
-            hard_violation_details.append(f"Night-Off-Day pattern: {night_off_day_violations}")
-        
-        # PART 2: Calculate soft constraint score
+        # Calculate soft constraint score
         soft_score, _, _ = self._calculate_soft_score(schedule, stats)
         
         # If any hard constraints are violated, return a very high score
         if hard_violations > 0:
-            logger.info(f"Hard constraint violations: {hard_violations} - {hard_violation_details}")
-        else:
-            logger.info(f"No hard constraint violations!")
-            logger.info(f"Soft score: {soft_score:.2f}")
-            
-        # Return tuple of (total_score, hard_violations, soft_score)
-        # This helps track and compare solutions more accurately
-        if hard_violations > 0:
+            logger.info(f"Hard constraint violations: {hard_violations}")
             # Hard violations make the total score very high
             total_score = 1000000.0 + hard_violations
         else:
+            logger.info(f"No hard constraint violations!")
+            logger.info(f"Soft score: {soft_score:.2f}")
             # No hard violations, score is just the soft score
             total_score = soft_score
             
@@ -798,6 +730,10 @@ class WeightOptimizer:
         active = [h for d, h in doctor_hours.items() if d not in limited and h > 0]
         return len(active) <= 1 or max(active) - min(active) <= 8.0
 
+    def _verify_no_night_off_day_violations(self, schedule):
+        """Verify that no doctors work Night → Off → Day pattern."""
+        return self._check_night_off_day_pattern(schedule, strict_check=True) == 0
+
     def _check_consecutive_night_shifts(self, schedule: Dict) -> int:
         """Check for doctors working consecutive night shifts."""
         violations = 0
@@ -939,10 +875,6 @@ class WeightOptimizer:
                 logger.info("No Night → Off → Day pattern violations found")
                 
         return violations
-
-    def _verify_no_night_off_day_violations(self, schedule):
-        """Verify that no doctors work Night → Off → Day pattern."""
-        return self._check_night_off_day_pattern(schedule, strict_check=True) == 0
 
     def _evaluate_weights(self, weights: Dict[str, Any], iteration: int) -> Tuple[Dict[str, Any], Dict, Dict, float, int, float, bool, int]:
         """
@@ -1115,67 +1047,17 @@ class WeightOptimizer:
             has_doctor_hour_balance_violation, preference_violations = self._evaluate_weights(weights, iteration)
             
             # Store results
-            self.results.append({
-                "weights": copy.deepcopy(current_weights),
-                "score": total_score,
-                "hard_violations": hard_violations,
-                "has_doctor_hour_balance_violation": has_doctor_hour_balance_violation,
-                "preference_violations": preference_violations,
-                "soft_score": soft_score,
-                "stats": {
-                    "availability_violations": stats.get("availability_violations", 0),
-                    "duplicate_doctors": stats.get("duplicate_doctors", 0),
-                    "coverage_errors": stats.get("coverage_errors", 0),
-                    "objective_value": stats.get("objective_value", 0)
-                }
-            })
+            self._store_result(current_weights, total_score, hard_violations, 
+                             has_doctor_hour_balance_violation, preference_violations, soft_score, stats)
             
             # Update best if improved
-            if self._is_better_solution(
-                hard_violations, has_doctor_hour_balance_violation, preference_violations, soft_score,
-                self.best_hard_violations, self.best_has_doctor_hour_balance_violation, 
-                self.best_preference_violations, self.best_soft_score
-            ):
-                logger.info(f"New best solution! Score: {total_score:.2f} (was {self.best_score:.2f})")
-                
-                self.best_score = total_score
-                self.best_hard_violations = hard_violations
-                self.best_has_doctor_hour_balance_violation = has_doctor_hour_balance_violation
-                self.best_preference_violations = preference_violations
-                self.best_soft_score = soft_score
-                self.best_weights = copy.deepcopy(current_weights)
-                self.best_schedule = copy.deepcopy(schedule)
-                self.best_stats = copy.deepcopy(stats)
-                
+            self._update_best_if_improved(current_weights, schedule, stats, total_score, hard_violations, 
+                                        has_doctor_hour_balance_violation, preference_violations, soft_score)
+            
             # Report progress
             if progress_callback:
-                elapsed_time = time.time() - start_time
-                time_percent = min(100, int(100 * elapsed_time / self.time_limit_seconds))
-                iter_percent = int(100 * iteration / self.max_iterations)
-                progress = max(time_percent, iter_percent)
-                
-                status_msg = f"Iteration {iteration}/{self.max_iterations}, Best score: {self.best_score:.2f}"
-                # Clearly separate the different constraint types
-                constraints_msg = []
-                
-                # Hard constraints - most critical
-                if self.best_hard_violations > 0:
-                    constraints_msg.append(f"HARD CONSTRAINTS: {self.best_hard_violations} violations!")
-                else:
-                    constraints_msg.append("HARD CONSTRAINTS: None")
-                    
-                # Doctor hour balance - second priority
-                if self.best_has_doctor_hour_balance_violation:
-                    constraints_msg.append("DOCTOR HOUR BALANCE: >8h Difference (UI will show violation)")
-                else:
-                    constraints_msg.append("DOCTOR HOUR BALANCE: Balanced (≤8h difference)")
-                    
-                # Preference violations - lowest priority
-                constraints_msg.append(f"PREFERENCES: {self.best_preference_violations} violations")
-                
-                status_msg += f" ({' | '.join(constraints_msg)})"
-                
-                progress_callback(progress, status_msg)
+                self._report_progress(progress_callback, iteration, self.max_iterations, 
+                                    time.time() - start_time, self.time_limit_seconds)
     
     def _optimize_parallel(self, progress_callback: Callable = None):
         """Run optimization in parallel using ProcessPoolExecutor with time and iteration limits."""
@@ -1226,69 +1108,20 @@ class WeightOptimizer:
                         completed += 1
                         
                         # Store results
-                        self.results.append({
-                            "weights": copy.deepcopy(current_weights),
-                            "score": total_score,
-                            "hard_violations": hard_violations,
-                            "has_doctor_hour_balance_violation": has_doctor_hour_balance_violation,
-                            "preference_violations": preference_violations,
-                            "soft_score": soft_score,
-                            "stats": {
-                                "availability_violations": stats.get("availability_violations", 0),
-                                "duplicate_doctors": stats.get("duplicate_doctors", 0),
-                                "coverage_errors": stats.get("coverage_errors", 0),
-                                "objective_value": stats.get("objective_value", 0)
-                            }
-                        })
+                        self._store_result(current_weights, total_score, hard_violations, 
+                                         has_doctor_hour_balance_violation, preference_violations, soft_score, stats)
                         
                         # Update best if improved
-                        if self._is_better_solution(
-                            hard_violations, has_doctor_hour_balance_violation, preference_violations, soft_score,
-                            self.best_hard_violations, self.best_has_doctor_hour_balance_violation, 
-                            self.best_preference_violations, self.best_soft_score
-                        ):
-                            logger.info(f"New best solution! Score: {total_score:.2f} (was {self.best_score:.2f})")
-                            
-                            self.best_score = total_score
-                            self.best_hard_violations = hard_violations
-                            self.best_has_doctor_hour_balance_violation = has_doctor_hour_balance_violation
-                            self.best_preference_violations = preference_violations
-                            self.best_soft_score = soft_score
-                            self.best_weights = copy.deepcopy(current_weights)
-                            self.best_schedule = copy.deepcopy(schedule)
-                            self.best_stats = copy.deepcopy(stats)
+                        self._update_best_if_improved(current_weights, schedule, stats, total_score, hard_violations, 
+                                                    has_doctor_hour_balance_violation, preference_violations, soft_score)
                     except Exception as e:
                         logger.error(f"Error processing future: {e}")
+                        completed += 1
                 
                 # Report progress
                 if progress_callback:
-                    elapsed_time = time.time() - start_time
-                    time_percent = min(100, int(100 * elapsed_time / self.time_limit_seconds))
-                    iter_percent = int(100 * completed / self.max_iterations)
-                    progress = max(time_percent, iter_percent)
-                    
-                    status_msg = f"Completed {completed}/{self.max_iterations}, Best score: {self.best_score:.2f}"
-                    # Clearly separate the different constraint types
-                    constraints_msg = []
-                    
-                    # Hard constraints - most critical
-                    if self.best_hard_violations > 0:
-                        constraints_msg.append(f"HARD CONSTRAINTS: {self.best_hard_violations} violations!")
-                    else:
-                        constraints_msg.append("HARD CONSTRAINTS: None")
-                        
-                    # Doctor hour balance - second priority
-                    if self.best_has_doctor_hour_balance_violation:
-                        constraints_msg.append("DOCTOR HOUR BALANCE: >8h Difference (UI will show violation)")
-                    else:
-                        constraints_msg.append("DOCTOR HOUR BALANCE: Balanced (≤8h difference)")
-                        
-                    # Preference violations - lowest priority
-                    constraints_msg.append(f"PREFERENCES: {self.best_preference_violations} violations")
-                    
-                    status_msg += f" ({' | '.join(constraints_msg)})"
-                    
-                    progress_callback(progress, status_msg)
+                    self._report_progress(progress_callback, completed, self.max_iterations, 
+                                        time.time() - start_time, self.time_limit_seconds)
             
             # Cancel any remaining futures if we hit time limit
             for future in active_futures:
@@ -1339,67 +1172,17 @@ class WeightOptimizer:
                         has_doctor_hour_balance_violation, preference_violations = result
                         
                         # Store result
-                        self.results.append({
-                            "weights": copy.deepcopy(current_weights),
-                            "score": total_score,
-                            "hard_violations": hard_violations,
-                            "has_doctor_hour_balance_violation": has_doctor_hour_balance_violation,
-                            "preference_violations": preference_violations,
-                            "soft_score": soft_score,
-                            "stats": {
-                                "availability_violations": stats.get("availability_violations", 0),
-                                "duplicate_doctors": stats.get("duplicate_doctors", 0),
-                                "coverage_errors": stats.get("coverage_errors", 0),
-                                "objective_value": stats.get("objective_value", 0)
-                            }
-                        })
+                        self._store_result(current_weights, total_score, hard_violations, 
+                                         has_doctor_hour_balance_violation, preference_violations, soft_score, stats)
                         
                         # Update best if improved
-                        if self._is_better_solution(
-                            hard_violations, has_doctor_hour_balance_violation, preference_violations, soft_score,
-                            self.best_hard_violations, self.best_has_doctor_hour_balance_violation, 
-                            self.best_preference_violations, self.best_soft_score
-                        ):
-                            logger.info(f"New best solution! Score: {total_score:.2f} (was {self.best_score:.2f})")
-                            
-                            self.best_score = total_score
-                            self.best_hard_violations = hard_violations
-                            self.best_has_doctor_hour_balance_violation = has_doctor_hour_balance_violation
-                            self.best_preference_violations = preference_violations
-                            self.best_soft_score = soft_score
-                            self.best_weights = copy.deepcopy(current_weights)
-                            self.best_schedule = copy.deepcopy(schedule)
-                            self.best_stats = copy.deepcopy(stats)
-                            
+                        self._update_best_if_improved(current_weights, schedule, stats, total_score, hard_violations, 
+                                                    has_doctor_hour_balance_violation, preference_violations, soft_score)
+                        
                         # Report progress after each evaluation
                         if progress_callback and completed % max(1, min(5, self.max_iterations // 10)) == 0:
-                            elapsed_time = time.time() - start_time
-                            time_percent = min(100, int(100 * elapsed_time / self.time_limit_seconds))
-                            iter_percent = int(100 * completed / self.max_iterations)
-                            progress = max(time_percent, iter_percent)
-                            
-                            status_msg = f"Completed {completed}/{self.max_iterations}, Best score: {self.best_score:.2f}"
-                            # Clearly separate the different constraint types
-                            constraints_msg = []
-                            
-                            # Hard constraints - most critical
-                            if self.best_hard_violations > 0:
-                                constraints_msg.append(f"HARD CONSTRAINTS: {self.best_hard_violations} violations!")
-                            else:
-                                constraints_msg.append("HARD CONSTRAINTS: None")
-                                
-                            # Doctor hour balance - second priority
-                            if self.best_has_doctor_hour_balance_violation:
-                                constraints_msg.append("DOCTOR HOUR BALANCE: >8h Difference (UI will show violation)")
-                            else:
-                                constraints_msg.append("DOCTOR HOUR BALANCE: Balanced (≤8h difference)")
-                                
-                            # Preference violations - lowest priority
-                            constraints_msg.append(f"PREFERENCES: {self.best_preference_violations} violations")
-                            
-                            status_msg += f" ({' | '.join(constraints_msg)})"
-                            
-                            progress_callback(progress, status_msg)
+                            self._report_progress(progress_callback, completed, self.max_iterations, 
+                                                time.time() - start_time, self.time_limit_seconds)
                 
                 except Exception as e:
                     logger.error(f"Error evaluating weights: {e}")
@@ -1429,6 +1212,117 @@ class WeightOptimizer:
             progress_callback(100, f"Completed {completed}/{self.max_iterations}, Best score: {self.best_score:.2f}")
         
         logger.info(f"Bundled app optimization completed: processed {completed}/{self.max_iterations} configurations")
+
+    # Add these helper methods before the optimize method
+    def _store_result(self, weights, total_score, hard_violations, has_doctor_hour_balance_violation, 
+                    preference_violations, soft_score, stats):
+        """Store results of a weight configuration evaluation."""
+        self.results.append({
+            "weights": copy.deepcopy(weights),
+            "score": total_score,
+            "hard_violations": hard_violations,
+            "has_doctor_hour_balance_violation": has_doctor_hour_balance_violation,
+            "preference_violations": preference_violations,
+            "soft_score": soft_score,
+            "stats": {
+                "availability_violations": stats.get("availability_violations", 0),
+                "duplicate_doctors": stats.get("duplicate_doctors", 0),
+                "coverage_errors": stats.get("coverage_errors", 0),
+                "objective_value": stats.get("objective_value", 0)
+            }
+        })
+
+    def _update_best_if_improved(self, weights, schedule, stats, total_score, hard_violations, 
+                                has_doctor_hour_balance_violation, preference_violations, soft_score):
+        """Update best solution if the current one is better."""
+        if self._is_better_solution(
+            hard_violations, has_doctor_hour_balance_violation, preference_violations, soft_score,
+            self.best_hard_violations, self.best_has_doctor_hour_balance_violation, 
+            self.best_preference_violations, self.best_soft_score
+        ):
+            logger.info(f"New best solution! Score: {total_score:.2f} (was {self.best_score:.2f})")
+            
+            self.best_score = total_score
+            self.best_hard_violations = hard_violations
+            self.best_has_doctor_hour_balance_violation = has_doctor_hour_balance_violation
+            self.best_preference_violations = preference_violations
+            self.best_soft_score = soft_score
+            self.best_weights = copy.deepcopy(weights)
+            self.best_schedule = copy.deepcopy(schedule)
+            self.best_stats = copy.deepcopy(stats)
+
+    def _report_progress(self, progress_callback, current_iteration, max_iterations, elapsed_time, time_limit):
+        """Report progress to the callback function."""
+        time_percent = min(100, int(100 * elapsed_time / time_limit))
+        iter_percent = int(100 * current_iteration / max_iterations)
+        progress = max(time_percent, iter_percent)
+        
+        status_msg = f"Completed {current_iteration}/{max_iterations}, Best score: {self.best_score:.2f}"
+        # Clearly separate the different constraint types
+        constraints_msg = []
+        
+        # Hard constraints - most critical
+        if self.best_hard_violations > 0:
+            constraints_msg.append(f"HARD CONSTRAINTS: {self.best_hard_violations} violations!")
+        else:
+            constraints_msg.append("HARD CONSTRAINTS: None")
+            
+        # Doctor hour balance - second priority
+        if self.best_has_doctor_hour_balance_violation:
+            constraints_msg.append("DOCTOR HOUR BALANCE: >8h Difference (UI will show violation)")
+        else:
+            constraints_msg.append("DOCTOR HOUR BALANCE: Balanced (≤8h difference)")
+            
+        # Preference violations - lowest priority
+        constraints_msg.append(f"PREFERENCES: {self.best_preference_violations} violations")
+        
+        status_msg += f" ({' | '.join(constraints_msg)})"
+        
+        progress_callback(progress, status_msg)
+
+    def _verify_constraints(self, schedule, stats, log_details=False):
+        """
+        Comprehensive verification of all constraints in one pass.
+        
+        Args:
+            schedule: Schedule to verify
+            stats: Schedule statistics
+            log_details: Whether to log detailed constraint information
+            
+        Returns:
+            Dictionary mapping constraint names to boolean pass/fail results
+        """
+        verification_results = {}
+        
+        # Senior hours check
+        verification_results["senior_hours"] = self._check_senior_more_hours(stats, strict_check=log_details) == 0
+        
+        # Senior weekend/holiday hours check
+        verification_results["senior_wh_hours"] = self._check_senior_more_weekend_holiday(stats, strict_check=log_details) == 0
+        
+        # Schedule pattern constraints
+        verification_results["night_followed"] = self._check_night_followed_by_work(schedule) == 0
+        verification_results["evening_day"] = self._check_evening_to_day(schedule) == 0
+        verification_results["night_off_day"] = self._check_night_off_day_pattern(schedule, strict_check=log_details) == 0
+        verification_results["consecutive_night"] = self._check_consecutive_night_shifts(schedule) == 0
+        verification_results["day_evening_to_night"] = self._check_day_evening_to_night(schedule) == 0
+        
+        # Other constraints
+        verification_results["senior_holiday"] = self._check_senior_on_long_holiday(schedule) == 0
+        verification_results["availability"] = stats.get("availability_violations", 0) == 0
+        verification_results["duplicates"] = stats.get("duplicate_doctors", 0) == 0
+        verification_results["coverage"] = self._check_coverage_errors(schedule) == 0
+        verification_results["doctor_balance"] = self._verify_no_doctor_hour_balance_violations(schedule, stats)
+        
+        # Count total violations for convenience
+        if log_details:
+            failed_constraints = [name for name, passed in verification_results.items() if not passed]
+            if failed_constraints:
+                logger.warning(f"Failed constraints: {', '.join(failed_constraints)}")
+            else:
+                logger.info("All constraints verified successfully")
+        
+        return verification_results
 
 
 def optimize_weights(data: Dict[str, Any], progress_callback: Callable = None) -> Dict[str, Any]:
