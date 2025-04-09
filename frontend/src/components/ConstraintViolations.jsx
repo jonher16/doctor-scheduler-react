@@ -26,7 +26,7 @@ import {
 
 import { isWeekend } from '../utils/dateUtils';
 
-function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, selectedYear}) {
+function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, selectedYear, availability}) {
 
   const [violations, setViolations] = useState({});
   const [totalViolations, setTotalViolations] = useState(0);
@@ -126,6 +126,11 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
         details: []
       },
       seniorMoreWeekendHoliday: {
+        count: 0,
+        details: []
+      },
+      // Add new availability violation category
+      availabilityViolations: {
         count: 0,
         details: []
       }
@@ -453,6 +458,75 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
       }
     }
 
+    // New check for availability violations
+    if (availability) {
+      for (const date of monthDates) {
+        if (!schedule[date]) continue;
+        
+        for (const shift of ['Day', 'Evening', 'Night']) {
+          if (!schedule[date][shift]) continue;
+          
+          for (const doctor of schedule[date][shift]) {
+            // Skip if no availability data for this doctor
+            if (!availability[doctor]) continue;
+            
+            // Check if doctor is available for this date
+            const doctorAvailability = availability[doctor][date];
+            
+            if (doctorAvailability) {
+              // Check specific availability constraints
+              if (doctorAvailability === 'Not Available') {
+                // Doctor is completely unavailable for this date
+                violationsData.availabilityViolations.count++;
+                violationsData.availabilityViolations.details.push({
+                  doctor,
+                  date,
+                  shift,
+                  status: doctorAvailability
+                });
+              } else if (doctorAvailability.startsWith('Not Available: ')) {
+                // Check for partial unavailability
+                const unavailableShifts = doctorAvailability.substring('Not Available: '.length).split(', ');
+                if (unavailableShifts.includes(shift)) {
+                  violationsData.availabilityViolations.count++;
+                  violationsData.availabilityViolations.details.push({
+                    doctor,
+                    date,
+                    shift,
+                    status: doctorAvailability
+                  });
+                }
+              } else if (doctorAvailability === 'Day Only' && shift !== 'Day') {
+                violationsData.availabilityViolations.count++;
+                violationsData.availabilityViolations.details.push({
+                  doctor,
+                  date,
+                  shift,
+                  status: doctorAvailability
+                });
+              } else if (doctorAvailability === 'Evening Only' && shift !== 'Evening') {
+                violationsData.availabilityViolations.count++;
+                violationsData.availabilityViolations.details.push({
+                  doctor,
+                  date,
+                  shift,
+                  status: doctorAvailability
+                });
+              } else if (doctorAvailability === 'Night Only' && shift !== 'Night') {
+                violationsData.availabilityViolations.count++;
+                violationsData.availabilityViolations.details.push({
+                  doctor,
+                  date,
+                  shift,
+                  status: doctorAvailability
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+
     // Calculate total violations
     const total = Object.values(violationsData).reduce((sum, { count }) => sum + count, 0);
     
@@ -465,7 +539,7 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
     if (doctors && schedule && holidays && selectedMonth) {
       checkViolations();
     }
-  }, [doctors, schedule, holidays, selectedMonth]);
+  }, [doctors, schedule, holidays, selectedMonth, availability]);
 
   if (isLoading) {
     return (
@@ -579,6 +653,16 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
                     />
                   </Box>
                 </Grid>
+                <Grid item xs={6}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                    <Chip 
+                      icon={violations.availabilityViolations.count > 0 ? <ErrorIcon /> : <CheckIcon />}
+                      label={`Availability: ${violations.availabilityViolations.count}`}
+                      color={violations.availabilityViolations.count > 0 ? "error" : "success"}
+                      sx={{ width: '100%', justifyContent: 'flex-start' }}
+                    />
+                  </Box>
+                </Grid>
               </Grid>
             </CardContent>
           </Card>
@@ -672,6 +756,41 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
       {/* Detailed violations */}
       <Box sx={{ mt: 4 }}>
         <Typography variant="h6" gutterBottom>Detailed Violations</Typography>
+        
+        {/* New accordion for availability violations */}
+        <Accordion 
+          disabled={violations.availabilityViolations.count === 0}
+          sx={{
+            borderLeft: violations.availabilityViolations.count > 0 ? '4px solid' : 'none',
+            borderColor: 'error.main',
+          }}
+        >
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+              <Typography sx={{ flexGrow: 1 }}>Doctor Availability Violations ({violations.availabilityViolations.count})</Typography>
+              <Chip size="small" color="error" label="Hard Constraint" sx={{ ml: 2 }} />
+            </Box>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Typography variant="body2" sx={{ mb: 2, fontStyle: 'italic', color: 'error.main' }}>
+              Critical violation: Doctors are scheduled for shifts when they are not available.
+            </Typography>
+            {violations.availabilityViolations.details.length > 0 ? (
+              <List>
+                {violations.availabilityViolations.details.map((violation, index) => (
+                  <ListItem key={`availability-${index}`} divider>
+                    <ListItemText 
+                      primary={`${violation.doctor} (${isSeniorDoctor(violation.doctor) ? 'Senior' : 'Junior'})`}
+                      secondary={`Date: ${violation.date}, Assigned: ${violation.shift} Shift, Availability: ${violation.status}`} 
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            ) : (
+              <Typography>No violations of this type.</Typography>
+            )}
+          </AccordionDetails>
+        </Accordion>
         
         <Accordion 
           disabled={violations.nightShiftFollowedByWork.count === 0}

@@ -42,7 +42,7 @@ import { getMonthName } from '../utils/dateUtils';
 import { useYear } from '../contexts/YearContext';
 
 
-function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
+function Dashboard({ doctors, schedule, holidays, availability, onScheduleUpdate }) {
 
   const { selectedYear } = useYear();
   const [tabValue, setTabValue] = useState(0);
@@ -52,6 +52,7 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
   const [localDoctors, setLocalDoctors] = useState([]);
   const [localSchedule, setLocalSchedule] = useState({});
   const [localHolidays, setLocalHolidays] = useState({});
+  const [localAvailability, setLocalAvailability] = useState({});
   const [hasSchedule, setHasSchedule] = useState(false);
   const [quickStats, setQuickStats] = useState(null);
   const [notification, setNotification] = useState({
@@ -87,6 +88,11 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
         setLocalHolidays(JSON.parse(JSON.stringify(holidays)));
       }
       
+      // Also take a snapshot of availability
+      if (availability && Object.keys(availability).length > 0) {
+        setLocalAvailability(JSON.parse(JSON.stringify(availability)));
+      }
+      
       // Determine if it's a yearly or monthly schedule by checking dates
       const months = new Set();
       Object.keys(schedule).forEach(dateStr => {
@@ -111,7 +117,7 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
       
       setHasSchedule(true);
     }
-  }, [schedule, doctors, holidays, selectedYear]);
+  }, [schedule, doctors, holidays, availability, selectedYear]);
   
   // Recalculate quick stats when local data changes
   useEffect(() => {
@@ -452,7 +458,7 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
                       return {};
                     }
                   })()}
-                  availability={window.availability || {}}
+                  availability={localAvailability}
                 />
               )}
               {tabValue === 1 && (
@@ -485,6 +491,7 @@ function Dashboard({ doctors, schedule, holidays, onScheduleUpdate }) {
                 doctors={localDoctors} 
                 schedule={localSchedule} 
                 holidays={localHolidays} 
+                availability={localAvailability}
                 selectedMonth={month}
                 selectedYear={scheduleYear}
               />

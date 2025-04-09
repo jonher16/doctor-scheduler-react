@@ -686,6 +686,7 @@ function App() {
           doctors={dashboardDoctors} 
           schedule={dashboardSchedule} 
           holidays={dashboardHolidays}
+          availability={availability}
           onScheduleUpdate={handleScheduleUpdate}
         />;
       };
