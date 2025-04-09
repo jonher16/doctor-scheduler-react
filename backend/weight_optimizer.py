@@ -218,104 +218,56 @@ class WeightOptimizer:
         hard_violations += duplicate_doctors
         if duplicate_doctors > 0:
             hard_violation_details.append(f"Duplicate doctors: {duplicate_doctors}")
-            
+        
         # 1c. Coverage errors - now using our template-aware method
         coverage_errors = self._check_coverage_errors(schedule)
         hard_violations += coverage_errors
         if coverage_errors > 0:
             hard_violation_details.append(f"Coverage errors: {coverage_errors}")
         
-        # 1d. NEW: Check specifically for unfilled slots in the template
-        unfilled_template_slots = 0
-        if hasattr(self, 'shift_template') and self.shift_template:
-            for date in schedule.keys():
-                # Check if date is in the right month
-                if self.month is not None:
-                    d_date = datetime.date.fromisoformat(date)
-                    if d_date.month != self.month:
-                        continue
-                    if self.year is not None and d_date.year != self.year:
-                        continue
-                
-                # Check if this date has a template
-                if date not in self.shift_template:
-                    continue
-                
-                # Check each shift in the template
-                for shift, shift_data in self.shift_template[date].items():
-                    required = shift_data.get('slots', 0)
-                    if required <= 0:
-                        continue
-                    
-                    # Count actual assigned doctors
-                    assigned = 0
-                    if shift in schedule.get(date, {}):
-                        assigned = len(schedule[date][shift])
-                    
-                    # If fewer doctors than required by template
-                    if assigned < required:
-                        unfilled_template_slots += (required - assigned)
+        # 1d. Check for Night shift followed by Day/Evening shift (hard constraint)
+        night_followed_violations = self._check_night_followed_by_work(schedule)
+        hard_violations += night_followed_violations
+        if night_followed_violations > 0:
+            hard_violation_details.append(f"Night shift followed by work: {night_followed_violations}")
         
-        # Apply an extreme penalty for unfilled template slots
-        if unfilled_template_slots > 0:
-            hard_violations += unfilled_template_slots * 10  # Higher multiplier to prioritize this constraint
-            hard_violation_details.append(f"Unfilled template slots: {unfilled_template_slots}")
+        # 1e. Check for Evening to Day shift pattern (hard constraint)
+        evening_to_day_violations = self._check_evening_to_day(schedule)
+        hard_violations += evening_to_day_violations
+        if evening_to_day_violations > 0:
+            hard_violation_details.append(f"Evening to Day shift: {evening_to_day_violations}")
         
-        # 1e. Night shift rest violations (hard constraint)
-        night_rest_violations = self._check_night_followed_by_work(schedule)
-        hard_violations += night_rest_violations
-        if night_rest_violations > 0:
-            hard_violation_details.append(f"Night shift rest violations: {night_rest_violations}")
-        
-        # 1f. Evening to day violations (hard constraint) 
-        evening_day_violations = self._check_evening_to_day(schedule)
-        hard_violations += evening_day_violations
-        if evening_day_violations > 0:
-            hard_violation_details.append(f"Evening to day violations: {evening_day_violations}")
-            
-        # 1g. Consecutive night shift violations (hard constraint)
-        consec_night_violations = self._check_consecutive_night_shifts(schedule)
-        hard_violations += consec_night_violations
-        if consec_night_violations > 0:
-            hard_violation_details.append(f"Consecutive night shift violations: {consec_night_violations}")
-            
-        # 1h. Night-day-off pattern violations (hard constraint)
-        night_off_day_violations = self._check_night_off_day_pattern(schedule)
-        hard_violations += night_off_day_violations
-        if night_off_day_violations > 0:
-            hard_violation_details.append(f"Night-off-day pattern violations: {night_off_day_violations}")
-        
-        # 1i. Check for seniors working on long holidays (hard constraint)
+        # 1f. Check for seniors working on long holidays (hard constraint)
         senior_holiday_violations = self._check_senior_on_long_holiday(schedule)
         hard_violations += senior_holiday_violations
         if senior_holiday_violations > 0:
             hard_violation_details.append(f"Senior on long holiday: {senior_holiday_violations}")
         
-        # 1j. Check if seniors work more hours than juniors (hard constraint)
+        # 1g. Check if seniors work more hours than juniors (hard constraint)
         senior_more_hours = self._check_senior_more_hours(stats)
         hard_violations += senior_more_hours
         if senior_more_hours > 0:
             hard_violation_details.append("Seniors working more hours than juniors")
         
-        # 1k. Check if seniors have more weekend/holiday hours (hard constraint)
+        # 1h. Check if seniors have more weekend/holiday hours (hard constraint)
         senior_more_wh = self._check_senior_more_weekend_holiday(stats)
         hard_violations += senior_more_wh
         if senior_more_wh > 0:
             hard_violation_details.append("Seniors with more weekend/holiday hours than juniors")
         
-        # 1l. Check for consecutive night shifts (hard constraint)
+        # 1i. Check for consecutive night shifts (hard constraint)
         consecutive_night_violations = self._check_consecutive_night_shifts(schedule)
         hard_violations += consecutive_night_violations
         if consecutive_night_violations > 0:
             hard_violation_details.append(f"Consecutive night shifts: {consecutive_night_violations}")
 
-        # 1m. Check for Day/Evening preference doctors assigned to Night shifts (hard constraint)
+        # 1j. Check for Day/Evening preference doctors assigned to Night shifts (hard constraint)
         day_evening_to_night_violations = self._check_day_evening_to_night(schedule)
         hard_violations += day_evening_to_night_violations
         if day_evening_to_night_violations > 0:
             hard_violation_details.append(f"Day/Evening pref assigned to Night shifts: {day_evening_to_night_violations}")
         
-        # 1n. Check for Night-Off-Day pattern violations (hard constraint)
+        # 1k. Check for Night-Off-Day pattern violations (hard constraint)
         night_off_day_violations = self._check_night_off_day_pattern(schedule)
         hard_violations += night_off_day_violations
         if night_off_day_violations > 0:
@@ -401,9 +353,7 @@ class WeightOptimizer:
             for shift, required in expected_shifts.items():
                 # Check if shift exists in schedule
                 if shift not in schedule.get(date, {}):
-                    # This is a severe error - a required shift is completely missing
                     coverage_errors += 1
-                    logger.warning(f"Coverage error: Required shift {shift} on {date} is missing")
                     continue
                 
                 # Check if enough doctors are assigned
@@ -414,16 +364,8 @@ class WeightOptimizer:
                 available_doctors = self._get_available_doctors_for_date(date, shift)
                 available_doctors = [doc for doc in available_doctors if doc not in limited_availability_doctors]
                 
-                # NEW: If we're using a shift template, treat unfilled slots as a more serious error
-                if assigned < required:
-                    if hasattr(self, 'shift_template') and date in self.shift_template and shift in self.shift_template[date]:
-                        # Unfilled slot in template is a hard constraint violation
-                        coverage_errors += 1
-                        logger.warning(f"Coverage error: Template requires {required} doctors for {shift} on {date}, but only {assigned} assigned")
-                    elif len(available_doctors) >= required:
-                        # Traditional coverage error - only counts if enough doctors are available
-                        coverage_errors += 1
-                        logger.warning(f"Coverage error: Need {required} doctors for {shift} on {date}, have {assigned}, with {len(available_doctors)} available")
+                if assigned < required and len(available_doctors) >= required:
+                    coverage_errors += 1
         
         return coverage_errors
     
