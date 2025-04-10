@@ -133,6 +133,11 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
       availabilityViolations: {
         count: 0,
         details: []
+      },
+      // New contract shift violations
+      contractShiftViolations: {
+        count: 0,
+        details: []
       }
     };
 
@@ -527,6 +532,74 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
       }
     }
 
+    // Check for contract shift violations - doctors who have a contract must receive exact number of shifts by type
+    const contractDoctors = doctors.filter(doctor => doctor.contract && doctor.contractShiftsDetail);
+    if (contractDoctors.length > 0) {
+      // Initialize shift counts for each doctor by shift type
+      const doctorShiftCounts = {};
+      
+      for (const doctor of contractDoctors) {
+        doctorShiftCounts[doctor.name] = {
+          Day: 0,
+          Evening: 0,
+          Night: 0
+        };
+      }
+      
+      // Count the actual shifts worked by each doctor
+      for (const date of monthDates) {
+        if (!schedule[date]) continue;
+        
+        for (const shift of ['Day', 'Evening', 'Night']) {
+          if (!schedule[date][shift]) continue;
+          
+          for (const doctor of schedule[date][shift]) {
+            // Check if this is a contract doctor
+            if (doctorShiftCounts[doctor]) {
+              doctorShiftCounts[doctor][shift]++;
+            }
+          }
+        }
+      }
+      
+      // Compare with expected contract shift numbers and record violations
+      for (const doctor of contractDoctors) {
+        const actualShifts = doctorShiftCounts[doctor.name];
+        const expectedShifts = {
+          Day: doctor.contractShiftsDetail.day || 0,
+          Evening: doctor.contractShiftsDetail.evening || 0,
+          Night: doctor.contractShiftsDetail.night || 0
+        };
+        
+        let hasViolation = false;
+        
+        // Check if there's a mismatch between actual and expected shifts
+        if (actualShifts.Day !== expectedShifts.Day ||
+            actualShifts.Evening !== expectedShifts.Evening ||
+            actualShifts.Night !== expectedShifts.Night) {
+          hasViolation = true;
+        }
+        
+        if (hasViolation) {
+          violationsData.contractShiftViolations.count++;
+          violationsData.contractShiftViolations.details.push({
+            doctor: doctor.name,
+            seniority: doctor.seniority,
+            actual: {
+              Day: actualShifts.Day,
+              Evening: actualShifts.Evening,
+              Night: actualShifts.Night
+            },
+            expected: {
+              Day: expectedShifts.Day,
+              Evening: expectedShifts.Evening,
+              Night: expectedShifts.Night
+            }
+          });
+        }
+      }
+    }
+
     // Calculate total violations
     const total = Object.values(violationsData).reduce((sum, { count }) => sum + count, 0);
     
@@ -653,16 +726,6 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
                     />
                   </Box>
                 </Grid>
-                <Grid item xs={6}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                    <Chip 
-                      icon={violations.availabilityViolations.count > 0 ? <ErrorIcon /> : <CheckIcon />}
-                      label={`Availability: ${violations.availabilityViolations.count}`}
-                      color={violations.availabilityViolations.count > 0 ? "error" : "success"}
-                      sx={{ width: '100%', justifyContent: 'flex-start' }}
-                    />
-                  </Box>
-                </Grid>
               </Grid>
             </CardContent>
           </Card>
@@ -709,8 +772,41 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
             </CardContent>
           </Card>
         </Grid>
+
+        {/* New Resource Allocation Violations card */}
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>Availability Violations</Typography>
+              <Divider sx={{ mb: 2 }} />
+              
+              <Grid container spacing={2}>
+                <Grid item xs={6}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                    <Chip 
+                      icon={violations.availabilityViolations.count > 0 ? <ErrorIcon /> : <CheckIcon />}
+                      label={`Availability: ${violations.availabilityViolations.count}`}
+                      color={violations.availabilityViolations.count > 0 ? "error" : "success"}
+                      sx={{ width: '100%', justifyContent: 'flex-start' }}
+                    />
+                  </Box>
+                </Grid>
+                <Grid item xs={6}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                    <Chip 
+                      icon={violations.contractShiftViolations.count > 0 ? <ErrorIcon /> : <CheckIcon />}
+                      label={`Contract Shifts: ${violations.contractShiftViolations.count}`}
+                      color={violations.contractShiftViolations.count > 0 ? "error" : "success"}
+                      sx={{ width: '100%', justifyContent: 'flex-start' }}
+                    />
+                  </Box>
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
+        </Grid>
         
-        <Grid item xs={12}>
+        <Grid item xs={12} md={6}>
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom>Workload Balance Violations</Typography>
@@ -756,6 +852,119 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
       {/* Detailed violations */}
       <Box sx={{ mt: 4 }}>
         <Typography variant="h6" gutterBottom>Detailed Violations</Typography>
+        
+        {/* New accordion for contract shift violations with improved styling */}
+        <Accordion 
+          disabled={violations.contractShiftViolations.count === 0}
+          sx={{
+            borderLeft: violations.contractShiftViolations.count > 0 ? '4px solid' : 'none',
+            borderColor: 'error.main',
+          }}
+        >
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+              <Typography sx={{ flexGrow: 1 }}>Contract Shift Violations ({violations.contractShiftViolations.count})</Typography>
+              <Chip size="small" color="error" label="Hard Constraint" sx={{ ml: 2 }} />
+            </Box>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Typography variant="body2" sx={{ mb: 2, fontStyle: 'italic', color: 'error.main' }}>
+              Critical violation: Doctors with contracts must work exactly the number of shifts specified in their contract by shift type.
+            </Typography>
+            {violations.contractShiftViolations.details.length > 0 ? (
+              <List sx={{ p: 0 }}>
+                {violations.contractShiftViolations.details.map((violation, index) => (
+                  <Paper
+                    key={`contract-shift-${index}`}
+                    variant="outlined"
+                    sx={{ mb: 2, p: 2 }}
+                  >
+                    <Typography variant="subtitle1" fontWeight="medium">
+                      {violation.doctor} ({violation.seniority})
+                    </Typography>
+                    <Divider sx={{ my: 1.5 }} />
+                    <Grid container spacing={2}>
+                      <Grid item xs={12}>
+                        <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: 1.5 }}>
+                          <Chip 
+                            label="DAY" 
+                            size="small" 
+                            color="warning"
+                            sx={{ width: '80px', mr: 2 }}
+                          />
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <Typography variant="body2" sx={{ mr: 2 }}>
+                              Expected: {violation.expected.Day}
+                            </Typography>
+                            <Typography variant="body2">
+                              Actual:{' '}
+                              <Typography 
+                                component="span" 
+                                color={violation.expected.Day !== violation.actual.Day ? 'error.main' : 'inherit'}
+                              >
+                                {violation.actual.Day}
+                              </Typography>
+                            </Typography>
+                          </Box>
+                        </Box>
+                      </Grid>
+                      <Grid item xs={12}>
+                        <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: 1.5 }}>
+                          <Chip 
+                            label="EVENING" 
+                            size="small"
+                            color="primary"
+                            sx={{ width: '80px', mr: 2 }}
+                          />
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <Typography variant="body2" sx={{ mr: 2 }}>
+                              Expected: {violation.expected.Evening}
+                            </Typography>
+                            <Typography variant="body2">
+                              Actual:{' '}
+                              <Typography 
+                                component="span" 
+                                color={violation.expected.Evening !== violation.actual.Evening ? 'error.main' : 'inherit'}
+                              >
+                                {violation.actual.Evening}
+                              </Typography>
+                            </Typography>
+                          </Box>
+                        </Box>
+                      </Grid>
+                      <Grid item xs={12}>
+                        <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
+                          <Chip 
+                            label="NIGHT" 
+                            size="small"
+                            color="secondary"
+                            sx={{ width: '80px', mr: 2 }}
+                          />
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <Typography variant="body2" sx={{ mr: 2 }}>
+                              Expected: {violation.expected.Night}
+                            </Typography>
+                            <Typography variant="body2">
+                              Actual:{' '}
+                              <Typography 
+                                component="span" 
+                                color={violation.expected.Night !== violation.actual.Night ? 'error.main' : 'inherit'}
+                              >
+                                {violation.actual.Night}
+                              </Typography>
+                            </Typography>
+                          </Box>
+                        </Box>
+                      </Grid>
+                    </Grid>
+                  </Paper>
+                ))}
+              </List>
+            ) : (
+              <Typography>No violations of this type.</Typography>
+            )}
+          </AccordionDetails>
+        </Accordion>
         
         {/* New accordion for availability violations */}
         <Accordion 

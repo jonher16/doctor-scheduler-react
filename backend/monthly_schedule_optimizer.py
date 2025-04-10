@@ -25,7 +25,8 @@ logger = logging.getLogger("MonthlyScheduleOptimizer")
 
 class MonthlyScheduleOptimizer:
     def __init__(self, doctors: List[Dict], holidays: Dict[str, str],
-                 availability: Dict[str, Dict[str, str]], month: int, year: int):
+                 availability: Dict[str, Dict[str, str]], month: int, year: int,
+                 contract_specific_shifts: Dict[str, List[Dict[str, str]]] = None):
         """
         Initialize with input data for a specific month.
         
@@ -34,12 +35,18 @@ class MonthlyScheduleOptimizer:
             holidays: Dictionary mapping dates to holiday types (e.g., 'Short' or 'Long').
             availability: Nested dictionary for doctor availability constraints.
             month: The month to generate the schedule for (1-12).
+            year: The year for the schedule.
+            contract_specific_shifts: Dictionary mapping doctor names to lists of shifts they are 
+                                     contractually obligated to work. Each shift is a dictionary 
+                                     with 'date' and 'shift' keys.
         """
         self.doctors = doctors
         self.holidays = holidays
         self.availability = availability
         self.month = month
         self.year = year
+        # Store contract-specific shifts
+        self.contract_specific_shifts = contract_specific_shifts or {}
 
         # Create indices for faster lookups
         self.doctor_indices = {doc["name"]: i for i, doc in enumerate(doctors)}
@@ -140,6 +147,15 @@ class MonthlyScheduleOptimizer:
                 for shift in self.shifts:
                     key = (doctor, date, shift)
                     self._availability_cache[key] = self._calculate_doctor_availability(doctor, date, shift)
+                    
+        # Make sure contract-specific shifts are marked as available
+        for doctor, shifts in self.contract_specific_shifts.items():
+            for shift_info in shifts:
+                date = shift_info.get('date')
+                shift_type = shift_info.get('shift')
+                if date and shift_type and date in self.all_dates:
+                    key = (doctor, date, shift_type)
+                    self._availability_cache[key] = True
 
     def _calculate_doctor_availability(self, doctor: str, date: str, shift: str) -> bool:
         """Calculate the availability status without using cache."""
@@ -267,6 +283,43 @@ class MonthlyScheduleOptimizer:
             schedule[date] = {}
             assigned_today = set()  # Track doctors assigned on this date
             
+            # First, assign contract-specific shifts
+            for doctor, shifts in self.contract_specific_shifts.items():
+                for shift_info in shifts:
+                    shift_date = shift_info.get('date')
+                    shift_type = shift_info.get('shift')
+                    
+                    # Skip if not for this date
+                    if shift_date != date:
+                        continue
+                        
+                    # Create the shift if it doesn't exist
+                    if shift_type not in schedule[date]:
+                        schedule[date][shift_type] = []
+                        
+                    # Add doctor to the shift if not already there
+                    if doctor not in schedule[date][shift_type]:
+                        schedule[date][shift_type].append(doctor)
+                        assigned_today.add(doctor)
+                        
+                        # Update assignment tracking
+                        assignments[doctor] += 1
+                        if is_weekend_or_holiday:
+                            weekend_holiday_assignments[doctor] += 1
+                        
+                        # Update consecutive days tracking
+                        d_date = datetime.date.fromisoformat(date)
+                        if last_worked_day[doctor] is not None:
+                            last_d_date = datetime.date.fromisoformat(last_worked_day[doctor])
+                            if (d_date - last_d_date).days == 1:
+                                consecutive_days[doctor] += 1
+                            else:
+                                consecutive_days[doctor] = 1
+                        else:
+                            consecutive_days[doctor] = 1
+                        
+                        last_worked_day[doctor] = date
+            
             # Process shifts in the determined order
             for shift in shift_order:
                 # Check if this date has a template with this shift
@@ -286,6 +339,19 @@ class MonthlyScheduleOptimizer:
                 # Skip if no slots required for this shift
                 if required <= 0:
                     continue
+                
+                # If shift already exists from contract assignments, count how many more doctors we need
+                if shift in schedule[date]:
+                    # Count doctors already assigned from contracts
+                    already_assigned = len(schedule[date][shift])
+                    # Update required count
+                    required = max(0, required - already_assigned)
+                    # If all slots are filled, skip to the next shift
+                    if required == 0:
+                        continue
+                else:
+                    # Create the shift
+                    schedule[date][shift] = []
                 
                 # Get doctors with preference for this shift first
                 pref_key = f"{shift} Only"
@@ -332,7 +398,7 @@ class MonthlyScheduleOptimizer:
                     # Ensure no duplicates
                     unique_preferred = []
                     for doc in preferred_docs:
-                        if doc not in unique_preferred:
+                        if doc not in unique_preferred and doc not in schedule[date][shift]:
                             unique_preferred.append(doc)
                     
                     preferred_selections = unique_preferred[:required]
@@ -347,6 +413,7 @@ class MonthlyScheduleOptimizer:
                         d for d in doctor_names 
                         if d not in preferred_docs and 
                         d not in assigned_today and 
+                        d not in schedule[date][shift] and 
                         self._is_doctor_available(d, date, shift) and
                         # NEW: Check preference compatibility with shift
                         self._can_assign_to_shift(d, shift)
@@ -371,51 +438,73 @@ class MonthlyScheduleOptimizer:
                     for doc in other_candidates:
                         if len(other_selections) >= remaining_required:
                             break
-                        if doc not in other_selections:
+                        if doc not in other_selections and doc not in schedule[date][shift]:
                             other_selections.append(doc)
                 
-                # Combine and assign doctors to this shift with uniqueness check
-                assigned = []
+                # Add doctors to the shift
                 for doc in preferred_selections + other_selections:
-                    if doc not in assigned:  # Ensure no duplicates
-                        assigned.append(doc)
+                    if doc not in schedule[date][shift]:  # Final uniqueness check
+                        schedule[date][shift].append(doc)
+                        assigned_today.add(doc)
+                        
+                        # Update assignment tracking
+                        assignments[doc] += 1
+                        if is_weekend_or_holiday:
+                            weekend_holiday_assignments[doc] += 1
+                        
+                        # Update consecutive days tracking
+                        d_date = datetime.date.fromisoformat(date)
+                        if last_worked_day[doc] is not None:
+                            last_d_date = datetime.date.fromisoformat(last_worked_day[doc])
+                            if (d_date - last_d_date).days == 1:
+                                consecutive_days[doc] += 1
+                            else:
+                                consecutive_days[doc] = 1
+                        else:
+                            consecutive_days[doc] = 1
+                        
+                        last_worked_day[doc] = date
                 
-                # If we still don't have enough, try to relax "assigned today" constraint
-                remaining_required = required - len(assigned)
+                # If we still don't have enough doctors, try to relax "assigned today" constraint
+                remaining_required = required - len(schedule[date][shift])
                 if remaining_required > 0:
                     # Consider doctors already assigned today but available for this shift
                     additional_candidates = [
                         d for d in doctor_names
-                        if d not in assigned and
+                        if d not in schedule[date][shift] and
                         d in assigned_today and
                         self._is_doctor_available(d, date, shift)
                     ]
                     
                     # Pick some with uniqueness check
+                    additional_selections = []
                     for doc in additional_candidates:
-                        if len(assigned) >= required:
+                        if len(additional_selections) >= remaining_required:
                             break
-                        if doc not in assigned:  # Ensure no duplicates
-                            assigned.append(doc)
-                
-                # Final uniqueness verification (belt and suspenders)
-                final_assigned = []
-                seen = set()
-                for doc in assigned:
-                    if doc not in seen:
-                        final_assigned.append(doc)
-                        seen.add(doc)
+                        if doc not in additional_selections and doc not in schedule[date][shift]:
+                            additional_selections.append(doc)
+                            
+                    # Add doctors to the shift
+                    for doc in additional_selections:
+                        if doc not in schedule[date][shift]:  # Final uniqueness check
+                            schedule[date][shift].append(doc)
+                            
+                            # Update assignment tracking
+                            assignments[doc] += 1
+                            if is_weekend_or_holiday:
+                                weekend_holiday_assignments[doc] += 1
                 
                 # If still not enough, log the issue but continue with best effort
-                if len(final_assigned) < required:
-                    logger.warning(f"Not enough available doctors for {date}, {shift}. Need {required}, have {len(final_assigned)}")
+                remaining_required = required - len(schedule[date][shift])
+                if remaining_required > 0:
+                    logger.warning(f"Not enough available doctors for {date}, {shift}. Need {len(schedule[date][shift]) + remaining_required}, have {len(schedule[date][shift])}")
                     
                     # ENHANCED APPROACH: Try to fill all required slots while respecting availability
                     # Look for ANY available doctor for this shift, even if they're assigned elsewhere
                     # this might create duplicate assignments that the optimizer will fix later
                     additional_pool = [
                         d for d in doctor_names
-                        if d not in final_assigned and
+                        if d not in schedule[date][shift] and
                         self._is_doctor_available(d, date, shift) and
                         self._can_assign_to_shift(d, shift)
                     ]
@@ -424,85 +513,28 @@ class MonthlyScheduleOptimizer:
                     additional_pool.sort(key=lambda d: assignments[d])
                     
                     # Add doctors until we meet the required number
-                    while len(final_assigned) < required and additional_pool:
+                    while remaining_required > 0 and additional_pool:
                         doctor = additional_pool.pop(0)
-                        if doctor not in final_assigned:  # Final uniqueness check
-                            final_assigned.append(doctor)
+                        if doctor not in schedule[date][shift]:  # Final uniqueness check
+                            schedule[date][shift].append(doctor)
+                            assigned_today.add(doctor)
+                            assignments[doctor] += 1
+                            if is_weekend_or_holiday:
+                                weekend_holiday_assignments[doctor] += 1
+                            remaining_required -= 1
                             
-                    # If we STILL don't have enough doctors, try more aggressive measures
-                    # while respecting the hard availability constraint
-                    if len(final_assigned) < required:
-                        # Find doctors who have the fewest assignments overall
-                        # and are available for this shift
-                        least_assigned_doctors = sorted(
-                            [(d, assignments[d]) for d in doctor_names 
-                             if d not in final_assigned and 
-                             self._is_doctor_available(d, date, shift) and
-                             self._can_assign_to_shift(d, shift)],
-                            key=lambda x: x[1]
-                        )
-                        
-                        # Keep adding doctors until we fill all slots
-                        for doctor, _ in least_assigned_doctors:
-                            if len(final_assigned) >= required:
-                                break
-                            if doctor not in final_assigned:
-                                final_assigned.append(doctor)
-                                
-                    # STRONGER MEASURE: If we STILL can't fill all slots, then as a last resort,
-                    # use any available doctor even if they have preference conflicts
-                    if len(final_assigned) < required:
-                        last_resort_pool = [
-                            d for d in doctor_names
-                            if d not in final_assigned and
-                            self._is_doctor_available(d, date, shift)
-                            # Note: Not checking preference compatibility here
-                        ]
-                        
-                        # Sort by least assignments
-                        last_resort_pool.sort(key=lambda d: assignments[d])
-                        
-                        while len(final_assigned) < required and last_resort_pool:
-                            doctor = last_resort_pool.pop(0)
-                            if doctor not in final_assigned:
-                                final_assigned.append(doctor)
-                                logger.warning(f"Using doctor {doctor} who has preference conflicts for {date}, {shift} as last resort")
-                                
-                    # ABSOLUTE LAST RESORT: If we STILL can't fill slots, pick any doctor at all
-                    # even if they have other assignments or availability conflicts
-                    if len(final_assigned) < required:
-                        # Use literally any doctor, sorted by who has fewest assignments
-                        emergency_pool = sorted(doctor_names, key=lambda d: assignments[d])
-                        
-                        while len(final_assigned) < required and emergency_pool:
-                            doctor = emergency_pool.pop(0)
-                            if doctor not in final_assigned:
-                                final_assigned.append(doctor)
-                                logger.critical(f"EMERGENCY: Using doctor {doctor} for {date}, {shift} regardless of availability as absolute last resort")
-                        
-                # Update the schedule
-                schedule[date][shift] = final_assigned
-                assigned_today.update(final_assigned)
-                
-                # Update assignment tracking
-                for doctor in final_assigned:
-                    assignments[doctor] += 1
-                    
-                    if is_weekend_or_holiday:
-                        weekend_holiday_assignments[doctor] += 1
-                    
-                    # Update consecutive days tracking
-                    d_date = datetime.date.fromisoformat(date)
-                    if last_worked_day[doctor] is not None:
-                        last_d_date = datetime.date.fromisoformat(last_worked_day[doctor])
-                        if (d_date - last_d_date).days == 1:
-                            consecutive_days[doctor] += 1
-                        else:
-                            consecutive_days[doctor] = 1
-                    else:
-                        consecutive_days[doctor] = 1
-                    
-                    last_worked_day[doctor] = date
+                            # Update consecutive days tracking
+                            d_date = datetime.date.fromisoformat(date)
+                            if last_worked_day[doctor] is not None:
+                                last_d_date = datetime.date.fromisoformat(last_worked_day[doctor])
+                                if (d_date - last_d_date).days == 1:
+                                    consecutive_days[doctor] += 1
+                                else:
+                                    consecutive_days[doctor] = 1
+                            else:
+                                consecutive_days[doctor] = 1
+                            
+                            last_worked_day[doctor] = date
         
         return schedule
 
@@ -518,6 +550,7 @@ class MonthlyScheduleOptimizer:
         4. More aggressive enforcement of equitable weekend/holiday distribution
         5. Severe penalty for duplicate doctors in the same shift
         6. NEW: Extreme penalty for unfilled slots in the shift template
+        7. NEW: Extreme penalty for contract-specific shift violations
         """
         cost = 0.0
         doctor_names = [doc["name"] for doc in self.doctors]
@@ -745,10 +778,14 @@ class MonthlyScheduleOptimizer:
         for doctor, days in doctor_working_days.items():
             if days <= 2:
                 limited_availability_doctors.add(doctor)
+                
+        # Add doctors with contract-specific shifts to the limited availability set
+        for doctor in self.contract_specific_shifts.keys():
+            limited_availability_doctors.add(doctor)
         
         # Log information about doctors with limited availability
         if limited_availability_doctors:
-            logger.info(f"Monthly optimizer: Excluding {len(limited_availability_doctors)} doctors with limited availability (≤ 2 days) from monthly variance: {', '.join(limited_availability_doctors)}")
+            logger.info(f"Monthly optimizer: Excluding {len(limited_availability_doctors)} doctors with limited availability (≤ 2 days or contract-specific shifts) from monthly variance: {', '.join(limited_availability_doctors)}")
         
         # Calculate overall monthly variance across all doctors, excluding limited availability docs
         active_hours = []
@@ -971,6 +1008,25 @@ class MonthlyScheduleOptimizer:
                         if variance > 1.5:
                             cost += w_weekly_balance * ((variance - 1.5) ** 2)
         
+        # NEW: Check for contract-specific shift compliance (super hard constraint)
+        for doctor, shifts in self.contract_specific_shifts.items():
+            for shift_info in shifts:
+                date = shift_info.get('date')
+                shift_type = shift_info.get('shift')
+                
+                # Skip if date is outside the month we're optimizing
+                if date not in self.all_dates:
+                    continue
+                    
+                # Check if doctor is assigned to this specific shift
+                is_assigned = False
+                if date in schedule and shift_type in schedule[date]:
+                    is_assigned = doctor in schedule[date][shift_type]
+                
+                # Apply severe penalty if not assigned to a contract-specific shift
+                if not is_assigned:
+                    cost += self.w_avail * 2  # Using double the availability violation weight
+
         return cost
 
     def _calculate_monthly_hours(self, schedule):
@@ -1069,15 +1125,254 @@ class MonthlyScheduleOptimizer:
             
             # Decide which type of move to prioritize based on issues
             move_type = random.choices(
-                ["evening_preference", "senior_workload", "monthly_balance", 
+                ["fix_contract_shifts", "evening_preference", "senior_workload", "monthly_balance", 
                 "weekend_holiday_balance", "consecutive_days", "fix_duplicates", 
                 "fill_template", "random"],
-                weights=[0.15, 0.15, 0.15, 0.15, 0.1, 0.3, 0.7, 0.05],  # Highest weight for fill_template
+                weights=[0.8, 0.15, 0.15, 0.15, 0.15, 0.1, 0.3, 0.7, 0.05],  # Highest weight for contract shifts
                 k=1
             )[0]
             
+            # Highest priority: Fix contract shift violations
+            if move_type == "fix_contract_shifts":
+                # Find missing contract shifts that need to be filled
+                missing_contract_shifts = []
+                
+                for doctor, shifts in self.contract_specific_shifts.items():
+                    for shift_info in shifts:
+                        date = shift_info.get('date')
+                        shift_type = shift_info.get('shift')
+                        
+                        # Skip if date is outside the month we're optimizing
+                        if date not in self.all_dates:
+                            continue
+                            
+                        # Check if doctor is assigned to this specific shift
+                        is_assigned = False
+                        if date in current_schedule and shift_type in current_schedule[date]:
+                            is_assigned = doctor in current_schedule[date][shift_type]
+                        
+                        # If not assigned, we need to fix this
+                        if not is_assigned:
+                            missing_contract_shifts.append((date, shift_type, doctor))
+                
+                # If we found any missing contract shifts, try to fix one
+                if missing_contract_shifts:
+                    # Pick a random missing contract shift to fix
+                    date, shift_type, contract_doctor = random.choice(missing_contract_shifts)
+                    
+                    # Check if someone else is currently in that slot who we can replace
+                    current_doctors = []
+                    if date in current_schedule and shift_type in current_schedule[date]:
+                        current_doctors = current_schedule[date][shift_type]
+                    
+                    # Two scenarios:
+                    # 1. If there are doctors in this slot already, replace one with the contract doctor
+                    if current_doctors:
+                        # Find a non-contract doctor to replace
+                        replaceable_indices = []
+                        for idx, doc in enumerate(current_doctors):
+                            # Check if this doctor has a contract for this specific shift
+                            has_contract_for_this_shift = False
+                            for contract_info in self.contract_specific_shifts.get(doc, []):
+                                if contract_info.get('date') == date and contract_info.get('shift') == shift_type:
+                                    has_contract_for_this_shift = True
+                                    break
+                            
+                            # Only consider replacing doctors who don't have a contract for this shift
+                            if not has_contract_for_this_shift:
+                                replaceable_indices.append(idx)
+                        
+                        if replaceable_indices:
+                            # Choose a doctor to replace
+                            idx = random.choice(replaceable_indices)
+                            old_doctor = current_doctors[idx]
+                            
+                            # Set up the move - replace old_doctor with contract_doctor
+                            date = date
+                            shift = shift_type
+                            new_doctor = contract_doctor
+                            move_successful = True
+                            
+                            # If we're removing this doctor from another shift, we must find a replacement
+                            # for that shift to maintain contract requirements
+                            
+                            # First check if contract_doctor is already assigned elsewhere that day
+                            is_assigned_elsewhere = False
+                            other_shift_info = None
+                            
+                            if date in current_schedule:
+                                for other_shift in self.shifts:
+                                    if other_shift == shift_type:
+                                        continue
+                                    if (other_shift in current_schedule[date] and 
+                                        contract_doctor in current_schedule[date][other_shift]):
+                                        is_assigned_elsewhere = True
+                                        other_shift_info = (date, other_shift, current_schedule[date][other_shift].index(contract_doctor))
+                                        break
+                            
+                            # If contract doctor is assigned elsewhere, we need to find a replacement for that slot
+                            if is_assigned_elsewhere:
+                                other_date, other_shift, other_idx = other_shift_info
+                                
+                                # Find a valid replacement for the other shift
+                                replacement_candidates = []
+                                for doctor in [doc["name"] for doc in self.doctors]:
+                                    # Skip if already in this shift
+                                    if doctor in current_schedule[other_date][other_shift]:
+                                        continue
+                                    
+                                    # Skip if not available for this shift
+                                    if not self._is_doctor_available(doctor, other_date, other_shift):
+                                        continue
+                                    
+                                    # Skip if already assigned to another shift on this date
+                                    already_assigned = False
+                                    for s in self.shifts:
+                                        if s == other_shift:
+                                            continue
+                                        if s in current_schedule[other_date] and doctor in current_schedule[other_date][s]:
+                                            already_assigned = True
+                                            break
+                                    
+                                    if already_assigned:
+                                        continue
+                                    
+                                    # Skip if this doctor has a contract for this specific shift
+                                    has_contract_for_this_shift = False
+                                    for contract_info in self.contract_specific_shifts.get(doctor, []):
+                                        if contract_info.get('date') == other_date and contract_info.get('shift') == other_shift:
+                                            has_contract_for_this_shift = True
+                                            break
+                                    
+                                    if has_contract_for_this_shift:
+                                        continue
+                                    
+                                    # Add to candidates
+                                    replacement_candidates.append(doctor)
+                                
+                                # If we can't find a replacement, we can't make this move
+                                if not replacement_candidates:
+                                    move_successful = False
+                                else:
+                                    # Choose a replacement
+                                    replacement_doctor = random.choice(replacement_candidates)
+                                    
+                                    # First make the swap for the other shift
+                                    new_schedule = self._create_new_schedule(
+                                        current_schedule, other_date, other_shift, other_idx, 
+                                        contract_doctor, replacement_doctor
+                                    )
+                                    
+                                    # Then make the swap for the contract shift
+                                    new_schedule = self._create_new_schedule(
+                                        new_schedule, date, shift, idx, old_doctor, contract_doctor
+                                    )
+                                    
+                                    # Add to neighbors
+                                    if move_successful:
+                                        neighbors.append((new_schedule, (date, shift, old_doctor, contract_doctor)))
+                                        continue  # Skip the rest of the loop
+                            else:
+                                # Contract doctor isn't assigned elsewhere, simple replacement
+                                new_schedule = self._create_new_schedule(
+                                    current_schedule, date, shift, idx, old_doctor, contract_doctor
+                                )
+                                
+                                # Add to neighbors
+                                if move_successful:
+                                    neighbors.append((new_schedule, (date, shift, old_doctor, contract_doctor)))
+                                    continue  # Skip the rest of the loop
+                    
+                    # 2. If there are no doctors in this slot, add the contract doctor
+                    else:
+                        # First check if contract_doctor is already assigned elsewhere that day
+                        is_assigned_elsewhere = False
+                        other_shift_info = None
+                        
+                        if date in current_schedule:
+                            for other_shift in self.shifts:
+                                if other_shift == shift_type:
+                                    continue
+                                if (other_shift in current_schedule[date] and 
+                                    contract_doctor in current_schedule[date][other_shift]):
+                                    is_assigned_elsewhere = True
+                                    other_shift_info = (date, other_shift, current_schedule[date][other_shift].index(contract_doctor))
+                                    break
+                        
+                        # If contract doctor is assigned elsewhere, we need to find a replacement for that slot
+                        if is_assigned_elsewhere:
+                            other_date, other_shift, other_idx = other_shift_info
+                            
+                            # Find a valid replacement for the other shift
+                            replacement_candidates = []
+                            for doctor in [doc["name"] for doc in self.doctors]:
+                                # Skip if already in this shift
+                                if doctor in current_schedule[other_date][other_shift]:
+                                    continue
+                                
+                                # Skip if not available for this shift
+                                if not self._is_doctor_available(doctor, other_date, other_shift):
+                                    continue
+                                
+                                # Skip if already assigned to another shift on this date
+                                already_assigned = False
+                                for s in self.shifts:
+                                    if s == other_shift:
+                                        continue
+                                    if s in current_schedule[other_date] and doctor in current_schedule[other_date][s]:
+                                        already_assigned = True
+                                        break
+                                
+                                if already_assigned:
+                                    continue
+                                
+                                # Skip if this doctor has a contract for this specific shift
+                                has_contract_for_this_shift = False
+                                for contract_info in self.contract_specific_shifts.get(doctor, []):
+                                    if contract_info.get('date') == other_date and contract_info.get('shift') == other_shift:
+                                        has_contract_for_this_shift = True
+                                        break
+                                
+                                if has_contract_for_this_shift:
+                                    continue
+                                
+                                # Add to candidates
+                                replacement_candidates.append(doctor)
+                            
+                            # If we can't find a replacement, we can't make this move
+                            if not replacement_candidates:
+                                move_successful = False
+                            else:
+                                # Choose a replacement
+                                replacement_doctor = random.choice(replacement_candidates)
+                                
+                                # First make the swap for the other shift
+                                new_schedule = self._create_new_schedule(
+                                    current_schedule, other_date, other_shift, other_idx, 
+                                    contract_doctor, replacement_doctor
+                                )
+                                
+                                # Then add the contract doctor to the contract shift (using idx=-1 for add)
+                                new_schedule = self._create_new_schedule(
+                                    new_schedule, date, shift_type, -1, None, contract_doctor
+                                )
+                                
+                                # Add to neighbors
+                                if move_successful:
+                                    neighbors.append((new_schedule, (date, shift_type, None, contract_doctor)))
+                                    continue  # Skip the rest of the loop
+                        else:
+                            # Contract doctor isn't assigned elsewhere, simply add them
+                            new_schedule = self._create_new_schedule(
+                                current_schedule, date, shift_type, -1, None, contract_doctor
+                            )
+                            
+                            # Add to neighbors
+                            neighbors.append((new_schedule, (date, shift_type, None, contract_doctor)))
+                            continue  # Skip the rest of the loop
+            
             # NEW: Highest-priority move type - find and fill unfilled slots in the template
-            if move_type == "fill_template":
+            elif move_type == "fill_template":
                 # Check if we have a template
                 has_template = hasattr(self, 'shift_template') and self.shift_template
                 
@@ -1956,8 +2251,26 @@ class MonthlyScheduleOptimizer:
             if not current_assignment:
                 continue
                 
+            # Check which doctors can be replaced (skip doctors with contract for this shift)
+            replaceable_indices = []
+            for idx, doctor in enumerate(current_assignment):
+                # Check if this doctor has a contract for this specific shift
+                has_contract_for_this_shift = False
+                for contract_info in self.contract_specific_shifts.get(doctor, []):
+                    if contract_info.get('date') == date and contract_info.get('shift') == shift:
+                        has_contract_for_this_shift = True
+                        break
+                
+                # Only consider replacing doctors who don't have a contract for this shift
+                if not has_contract_for_this_shift:
+                    replaceable_indices.append(idx)
+            
+            # If no doctors can be replaced in this shift, try another shift
+            if not replaceable_indices:
+                continue
+                
             # Select a random doctor to replace
-            idx = random.randint(0, len(current_assignment) - 1)
+            idx = random.choice(replaceable_indices)
             old_doctor = current_assignment[idx]
             
             # Find available replacements
@@ -2321,7 +2634,7 @@ class MonthlyScheduleOptimizer:
                     
                     # Log the issue
                     duplicates = [d for d in shift_doctors if shift_doctors.count(d) > 1]
-                    logger.warning(f"Duplicate doctor(s) in final schedule at {date}, {shift}: {duplicates}")
+                    logger.warning(f"Duplicate doctor(s) detected in {date}, {shift}: {duplicates}")
 
         if progress_callback:
             progress_callback(100, "Monthly optimization complete")
@@ -2434,6 +2747,7 @@ def optimize_monthly_schedule(data: Dict[str, Any], progress_callback: Callable 
         month = data.get("month")
         year = data.get("year")
         shift_template = data.get("shift_template", {})  # Get the shift template
+        contract_specific_shifts = data.get("contract_specific_shifts", {})  # Get contract-specific shifts
         
         # Validate month is between 1 and 12
         if month is None:
@@ -2450,7 +2764,7 @@ def optimize_monthly_schedule(data: Dict[str, Any], progress_callback: Callable 
         
 
         # Create optimizer for the specified month
-        optimizer = MonthlyScheduleOptimizer(doctors, holidays, availability, month, year)
+        optimizer = MonthlyScheduleOptimizer(doctors, holidays, availability, month, year, contract_specific_shifts)
 
         # Set the shift template if provided
         if 'shift_template' in data and isinstance(data['shift_template'], dict) and len(data['shift_template']) > 0:

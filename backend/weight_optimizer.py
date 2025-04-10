@@ -66,7 +66,8 @@ class WeightOptimizer:
                  max_iterations: int = 20,
                  parallel_jobs: int = 1,
                  time_limit_minutes: int = 10,
-                 shift_template: Dict[str, Dict[str, Dict[str, int]]] = None
+                 shift_template: Dict[str, Dict[str, Dict[str, int]]] = None,
+                 contract_specific_shifts: Dict[str, List[Dict[str, str]]] = None
                  ):
         """
         Initialize the weight optimizer.
@@ -80,6 +81,9 @@ class WeightOptimizer:
             max_iterations: Maximum number of weight configurations to try
             parallel_jobs: Number of parallel optimization jobs to run
             time_limit_minutes: Time limit in minutes for the optimization
+            shift_template: Template for shifts in the month
+            contract_specific_shifts: Dictionary mapping doctor names to lists of shifts they
+                                     are contractually obligated to work
         """
         self.doctors = doctors
         self.holidays = holidays
@@ -169,6 +173,11 @@ class WeightOptimizer:
                 current_method = multiprocessing.get_start_method()
                 logger.info(f"Current multiprocessing start method: {current_method}")
 
+        # Store contract-specific shifts
+        self.contract_specific_shifts = contract_specific_shifts or {}
+        if self.contract_specific_shifts:
+            logger.info(f"Initialized with {sum(len(shifts) for shifts in self.contract_specific_shifts.values())} contract-specific shifts")
+
     def _get_random_weights(self) -> Dict[str, Any]:
         """Generate a random set of weights within the defined ranges."""
         weights = copy.deepcopy(self.fixed_weights)
@@ -192,39 +201,57 @@ class WeightOptimizer:
 
     def _calculate_score(self, schedule: Dict, stats: Dict) -> Tuple[float, int, float]:
         """
-        Calculate a hierarchical score to evaluate how well the constraints are satisfied.
-        - First priority: No hard constraint violations (absolute requirement)
-        - Second priority: Minimize soft constraint violations
+        Calculate a score for the given schedule based on hard and soft constraints.
         
         Args:
-            schedule: The generated schedule
-            stats: Schedule statistics
+            schedule: Dictionary mapping dates to shift assignments
+            stats: Dictionary of scheduling statistics
             
         Returns:
             Tuple of (total_score, hard_violations, soft_score)
         """
-        # Check all constraints in one pass
-        verification_results = self._verify_constraints(schedule, stats)
+        # Hard constraints - these are critical and should always be satisfied
+        hard_violations = 0
         
-        # Count hard violations
-        hard_violations = sum(1 for constraint, passed in verification_results.items() 
-                             if not passed and constraint != "doctor_balance")
+        # Check for availability violations
+        hard_violations += stats.get("availability_violations", 0)
         
-        # Calculate soft constraint score
+        # Check for duplicate assignments (doctors assigned to multiple shifts on same day)
+        hard_violations += stats.get("duplicate_doctors", 0)
+        
+        # Check for coverage errors (slots not filled)
+        hard_violations += self._check_coverage_errors(schedule)
+        
+        # Check for night shift followed by work
+        hard_violations += self._check_night_followed_by_work(schedule)
+        
+        # Check for evening to day shift
+        hard_violations += self._check_evening_to_day(schedule)
+        
+        # Check for senior on long holiday
+        hard_violations += self._check_senior_on_long_holiday(schedule)
+        
+        # Check for consecutive night shifts (if implemented)
+        hard_violations += self._check_consecutive_night_shifts(schedule)
+        
+        # Check for doctors with "Day Only" or "Evening Only" pref working night shifts
+        hard_violations += self._check_day_evening_to_night(schedule)
+        
+        # Check for night shift followed by day off, then day shift
+        hard_violations += self._check_night_off_day_pattern(schedule)
+        
+        # Check for contract-specific shift violations
+        hard_violations += self._check_contract_specific_shifts(schedule)
+        
+        # Soft constraints - these are important but not critical
+        # Calculate a single soft score based on all soft constraints
         soft_score, _, _ = self._calculate_soft_score(schedule, stats)
         
-        # If any hard constraints are violated, return a very high score
-        if hard_violations > 0:
-            logger.info(f"Hard constraint violations: {hard_violations}")
-            # Hard violations make the total score very high
-            total_score = 1000000.0 + hard_violations
-        else:
-            logger.info(f"No hard constraint violations!")
-            logger.info(f"Soft score: {soft_score:.2f}")
-            # No hard violations, score is just the soft score
-            total_score = soft_score
-            
-        return (total_score, hard_violations, soft_score)
+        # The total score is a combination of hard and soft constraints
+        # Hard violations are heavily penalized to ensure they are avoided
+        total_score = hard_violations * 10000 + soft_score
+        
+        return total_score, hard_violations, soft_score
     
     def _check_coverage_errors(self, schedule: Dict) -> int:
         """
@@ -344,6 +371,11 @@ class WeightOptimizer:
         for doctor, days in availability_counts.items():
             if days <= 4:
                 limited_availability[doctor] = days
+                
+        # Add doctors with contract-specific shifts to limited availability
+        for doctor in self.contract_specific_shifts:
+            if doctor not in limited_availability:
+                limited_availability[doctor] = "Contract"
                 
         return limited_availability
         
@@ -812,6 +844,95 @@ class WeightOptimizer:
                 
         return violations
 
+    def _check_contract_specific_shifts(self, schedule: Dict) -> int:
+        """
+        Check for contract-specific shift violations.
+        
+        Args:
+            schedule: The schedule to check
+            
+        Returns:
+            Number of contract-specific shift violations
+        """
+        violations = 0
+        
+        # PART 1: Check assigned contract-specific shifts
+        # Only check doctors with contract-specific shifts
+        for doctor, shifts in self.contract_specific_shifts.items():
+            for shift_info in shifts:
+                date = shift_info.get('date')
+                shift_type = shift_info.get('shift')
+                
+                # Skip if date is not in target month/year
+                if date not in schedule:
+                    date_obj = datetime.date.fromisoformat(date)
+                    if (date_obj.month != self.month or 
+                        (self.year is not None and date_obj.year != self.year)):
+                        continue
+                
+                # Check if doctor is assigned to this contract-specific shift
+                is_assigned = False
+                if date in schedule and shift_type in schedule[date]:
+                    is_assigned = doctor in schedule[date][shift_type]
+                
+                # Count as violation if not assigned
+                if not is_assigned:
+                    violations += 1
+                    logger.warning(f"Contract-specific shift violation: {doctor} not assigned to {date}, {shift_type}")
+        
+        # PART 2: Check number of shifts for contract doctors
+        # Find contract doctors with fixed number of shifts
+        contract_doctors = [doc for doc in self.doctors if doc.get('contract') and doc.get('contractShifts', 0) > 0]
+        
+        if contract_doctors:
+            logger.info(f"Checking {len(contract_doctors)} contract doctors for shift count violations")
+            
+            # Filter dates to only include dates in the target month and year
+            month_dates = []
+            for date in schedule.keys():
+                try:
+                    date_obj = datetime.date.fromisoformat(date)
+                    if date_obj.month == self.month and (self.year is None or date_obj.year == self.year):
+                        month_dates.append(date)
+                except (ValueError, TypeError):
+                    continue
+            
+            # Count shifts worked by each contract doctor in this month
+            doctor_shift_count = {}
+            
+            # Initialize shift counts for all contract doctors
+            for doctor in contract_doctors:
+                doctor_shift_count[doctor['name']] = 0
+            
+            # Count shifts from the schedule
+            for date in month_dates:
+                if date not in schedule:
+                    continue
+                
+                for shift in ['Day', 'Evening', 'Night']:
+                    if shift not in schedule[date]:
+                        continue
+                    
+                    for doctor in schedule[date][shift]:
+                        # Only count shifts for contract doctors
+                        if doctor in doctor_shift_count:
+                            doctor_shift_count[doctor] += 1
+            
+            logger.info(f"Contract doctor shifts worked: {doctor_shift_count}")
+            
+            # Check if each contract doctor worked exactly their contracted shifts
+            for doctor in contract_doctors:
+                doctor_name = doctor['name']
+                shifts_worked = doctor_shift_count.get(doctor_name, 0)
+                required_shifts = doctor.get('contractShifts', 0)
+                
+                # If shifts worked doesn't match contract, record a violation
+                if shifts_worked != required_shifts:
+                    violations += 1
+                    logger.warning(f"Contract shift count violation: {doctor_name} worked {shifts_worked} shifts, but contract requires {required_shifts}")
+        
+        return violations
+
     def _evaluate_weights(self, weights: Dict[str, Any], iteration: int) -> Tuple[Dict[str, Any], Dict, Dict, float, int, float, bool, int]:
         """
         Evaluate a specific set of weights by running the optimizer and measuring constraint satisfaction.
@@ -841,7 +962,8 @@ class WeightOptimizer:
                 self.holidays,
                 self.availability,
                 self.month,
-                self.year
+                self.year,
+                self.contract_specific_shifts  # Pass contract-specific shifts
             )
         except Exception as e:
             logger.error(f"Error creating MonthlyScheduleOptimizer: {e}")
@@ -1250,6 +1372,14 @@ class WeightOptimizer:
         verification_results["coverage"] = self._check_coverage_errors(schedule) == 0
         verification_results["doctor_balance"] = self._verify_no_doctor_hour_balance_violations(schedule, stats)
         
+        # Check contract-specific shifts are respected
+        contract_shifts_violations = self._check_contract_specific_shifts(schedule)
+        verification_results["contract_shifts"] = contract_shifts_violations == 0
+        
+        # Log contract shift violations specifically for clarity
+        if contract_shifts_violations > 0:
+            logger.warning(f"Found {contract_shifts_violations} contract shift violations during verification")
+        
         # Count total violations for convenience
         if log_details:
             failed_constraints = [name for name, passed in verification_results.items() if not passed]
@@ -1307,6 +1437,9 @@ def optimize_weights(data: Dict[str, Any], progress_callback: Callable = None) -
         
         # Extract shift template from data
         shift_template = data.get('shift_template', {})
+        
+        # Extract contract-specific shifts
+        contract_specific_shifts = data.get('contract_specific_shifts', {})
 
         # Filter the template if provided to only include dates in the target month and year
         filtered_template = {}
@@ -1328,8 +1461,31 @@ def optimize_weights(data: Dict[str, Any], progress_callback: Callable = None) -
                 logger.info(f"Filtered shift template to {len(filtered_template)} days for month {month}, year {year}")
                 if progress_callback:
                     progress_callback(5, f"Using template with {len(filtered_template)} days")
+                    
+        # Filter contract-specific shifts to the target month and year
+        filtered_contract_shifts = {}
+        if contract_specific_shifts:
+            for doctor, shifts in contract_specific_shifts.items():
+                doctor_shifts = []
+                for shift_info in shifts:
+                    date = shift_info.get('date')
+                    if date:
+                        try:
+                            date_obj = datetime.date.fromisoformat(date)
+                            if date_obj.month == month and date_obj.year == year:
+                                doctor_shifts.append(shift_info)
+                        except (ValueError, TypeError):
+                            # Skip invalid dates
+                            continue
+                if doctor_shifts:
+                    filtered_contract_shifts[doctor] = doctor_shifts
+                    
+            if filtered_contract_shifts:
+                logger.info(f"Using {sum(len(shifts) for shifts in filtered_contract_shifts.values())} contract-specific shifts for {len(filtered_contract_shifts)} doctors")
+                if progress_callback:
+                    progress_callback(5, f"Using {sum(len(shifts) for shifts in filtered_contract_shifts.values())} contract-specific shifts")
 
-        # Create and run the weight optimizer with the filtered template
+        # Create and run the weight optimizer with the filtered template and contract shifts
         optimizer = WeightOptimizer(
             doctors=doctors,
             holidays=holidays,
@@ -1339,7 +1495,8 @@ def optimize_weights(data: Dict[str, Any], progress_callback: Callable = None) -
             max_iterations=max_iterations,
             parallel_jobs=parallel_jobs,
             time_limit_minutes=time_limit_minutes,
-            shift_template=filtered_template  # Pass the filtered template here
+            shift_template=filtered_template,  # Pass the filtered template here
+            contract_specific_shifts=filtered_contract_shifts  # Pass the filtered contract shifts
         )
         
         # Initialize additional tracking for soft constraint hierarchy
@@ -1423,6 +1580,30 @@ def optimize_weights(data: Dict[str, Any], progress_callback: Callable = None) -
                 logger.warning(f"Final verification found {night_off_day} night→off→day pattern violations!")
                 result["hard_violations"] += night_off_day
                 has_issues = True
+                
+            # Contract specific shifts check
+            contract_shifts = optimizer._check_contract_specific_shifts(schedule)
+            if contract_shifts > 0:
+                logger.warning(f"Final verification found {contract_shifts} contract shift violations!")
+                # Log specific details about the contract shift violations for debugging
+                logger.warning("Contract doctors may not be getting exactly the required number of shifts.")
+                for doc in doctors:
+                    if doc.get('contract') and doc.get('contractShifts', 0) > 0:
+                        # Count actual shifts for this doctor in the schedule
+                        shift_count = 0
+                        for date, shifts in schedule.items():
+                            date_obj = datetime.date.fromisoformat(date)
+                            if date_obj.month != month or (year is not None and date_obj.year != year):
+                                continue
+                            for shift_type, doctors_list in shifts.items():
+                                if doc['name'] in doctors_list:
+                                    shift_count += 1
+                        
+                        # Log contract vs. actual shifts
+                        logger.warning(f"Doctor {doc['name']} - Contract shifts: {doc.get('contractShifts')}, Actual shifts: {shift_count}")
+                
+                result["hard_violations"] += contract_shifts
+                has_issues = True
         
         # If we found any issues, look for better solutions in all our results
         if has_issues:
@@ -1487,6 +1668,9 @@ def optimize_weights(data: Dict[str, Any], progress_callback: Callable = None) -
                     
                     # Add night off day check
                     hard_violations += optimizer._check_night_off_day_pattern(schedule)
+                    
+                    # Add contract shifts check
+                    hard_violations += optimizer._check_contract_specific_shifts(schedule)
                     
                     # Only include if NO hard violations
                     if hard_violations == 0:
@@ -1627,7 +1811,8 @@ def optimize_weights(data: Dict[str, Any], progress_callback: Callable = None) -
             "day_evening_to_night": optimizer._check_day_evening_to_night(schedule) == 0,
             "availability": stats.get("availability_violations", 0) == 0,
             "duplicates": stats.get("duplicate_doctors", 0) == 0,
-            "coverage": True  # Always consider coverage as passing in the UI if doctors with limited availability are exempt
+            "coverage": True,  # Always consider coverage as passing in the UI if doctors with limited availability are exempt
+            "contract_shifts": optimizer._check_contract_specific_shifts(schedule) == 0  # NEW: Check contract-specific shifts
         }
         
         # For the best solution, print a report with exact hourly values - SIMPLIFIED TO AVOID DUPLICATION
