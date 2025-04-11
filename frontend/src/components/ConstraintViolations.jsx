@@ -306,7 +306,10 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
     
     // Separate junior and senior hours
     for (const doctor of doctors) {
-      if (doctorHours[doctor.name] > 0) {
+      // Skip contract doctors for hour balance calculations
+      const isContractDoctor = doctor.contract && doctor.contractShiftsDetail;
+      
+      if (doctorHours[doctor.name] > 0 && !isContractDoctor) {
         if (doctor.seniority === "Senior") {
           seniorHours.push({ name: doctor.name, hours: doctorHours[doctor.name] });
         } else {
@@ -346,11 +349,20 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
           Array.from(limitedAvailabilityDoctors).join(', '));
       }
       
+      // Find doctors with contracts
+      const contractDoctors = doctors.filter(doctor => doctor.contract && doctor.contractShiftsDetail)
+        .map(doctor => doctor.name);
+      
+      if (contractDoctors.length > 0) {
+        console.log(`Excluding ${contractDoctors.length} doctors with contracts from hour balancing:`,
+          contractDoctors.join(', '));
+      }
+      
       // Only consider doctors who actually have hours in this month
-      // AND exclude doctors with limited availability
+      // AND exclude doctors with limited availability OR contracts
       const activeDoctorHours = {};
       for (const [doctor, hours] of Object.entries(doctorHours)) {
-        if (hours > 0 && !limitedAvailabilityDoctors.has(doctor)) {
+        if (hours > 0 && !limitedAvailabilityDoctors.has(doctor) && !contractDoctors.includes(doctor)) {
           activeDoctorHours[doctor] = hours;
         }
       }
@@ -389,7 +401,10 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
             doctorsWithMax,
             doctorsWithMin,
             message: `Doctor hour balance variance of ${variance}h exceeds the 8h maximum (1 shift)`,
-            excludedDoctors: Array.from(limitedAvailabilityDoctors)
+            excludedDoctors: [
+              ...Array.from(limitedAvailabilityDoctors),
+              ...contractDoctors
+            ]
           });
         }
       }
@@ -439,7 +454,10 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
     
     // Separate junior and senior weekend/holiday hours
     for (const doctor of doctors) {
-      if (weekendHolidayHours[doctor.name] > 0) {
+      // Skip contract doctors for weekend/holiday hour calculations
+      const isContractDoctor = doctor.contract && doctor.contractShiftsDetail;
+      
+      if (weekendHolidayHours[doctor.name] > 0 && !isContractDoctor) {
         if (doctor.seniority === "Senior") {
           seniorWHHours.push({ name: doctor.name, hours: weekendHolidayHours[doctor.name] });
         } else {

@@ -24,63 +24,21 @@ import {
   Chip,
   Tooltip,
   Snackbar,
-  Alert,
-  Checkbox,
-  FormControlLabel,
-  FormHelperText,
-  Card,
-  CardContent,
-  Stack,
-  Divider,
-  CardHeader,
-  Avatar,
-  InputAdornment
+  Alert
 } from '@mui/material';
 import {
   PersonAdd as PersonAddIcon,
   Delete as DeleteIcon,
   Edit as EditIcon,
-  Save as SaveIcon,
-  WbSunny as DayIcon,
-  Nightlight as NightIcon,
-  Brightness4 as EveningIcon
+  Save as SaveIcon
 } from '@mui/icons-material';
 
 function DoctorConfig({ doctors, setDoctors }) {
   const [localDoctors, setLocalDoctors] = useState(doctors);
   const [openDialog, setOpenDialog] = useState(false);
   const [editingDoctor, setEditingDoctor] = useState(null);
-  const [newDoctor, setNewDoctor] = useState({ 
-    name: '', 
-    seniority: 'Junior', 
-    pref: 'None',
-    hasContractShifts: false,
-    contractShifts: {
-      day: 0,
-      evening: 0,
-      night: 0
-    }
-  });
+  const [newDoctor, setNewDoctor] = useState({ name: '', seniority: 'Junior', pref: 'None' });
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
-
-  // Define shift types and their corresponding MUI colors
-  const shiftTypes = {
-    day: {
-      icon: <DayIcon fontSize="small" />,
-      label: "Day",
-      color: "success"
-    },
-    evening: {
-      icon: <EveningIcon fontSize="small" />,
-      label: "Evening",
-      color: "info"
-    },
-    night: {
-      icon: <NightIcon fontSize="small" />,
-      label: "Night",
-      color: "secondary"
-    }
-  };
 
   // Update local state when doctors prop changes
   useEffect(() => {
@@ -90,49 +48,14 @@ function DoctorConfig({ doctors, setDoctors }) {
   // Handle dialog open for adding a new doctor
   const handleAddDoctor = () => {
     setEditingDoctor(null);
-    setNewDoctor({ 
-      name: '', 
-      seniority: 'Junior', 
-      pref: 'None',
-      hasContractShifts: false,
-      contractShifts: {
-        day: 0,
-        evening: 0,
-        night: 0
-      }
-    });
+    setNewDoctor({ name: '', seniority: 'Junior', pref: 'None' });
     setOpenDialog(true);
   };
 
   // Handle dialog open for editing a doctor
   const handleEditDoctor = (doctor, index) => {
     setEditingDoctor(index);
-    
-    // Initialize contract shifts object
-    let contractShiftsObj = { day: 0, evening: 0, night: 0 };
-    
-    // First check if we have detailed breakdown
-    if (doctor.contractShiftsDetail) {
-      contractShiftsObj = { ...doctor.contractShiftsDetail };
-    } 
-    // If doctor has contract but no detail, try to infer from total
-    else if (doctor.contract && doctor.contractShifts > 0) {
-      // Default to all day shifts if we only have the total
-      contractShiftsObj = { 
-        day: doctor.contractShifts, 
-        evening: 0, 
-        night: 0 
-      };
-      
-      // Log warning about missing detail
-      console.warn(`Doctor ${doctor.name} has contract shifts (${doctor.contractShifts}) but no breakdown detail`);
-    }
-    
-    setNewDoctor({ 
-      ...doctor, 
-      hasContractShifts: doctor.contract || false,
-      contractShifts: contractShiftsObj
-    });
+    setNewDoctor({ ...doctor });
     setOpenDialog(true);
   };
 
@@ -147,33 +70,6 @@ function DoctorConfig({ doctors, setDoctors }) {
     setNewDoctor({ ...newDoctor, [name]: value });
   };
 
-  // Handle contract shift input changes
-  const handleContractShiftChange = (shiftType, value) => {
-    // Ensure value is a valid number
-    const numValue = parseInt(value) || 0;
-    
-    setNewDoctor({
-      ...newDoctor,
-      contractShifts: {
-        ...newDoctor.contractShifts,
-        [shiftType]: numValue
-      }
-    });
-  };
-
-  // Handle checkbox change
-  const handleCheckboxChange = (e) => {
-    const { name, checked } = e.target;
-    const updatedDoctor = { ...newDoctor, [name]: checked };
-    
-    // If contract shifts checkbox is checked, disable preferences
-    if (name === 'hasContractShifts' && checked) {
-      updatedDoctor.pref = 'None';
-    }
-    
-    setNewDoctor(updatedDoctor);
-  };
-
   // Handle form submission
   const handleSubmitDoctor = () => {
     // Validate input
@@ -186,57 +82,22 @@ function DoctorConfig({ doctors, setDoctors }) {
       return;
     }
 
-    // Create a copy of the doctor object to modify
-    const doctorToSave = { ...newDoctor };
-
-    // Validate contract shifts if checkbox is checked
-    if (doctorToSave.hasContractShifts) {
-      const { day, evening, night } = doctorToSave.contractShifts;
-      if (day === 0 && evening === 0 && night === 0) {
-        setSnackbar({
-          open: true,
-          message: 'Please specify at least one shift in the contract',
-          severity: 'error'
-        });
-        return;
-      }
-      
-      // Calculate total shifts for the doctor's contract
-      const totalShifts = day + evening + night;
-      
-      // Store both the detailed breakdown and the total
-      doctorToSave.contract = true;
-      doctorToSave.contractShiftsDetail = {
-        day, 
-        evening, 
-        night
-      };
-      doctorToSave.contractShifts = totalShifts;
-      
-      console.log(`Setting contract shifts for ${doctorToSave.name}: ${totalShifts} total shifts (${day} day, ${evening} evening, ${night} night)`);
-    } else {
-      // Ensure contract properties are cleared if checkbox is unchecked
-      doctorToSave.contract = false;
-      doctorToSave.contractShifts = 0;
-      doctorToSave.contractShiftsDetail = null;
-    }
-
     let updatedDoctors;
     if (editingDoctor !== null) {
       // Update existing doctor
       updatedDoctors = [...localDoctors];
-      updatedDoctors[editingDoctor] = doctorToSave;
+      updatedDoctors[editingDoctor] = newDoctor;
       setSnackbar({
         open: true,
-        message: `Dr. ${doctorToSave.name} updated successfully`,
+        message: `Dr. ${newDoctor.name} updated successfully`,
         severity: 'success'
       });
     } else {
       // Add new doctor
-      updatedDoctors = [...localDoctors, doctorToSave];
+      updatedDoctors = [...localDoctors, newDoctor];
       setSnackbar({
         open: true,
-        message: `Dr. ${doctorToSave.name} added successfully`,
+        message: `Dr. ${newDoctor.name} added successfully`,
         severity: 'success'
       });
     }
@@ -294,74 +155,6 @@ function DoctorConfig({ doctors, setDoctors }) {
     }
   };
 
-  // Render contract shift chips
-  const renderContractShiftChips = (contractShifts) => {
-    if (!contractShifts) return <Typography variant="body2" color="text.secondary">None</Typography>;
-    
-    // Handle string format (backwards compatibility)
-    if (typeof contractShifts === 'string') {
-      return <Chip label={contractShifts} color="warning" size="small" />;
-    }
-    
-    // Check if we have detailed breakdown
-    if (typeof contractShifts === 'number') {
-      // If we have contractShiftsDetail, use that instead
-      const doctor = localDoctors.find(d => d.contractShifts === contractShifts && d.contractShiftsDetail);
-      if (doctor && doctor.contractShiftsDetail) {
-        contractShifts = doctor.contractShiftsDetail;
-      } else {
-        // If we only have the total, show it as a single chip
-        return <Chip label={`${contractShifts} shifts total`} color="warning" size="small" />;
-      }
-    }
-    
-    const { day, evening, night } = contractShifts;
-    const shifts = [];
-    
-    if (day > 0) {
-      shifts.push(
-        <Chip
-          key="day"
-          icon={shiftTypes.day.icon}
-          label={`${day} ${shiftTypes.day.label}`}
-          size="small"
-          color={shiftTypes.day.color}
-          sx={{ mr: 0.5, mb: 0.5 }}
-        />
-      );
-    }
-    
-    if (evening > 0) {
-      shifts.push(
-        <Chip
-          key="evening"
-          icon={shiftTypes.evening.icon}
-          label={`${evening} ${shiftTypes.evening.label}`}
-          size="small"
-          color={shiftTypes.evening.color}
-          sx={{ mr: 0.5, mb: 0.5 }}
-        />
-      );
-    }
-    
-    if (night > 0) {
-      shifts.push(
-        <Chip
-          key="night"
-          icon={shiftTypes.night.icon}
-          label={`${night} ${shiftTypes.night.label}`}
-          size="small"
-          color={shiftTypes.night.color}
-          sx={{ mb: 0.5 }}
-        />
-      );
-    }
-    
-    return shifts.length > 0 ? 
-      <Box sx={{ display: 'flex', flexWrap: 'wrap' }}>{shifts}</Box> : 
-      <Typography variant="body2" color="text.secondary">None</Typography>;
-  };
-
   return (
     <Box>
       <Typography variant="h5" component="h2" gutterBottom>
@@ -374,127 +167,92 @@ function DoctorConfig({ doctors, setDoctors }) {
         </Typography>
       </Box>
 
-      <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="h6">Doctor List</Typography>
-        <Box>
-          <Button
-            variant="contained"
-            startIcon={<PersonAddIcon />}
-            onClick={handleAddDoctor}
-            sx={{ mr: 2 }}
-            color="error"
-          >
-            Add Doctor
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<SaveIcon />}
-            onClick={saveConfig}
-            color="primary"
-          >
-            Save Configuration
-          </Button>
-        </Box>
+      <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
+        <Button
+          variant="contained"
+          startIcon={<PersonAddIcon />}
+          onClick={handleAddDoctor}
+          sx={{ mr: 2 }}
+        >
+          Add Doctor
+        </Button>
+        <Button
+          variant="outlined"
+          startIcon={<SaveIcon />}
+          onClick={saveConfig}
+          color="primary"
+        >
+          Save Configuration
+        </Button>
       </Box>
 
-      <Paper elevation={1} sx={{ mb: 4 }}>
-        <TableContainer>
-          <Table>
-            <TableHead>
+      <TableContainer component={Paper} sx={{ mb: 4 }}>
+        <Table sx={{ minWidth: 650 }}>
+          <TableHead>
+            <TableRow sx={{ backgroundColor: 'primary.light' }}>
+              <TableCell sx={{ fontWeight: 'bold', color: 'white' }}>Name</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', color: 'white' }}>Seniority</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', color: 'white' }}>Preference</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', color: 'white' }}>Actions</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {localDoctors.length === 0 ? (
               <TableRow>
-                <TableCell><Typography variant="subtitle2">Name</Typography></TableCell>
-                <TableCell><Typography variant="subtitle2">Seniority</Typography></TableCell>
-                <TableCell><Typography variant="subtitle2">Preference</Typography></TableCell>
-                <TableCell><Typography variant="subtitle2">Contract Shifts</Typography></TableCell>
-                <TableCell><Typography variant="subtitle2">Actions</Typography></TableCell>
+                <TableCell colSpan={4} align="center">
+                  <Typography variant="body1" sx={{ py: 2 }}>
+                    No doctors configured. Add a doctor to get started.
+                  </Typography>
+                </TableCell>
               </TableRow>
-            </TableHead>
-            <TableBody>
-              {localDoctors.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} align="center">
-                    <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
-                      No doctors configured. Add a doctor to get started.
-                    </Typography>
+            ) : (
+              localDoctors.map((doctor, index) => (
+                <TableRow key={index} hover>
+                  <TableCell>
+                    <Typography variant="body1">{doctor.name}</Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Chip 
+                      label={doctor.seniority} 
+                      color={getSeniorityColor(doctor.seniority)}
+                      size="small"
+                      variant={doctor.seniority === 'Senior' ? 'filled' : 'outlined'}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Chip 
+                      label={doctor.pref} 
+                      color={getPreferenceColor(doctor.pref)}
+                      size="small"
+                      variant={doctor.pref === 'None' ? 'outlined' : 'filled'}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Tooltip title="Edit">
+                      <IconButton 
+                        color="primary" 
+                        onClick={() => handleEditDoctor(doctor, index)}
+                        size="small"
+                      >
+                        <EditIcon />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Remove">
+                      <IconButton 
+                        color="error" 
+                        onClick={() => handleRemoveDoctor(index)}
+                        size="small"
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </Tooltip>
                   </TableCell>
                 </TableRow>
-              ) : (
-                localDoctors.map((doctor, index) => (
-                  <TableRow key={index} hover>
-                    <TableCell>
-                      <Typography variant="body2">{doctor.name}</Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Chip 
-                        label={doctor.seniority} 
-                        color={getSeniorityColor(doctor.seniority)}
-                        size="small"
-                        variant={doctor.seniority === 'Senior' ? 'filled' : 'outlined'}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Chip 
-                        label={doctor.pref} 
-                        color={getPreferenceColor(doctor.pref)}
-                        size="small"
-                        variant={doctor.pref === 'None' ? 'outlined' : 'filled'}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      {doctor.hasContractShifts ? 
-                        renderContractShiftChips(doctor.contractShiftsDetail || doctor.contractShifts) : 
-                        <Typography variant="body2" color="text.secondary">None</Typography>
-                      }
-                    </TableCell>
-                    <TableCell>
-                      <Tooltip title="Edit">
-                        <IconButton 
-                          color="primary" 
-                          onClick={() => handleEditDoctor(doctor, index)}
-                          size="small"
-                        >
-                          <EditIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Remove">
-                        <IconButton 
-                          color="error" 
-                          onClick={() => handleRemoveDoctor(index)}
-                          size="small"
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Paper>
-
-      {/* Legend */}
-      <Paper elevation={1} sx={{ p: 2, mb: 2 }}>
-        <Typography variant="subtitle2" gutterBottom>
-          Contract Shift Types
-        </Typography>
-        <Divider sx={{ mb: 1 }} />
-        <Grid container spacing={1}>
-          {Object.entries(shiftTypes).map(([type, details]) => (
-            <Grid item xs={6} sm={3} key={type}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Chip 
-                  icon={details.icon} 
-                  label={details.label} 
-                  size="small" 
-                  color={details.color}
-                />
-              </Box>
-            </Grid>
-          ))}
-        </Grid>
-      </Paper>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
 
       {/* Add/Edit Doctor Dialog */}
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
@@ -532,7 +290,7 @@ function DoctorConfig({ doctors, setDoctors }) {
               </FormControl>
             </Grid>
             <Grid item xs={12} md={6}>
-              <FormControl fullWidth disabled={newDoctor.hasContractShifts}>
+              <FormControl fullWidth>
                 <InputLabel id="preference-label">Shift Preference</InputLabel>
                 <Select
                   labelId="preference-label"
@@ -546,71 +304,13 @@ function DoctorConfig({ doctors, setDoctors }) {
                   <MenuItem value="Evening Only">Evening Shifts Only</MenuItem>
                   <MenuItem value="Night Only">Night Shifts Only</MenuItem>
                 </Select>
-                {newDoctor.hasContractShifts && (
-                  <FormHelperText>Disabled when contract shifts are specified</FormHelperText>
-                )}
               </FormControl>
-            </Grid>
-            <Grid item xs={12}>
-              <Card variant="outlined">
-                <CardHeader
-                  title={
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            name="hasContractShifts"
-                            checked={newDoctor.hasContractShifts}
-                            onChange={handleCheckboxChange}
-                            color="primary"
-                          />
-                        }
-                        label={<Typography variant="subtitle1">Contract Shift Requirements</Typography>}
-                        sx={{ mr: 0 }}
-                      />
-                    </Box>
-                  }
-                  subheader={newDoctor.hasContractShifts ? 
-                    "Specify how many of each shift type the doctor is required to work per month" : 
-                    "Enable if the doctor has a contract specifying required shifts"}
-                />
-                {newDoctor.hasContractShifts && (
-                  <>
-                    <Divider />
-                    <CardContent>
-                      <Grid container spacing={2}>
-                        {Object.entries(shiftTypes).map(([type, details]) => (
-                          <Grid item xs={12} key={type}>
-                            <TextField
-                              label={`${details.label} Shifts Per Month`}
-                              type="number"
-                              fullWidth
-                              size="small"
-                              variant="outlined"
-                              InputProps={{ 
-                                inputProps: { min: 0 },
-                                startAdornment: (
-                                  <InputAdornment position="start">
-                                    {details.icon}
-                                  </InputAdornment>
-                                )
-                              }}
-                              value={newDoctor.contractShifts[type]}
-                              onChange={(e) => handleContractShiftChange(type, e.target.value)}
-                            />
-                          </Grid>
-                        ))}
-                      </Grid>
-                    </CardContent>
-                  </>
-                )}
-              </Card>
             </Grid>
           </Grid>
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseDialog}>Cancel</Button>
-          <Button onClick={handleSubmitDoctor} variant="contained" color="primary">
+          <Button onClick={handleSubmitDoctor} variant="contained">
             {editingDoctor !== null ? 'Update' : 'Add'}
           </Button>
         </DialogActions>
