@@ -7,9 +7,10 @@
 export const getYearRange = () => {
     const currentYear = new Date().getFullYear();
     
-    // Generate year options (current year and next 10 years)
+    // Generate year options (current year - 2 up to current year + 9)
     const years = [];
-    for (let i = 0; i < 10; i++) {
+    // Add previous 2 years
+    for (let i = -2; i < 10; i++) {
       years.push(currentYear + i);
     }
     

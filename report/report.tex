@@ -1,0 +1,547 @@
+\documentclass[12pt]{article}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{mathtools}
+\usepackage{geometry}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{xcolor}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+
+% Set page margins
+\geometry{a4paper, margin=1in}
+
+% Set hyperref options
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,
+    urlcolor=cyan,
+}
+
+% Set section numbering format
+\setcounter{secnumdepth}{3}
+\titleformat{\section}{\normalfont\Large\bfseries}{\thesection}{1em}{}
+\titleformat{\subsection}{\normalfont\large\bfseries}{\thesubsection}{1em}{}
+\titleformat{\subsubsection}{\normalfont\normalsize\bfseries}{\thesubsubsection}{1em}{}
+
+% Define indicator function
+\DeclareMathOperator{\ind}{1}
+
+% Set up headers and footers
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{Technical Report v3.0}
+\lhead{Hospital Schedule Optimization}
+\cfoot{\thepage}
+
+\begin{document}
+
+\begin{titlepage}
+    \centering
+    \vspace*{1cm}
+    
+    {\huge \bfseries Technical Report on the Doctor Schedule Optimization Algorithm Using Tabu Search\par}
+    \vspace{1cm}
+    {\Large Version 3.0\par}
+    \vspace{1cm}
+    {\Large March 11, 2025\par}
+    \vspace{2cm}
+    
+    {\Large Jon Hernandez Aranda\par}
+    \vspace{1cm}
+    
+    \begin{abstract}
+        This report documents the requirements and Tabu Search formulation for the hospital schedule optimization algorithm implemented in Python. The system generates both full-year schedules and monthly schedules that satisfy multiple constraints including complete daily shift coverage, fair workload distribution, proper rest periods, and appropriate weekend/holiday assignments. The optimization algorithm accommodates varying seniority levels, with senior doctors working fewer hours than junior doctors. The implementation uses a tabu search metaheuristic with weighted penalties and a hierarchical evaluation framework to efficiently explore the solution space, supported by a meta-optimizer that searches for optimal weight configurations.
+    \end{abstract}
+    
+    \vfill
+    {\large \textit{SHL Laboratory}\par}
+    
+\end{titlepage}
+
+\section{Requirements}
+
+The scheduling algorithm satisfies the following consolidated requirements based on the current implementation:
+
+\subsection*{R1: Hard Constraints (Must Not Be Violated)}
+
+\begin{itemize}
+    \item \textbf{Availability Constraints:} Doctors can only be assigned to shifts for which they are available.
+
+    \item \textbf{Contract Shift Requirements:} Doctors with shift contracts must receive exactly the specified number of shifts by type (Day, Evening, Night) each month.
+    
+    \item \textbf{Shift Template Adherence:} Shifts must be staffed exactly according to the shift template requirements, with no under-staffing or over-staffing.
+    
+    \item \textbf{Single Shift per Day:} Each doctor must be assigned to at most one shift per day.
+    
+    \item \textbf{Shift Coverage:} All required shifts must be properly staffed according to the shift template. Default requirements are 2 doctors for Day shifts, 1 for Evening shifts, and 2 for Night shifts, unless specified otherwise in the template.
+    
+    \item \textbf{Rest Period After Night Shift:} Doctors who work a Night shift cannot work any shift (Day or Evening) on the following day.
+    
+    \item \textbf{Evening-Day Pattern Prevention:} Doctors cannot work a Day shift immediately after working an Evening shift.
+    
+    \item \textbf{Consecutive Night Shifts Prevention:} Doctors cannot be assigned to Night shifts on consecutive days.
+    
+    \item \textbf{Preference Compatibility:} Doctors with "Day Only" or "Evening Only" preferences cannot be assigned to Night shifts.
+    
+    \item \textbf{Senior Doctor Workload:} Senior doctors must not work more hours than junior doctors in any month.
+    
+    \item \textbf{Senior Weekend/Holiday Distribution:} Senior doctors must not have more weekend/holiday hours than junior doctors.
+    
+    \item \textbf{Senior Long Holiday Protection:} Senior doctors should not work on long holidays.
+    
+    \item \textbf{Night-Day Gap Pattern:} Doctors cannot work a Day shift after having a Night shift followed by a day off - there must be at least two days between a Night shift and a Day shift.
+    
+    \item \textbf{No Duplicates:} The same doctor cannot appear multiple times in the same shift.
+\end{itemize}
+
+\subsection*{R2: Soft Constraints (Minimized but May Be Violated)}
+
+\begin{itemize}
+    \item \textbf{Monthly Balance:} The difference between the doctor with the most hours and the doctor with the least hours in a month should not exceed 10 hours (doctors with limited availability and doctors with contracts are excluded from this calculation).
+    
+    \item \textbf{Preference Satisfaction:} Doctors should be assigned to shifts that match their preferences (Day Only, Evening Only, Night Only, or None).
+    
+    \item \textbf{Preference Fairness:} The distribution of preference satisfaction should be equitable across doctors with similar preferences.
+    
+    \item \textbf{Workload Balance:} The distribution of work should be balanced across all doctors.
+    
+    \item \textbf{Weekend and Holiday Balance:} Weekend and holiday shifts should be distributed fairly.
+    
+    \item \textbf{Consecutive Work Limit:} Doctors should not work more than 5 consecutive days.
+\end{itemize}
+
+\subsection*{R3: Doctor Characteristics}
+
+\begin{itemize}
+    \item \textbf{Seniority:} Doctors are classified as either "Junior" or "Senior," which affects their workload expectations and holiday assignments.
+    
+    \item \textbf{Shift Preferences:} Doctors may have preferences for specific shift types:
+    \begin{itemize}
+        \item "Day Only": Prefers to work only Day shifts
+        \item "Evening Only": Prefers to work only Evening shifts
+        \item "Night Only": Prefers to work only Night shifts
+        \item "None": No specific shift preference
+    \end{itemize}
+    
+    \item \textbf{Contract Status:} Doctors may have contracts specifying an exact number of shifts of each type (Day, Evening, Night) that they must work each month.
+    
+    \item \textbf{Limited Availability:} Doctors may not be available on specific days and shifts in a month. Doctors with a very limited availability (unavailable for >20\% of the month) are excluded from some hour balance calculations.
+\end{itemize}
+
+\subsection*{R4: Schedule Construction}
+
+\begin{itemize}
+    \item \textbf{Template-Based Coverage:} A shift template can specify the required number of doctors for each shift on specific dates.
+    
+    \item \textbf{Scheduling Modes:} The system supports both yearly scheduling and focused monthly scheduling.
+    
+    \item \textbf{Customizable Weights:} The optimization uses a meta-optimizer to find the best weights for the objective function components.
+    
+    \item \textbf{Electron Support:} The system can run efficiently in both standalone mode and within an Electron bundled application.
+\end{itemize}
+
+\newpage
+\section{Mathematical Explanation of the Objective Function}
+
+The objective function for the hospital scheduling problem is a weighted sum of penalty terms. Each term corresponds to a specific constraint or desired property of the schedule, with higher penalty values indicating greater constraint violations. The tabu search algorithm aims to minimize this objective function, with weights determined by a meta-optimizer.
+
+\subsection{Formal Definition}
+
+Mathematically, the objective function $C(s)$ for a schedule $s$ can be represented as:
+
+\begin{equation}
+C(s) = \sum_{i=1}^{n} w_i \cdot P_i(s)
+\end{equation}
+
+Where:
+\begin{itemize}
+    \item $C(s)$ is the total cost (or penalty) of schedule $s$
+    \item $w_i$ is the weight coefficient for penalty component $i$
+    \item $P_i(s)$ is the penalty function for constraint $i$ given schedule $s$
+    \item $n$ is the number of penalty components in the objective function
+\end{itemize}
+
+\subsection{Hard Constraint Penalties}
+
+Hard constraints have fixed, very high weights (typically 999999) to ensure they are rarely if ever violated:
+
+\subsubsection{Availability Violation Penalty ($w_{avail} = 999999$)}
+This severely penalizes assignments where doctors are scheduled for shifts they are unavailable for:
+
+\begin{equation}
+P_{avail}(s) = \sum_{d \in D} \sum_{t \in S} \sum_{i \in I} w_{avail} \cdot \ind_{(x_{i,d,t}=1 \text{ and } A_{i,d,t}=0)}
+\end{equation}
+
+\subsubsection{One Shift Per Day Penalty ($w_{one\_shift} = 999999$)}
+This penalizes multiple shift assignments for the same doctor on the same day:
+
+\begin{equation}
+P_{one\_shift}(s) = \sum_{d \in D} \sum_{i \in I} w_{one\_shift} \cdot \max\left(0, \sum_{t \in S} x_{i,d,t} - 1\right)
+\end{equation}
+
+\subsubsection{Rest Period Penalty ($w_{rest} = 999999$)}
+This ensures proper rest time after night shifts:
+
+\begin{equation}
+P_{rest}(s) = \sum_{d \in D} \sum_{i \in I} w_{rest} \cdot (x_{i,d,Night} \cdot (x_{i,d+1,Day} + x_{i,d+1,Evening}))
+\end{equation}
+
+\subsubsection{Duplicate Doctor Penalty ($w_{duplicate\_penalty} = 999999$)}
+This severely penalizes having the same doctor appear multiple times in the same shift:
+
+\begin{equation}
+P_{duplicate}(s) = \sum_{d \in D} \sum_{t \in S} w_{duplicate\_penalty} \cdot (|\text{doctors in shift}| - |\text{unique doctors in shift}|)
+\end{equation}
+
+\subsubsection{Night-Day Gap Violation ($w_{night\_day\_gap} = 999999$)}
+This prevents a doctor from working a Day shift after a Night shift followed by a day off:
+
+\begin{equation}
+P_{night\_day\_gap}(s) = \sum_{d \in D} \sum_{i \in I} w_{night\_day\_gap} \cdot (x_{i,d,Night} \cdot (1-\sum_{t \in S}x_{i,d+1,t}) \cdot x_{i,d+2,Day})
+\end{equation}
+
+\subsubsection{Night Gap Violation ($w_{night\_gap} = 999999$)}
+This prevents consecutive Night shifts:
+
+\begin{equation}
+P_{night\_gap}(s) = \sum_{d \in D} \sum_{i \in I} w_{night\_gap} \cdot (x_{i,d,Night} \cdot x_{i,d+1,Night})
+\end{equation}
+
+\subsubsection{Wrong Preference Night Assignment ($w_{wrong\_pref\_night} = 999999$)}
+This prevents doctors with Day or Evening preferences from being assigned to Night shifts:
+
+\begin{equation}
+P_{wrong\_pref\_night}(s) = \sum_{d \in D} \sum_{i \in I_{day/evening}} w_{wrong\_pref\_night} \cdot x_{i,d,Night}
+\end{equation}
+
+where $I_{day/evening}$ is the set of doctors with "Day Only" or "Evening Only" preferences.
+
+\subsubsection{Consecutive Night Shifts ($w_{consec\_night} = 999999$)}
+This prevents the same doctor from working consecutive Night shifts:
+
+\begin{equation}
+P_{consec\_night}(s) = \sum_{d \in D} \sum_{i \in I} w_{consec\_night} \cdot (x_{i,d,Night} \cdot x_{i,d+1,Night})
+\end{equation}
+
+\subsubsection{Evening-Day Pattern ($w_{evening\_day} = 999999$)}
+This prevents a doctor from working a Day shift immediately after an Evening shift:
+
+\begin{equation}
+P_{evening\_day}(s) = \sum_{d \in D} \sum_{i \in I} w_{evening\_day} \cdot (x_{i,d,Evening} \cdot x_{i,d+1,Day})
+\end{equation}
+
+\subsubsection{Contract Shift Violation ($w_{contract} = 999999$)}
+This ensures doctors with contracts receive exactly the specified number of shifts:
+
+\begin{equation}
+P_{contract}(s) = \sum_{i \in I_{contract}} w_{contract} \cdot \sum_{t \in S} |AC_{i,t} - RC_{i,t}|
+\end{equation}
+
+where $I_{contract}$ is the set of doctors with contracts, $AC_{i,t}$ is the actual count of shifts of type $t$ assigned to doctor $i$, and $RC_{i,t}$ is the required count of shifts of type $t$ for doctor $i$.
+
+\subsubsection{Shift Template Violation ($w_{template} = 999999$)}
+This enforces exact adherence to the shift template requirements:
+
+\begin{equation}
+P_{template}(s) = \sum_{d \in D} \sum_{t \in S} w_{template} \cdot |Count(s,d,t) - Required(d,t)|
+\end{equation}
+
+where $Count(s,d,t)$ is the number of doctors assigned to shift $t$ on day $d$ in schedule $s$, and $Required(d,t)$ is the number of doctors required for that shift according to the template.
+
+\subsection{Soft Constraint Penalties}
+
+Soft constraints have weights that are optimized by the meta-optimizer to find the best balance:
+
+\subsubsection{Monthly Balance Penalty ($w_{balance} = 1000-10000$)}
+Penalizes schedules where the difference between the maximum and minimum hours worked by any doctor exceeds 10 hours:
+
+\begin{equation}
+P_{balance}(s) = \sum_{m \in M} w_{balance} \cdot \max(0, \max_{i \in I'} H_{i,m} - \min_{i \in I'} H_{i,m} - 10)^2
+\end{equation}
+
+where $H_{i,m}$ is the total hours doctor $i$ works in month $m$, $I'$ is the set of doctors excluding those with limited availability and contract doctors, and the squared term creates an exponential penalty for larger imbalances.
+
+\subsubsection{Weekend/Holiday Distribution Penalty ($w_{wh} = 10-100$)}
+This balances weekend and holiday assignments:
+
+\begin{equation}
+P_{wh}(s) = w_{wh} \cdot (junior\_variance + senior\_variance + max(0, avg(WH_{senior}) - avg(WH_{junior})))
+\end{equation}
+
+where $WH_i$ is the total weekend/holiday hours for doctor $i$, and the variances measure the spread within each group, excluding doctors with limited availability and contract doctors.
+
+\subsubsection{Senior Workload Difference Penalty ($w_{senior\_workload} = 500-10000$)}
+This enforces that senior doctors should work less than junior doctors:
+
+\begin{equation}
+P_{senior\_workload}(s) = w_{senior\_workload} \cdot \max(0, avg(H_{senior}) - avg(H_{junior}))
+\end{equation}
+
+where doctors with limited availability and contract doctors are excluded from the calculations.
+
+\subsubsection{Preference Adherence Penalty (Junior: $w_{pref\_junior} = 50-10000$, Senior: $w_{pref\_senior} = 100-20000$)}
+This encourages assigning doctors to their preferred shifts, with higher priority for senior doctors:
+
+\begin{equation}
+P_{pref}(s) = \sum_{d \in D} \sum_{i \in I_{junior}} w_{pref\_junior} \cdot \ind_{(x_{i,d,t}=1 \text{ and } t \neq P_i)} + \sum_{d \in D} \sum_{i \in I_{senior}} w_{pref\_senior} \cdot \ind_{(x_{i,d,t}=1 \text{ and } t \neq P_i)}
+\end{equation}
+
+\subsubsection{Preference Fairness Penalty ($w_{preference\_fairness} = 10-1000$)}
+This ensures fair distribution of preferred shifts among doctors with the same preferences:
+
+\begin{equation}
+P_{pref\_fair}(s) = w_{preference\_fairness} \cdot \sum_{pref} \max(0, \max_{i \in D_{pref}} PS_i - \min_{i \in D_{pref}} PS_i - tolerance)^2
+\end{equation}
+
+where $D_{pref}$ is the set of doctors with the same shift preference and $PS_i$ is the percentage of preferred shifts assigned to doctor $i$, excluding doctors with limited availability.
+
+\subsubsection{Senior Holiday Penalty ($w_{senior\_holiday} = 100-999999$)}
+This penalizes senior doctors working on long holidays:
+
+\begin{equation}
+P_{senior\_holiday}(s) = w_{senior\_holiday} \cdot \sum_{d \in D_{long-holiday}} \sum_{i \in I_{senior}} \sum_{t \in S} x_{i,d,t}
+\end{equation}
+
+\subsubsection{Consecutive Work Days Penalty ($w_{consecutive\_shifts} = 50$)}
+This penalizes doctors working more than the maximum allowed consecutive days:
+
+\begin{equation}
+P_{consecutive}(s) = w_{consecutive\_shifts} \cdot \sum_{i \in I} \sum_{d \in D} \max(0, C_{i,d} - max\_consecutive)^2
+\end{equation}
+
+where $C_{i,d}$ is the number of consecutive days doctor $i$ has worked up to day $d$.
+
+\subsection{Hierarchical Evaluation}
+
+The optimization employs a hierarchical evaluation approach:
+
+\begin{equation}
+score(s) = 
+\begin{cases} 
+1000000 + hard\_violations(s) & \text{if } hard\_violations(s) > 0 \\
+soft\_score(s) & \text{otherwise}
+\end{cases}
+\end{equation}
+
+This ensures that feasible schedules (with no hard constraint violations) are always preferred over infeasible ones. Among feasible schedules, the following priorities are applied:
+
+1. Schedules with monthly variance ≤ 10 hours are preferred over those with higher variance
+2. Schedules with fewer preference violations are preferred
+3. Schedules with lower overall soft constraint score are preferred
+
+\subsection{Weight Optimization}
+
+The system employs a meta-optimizer that searches for the best weights for the objective function components. The weight optimizer:
+
+1. Generates multiple random weight configurations within defined ranges
+2. Evaluates each configuration by running the scheduling algorithm
+3. Compares solutions using the hierarchical evaluation framework
+4. Selects the best-performing weight configuration
+
+The weight ranges are carefully defined to maintain the relative importance of different constraints while allowing flexibility in the exact values:
+
+\begin{center}
+\begin{tabular}{|l|c|}
+\hline
+\textbf{Weight Parameter} & \textbf{Range} \\
+\hline
+$w_{balance}$ & 1000-10000 (step 500) \\
+$w_{wh}$ & 10-100 (step 10) \\
+$w_{senior\_workload}$ & 500-10000 (step 1000) \\
+$w_{pref\_junior}$ & 50-10000 (step 200) \\
+$w_{pref\_senior}$ & 100-20000 (step 400) \\
+$w_{preference\_fairness}$ & 10-1000 (step 100) \\
+$w_{senior\_holiday}$ & 100-999999 (step 1000) \\
+\hline
+\end{tabular}
+\end{center}
+
+\section{Tabu Search Algorithm Implementation}
+
+The optimization uses an adaptive Tabu Search algorithm with several enhancements to efficiently navigate the solution space.
+
+\subsection{Initial Solution Generation}
+
+The initial schedule is generated using a greedy algorithm that:
+\begin{enumerate}
+    \item Processes dates in chronological order
+    \item Prioritizes shifts in order of constraint difficulty (Evening, Night, Day)
+    \item Considers doctor preferences, availability, and seniority
+    \item Ensures proper weekend/holiday distribution between junior and senior doctors
+    \item Prevents duplicate doctor assignments in the same shift
+    \item Prioritizes contract doctors to fulfill their required shifts
+    \item Adheres to the shift template requirements for each day
+\end{enumerate}
+
+\subsection{Neighborhood Generation}
+
+For each iteration, the algorithm generates neighbor solutions using intelligent move selection:
+
+\subsubsection{Targeted Move Types:}
+\begin{itemize}
+    \item \textbf{Contract Fix Moves:} Highest priority moves to ensure contract doctors get their required shifts
+    \item \textbf{Evening Preference Moves:} Prioritize assigning doctors with Evening preferences to Evening shifts
+    \item \textbf{Senior Workload Moves:} Replace seniors with juniors in weekend/holiday shifts
+    \item \textbf{Monthly Balance Moves:} Transfer shifts from overloaded to underloaded doctors
+    \item \textbf{Weekend/Holiday Balance Moves:} Improve the distribution of weekend/holiday shifts
+    \item \textbf{Duplicate Fix Moves:} High-priority moves that eliminate duplicate doctor assignments
+    \item \textbf{Template Adherence Moves:} Adjust assignments to match the shift template requirements
+    \item \textbf{Random Moves:} Occasional random moves to escape local optima
+\end{itemize}
+
+\subsubsection{Move Execution:}
+\begin{itemize}
+    \item Select a (date, shift, doctor) to replace
+    \item Find available replacement doctors based on the move type
+    \item Ensure the replacement doesn't violate availability or rest constraints
+    \item Verify the move doesn't create duplicates in the shift
+    \item Check that the move doesn't violate shift template requirements
+    \item Validate contract fulfillment for contract doctors
+\end{itemize}
+
+\subsubsection{Valid Move Filtering:}
+\begin{itemize}
+    \item Verify that replacement doctors are available for the shift
+    \item Check that they are not already assigned to another shift that day
+    \item Ensure the move doesn't create duplicate doctors in a shift
+    \item Validate that the move complies with rest period constraints
+    \item Check preference compatibility with the shift
+    \item Ensure shift template adherence is maintained
+\end{itemize}
+
+\subsection{Phase-Based Optimization}
+
+The algorithm employs a phase-based approach that focuses on different aspects of the schedule quality:
+
+\begin{enumerate}
+    \item \textbf{Contract Phase:} Focus on fulfilling contract doctor requirements
+    \item \textbf{General Phase:} Balanced improvement across all constraints
+    \item \textbf{Balance Phase:} Focus on monthly workload balance
+    \item \textbf{Senior Phase:} Prioritize senior workload and weekend/holiday distribution
+    \item \textbf{Preference Phase:} Emphasize shift preference satisfaction
+\end{enumerate}
+
+The algorithm switches between phases periodically or when specific metrics warrant targeted attention (e.g., switching to Balance phase if monthly variance becomes too high).
+
+\subsection{Tabu List Management}
+
+To avoid cycling and efficiently explore the solution space:
+\begin{itemize}
+    \item Each executed move is added to a tabu list for a duration of 15-20 iterations (tabu tenure)
+    \item The tabu list prevents recently made moves from being reversed
+    \item An aspiration criterion allows tabu moves if they result in a better solution than the best found so far
+    \item The tabu list is periodically pruned to remove expired entries
+\end{itemize}
+
+\subsection{Termination Criteria}
+
+The algorithm terminates when one of the following conditions is met:
+\begin{itemize}
+    \item A maximum number of iterations is reached (1000-1500 iterations)
+    \item No improvement is found for a specified number of iterations (75-100)
+    \item No valid neighbors can be generated
+\end{itemize}
+
+\section{Implementation Specifics}
+
+\subsection{Yearly vs. Monthly Optimization}
+
+The system implements two optimization modes:
+
+\subsubsection{Yearly Optimization:}
+\begin{itemize}
+    \item Optimizes the entire year's schedule at once
+    \item Places greater emphasis on long-term fairness
+    \item Uses more iterations (1500) and larger tabu tenure (20)
+\end{itemize}
+
+\subsubsection{Monthly Optimization:}
+\begin{itemize}
+    \item Focuses on a single month for more refined scheduling
+    \item Uses tighter constraints on workload balance (8 hours maximum difference)
+    \item Employs fewer iterations (1000) and smaller tabu tenure (15)
+    \item Adds additional penalties for consecutive working days
+    \item Enforces strict adherence to shift templates and contract requirements
+\end{itemize}
+
+\subsection{Contract Doctor Handling}
+
+The system has specialized processing for doctors with contracts:
+\begin{itemize}
+    \item Contract doctors are prioritized during initial schedule generation
+    \item They are excluded from workload balance calculations to avoid skewing the distribution
+    \item The algorithm prioritizes moves that fix contract violations
+    \item Contract fulfillment is treated as a hard constraint with maximum penalty
+    \item The optimizer tracks specific day, evening, and night shift counts for each contract doctor
+\end{itemize}
+
+\subsection{Shift Template Usage}
+
+The shift template functionality allows for custom staffing requirements:
+\begin{itemize}
+    \item Each date can have specific requirements for each shift type
+    \item The system enforces exact adherence to these requirements (no under or over-staffing)
+    \item The template takes precedence over default staffing requirements
+    \item Special handling prevents assigning doctors to shifts not in the template
+    \item The optimizer includes specific moves to fix template adherence issues
+\end{itemize}
+
+\subsection{Adaptive Parameters}
+
+The algorithm uses several adaptive mechanisms:
+\begin{itemize}
+    \item Dynamic phase switching based on current solution quality
+    \item Weighted move selection that favors most promising move types
+    \item Penalty weights carefully balanced to enforce constraint hierarchies
+    \item Special handling for doctors with limited availability
+\end{itemize}
+
+\subsection{Progress Tracking}
+
+The implementation includes a callback mechanism to report progress during optimization:
+\begin{itemize}
+    \item Regular updates on current iteration and objective value
+    \item Phase reporting to indicate the current optimization focus
+    \item Periodic logging of key metrics (workload balance, senior/junior ratios)
+    \item Final statistics reporting for solution evaluation
+\end{itemize}
+
+\subsection{Electron App Support}
+
+The system includes specific optimizations for running in an Electron bundled application:
+\begin{itemize}
+    \item Alternative parallelization mechanisms based on the execution environment
+    \item Chunked processing to prevent UI freezing in interactive mode
+    \item Dynamic adjustment of process management based on the hosting platform
+    \item Special logging and error handling for the bundled environment
+\end{itemize}
+
+\section{Conclusions}
+
+The hospital scheduling system uses a sophisticated Tabu Search implementation with weighted penalties and intelligent neighborhood generation to produce high-quality schedules. The algorithm effectively balances multiple competing constraints:
+
+\begin{enumerate}
+    \item Ensuring complete shift coverage every day according to the shift template
+    \item Maintaining fair monthly workload distribution ($\leq$ 8h variance)
+    \item Enforcing that senior doctors work less than junior doctors
+    \item Satisfying doctor shift preferences with priority for seniors
+    \item Distributing weekend/holiday shifts appropriately
+    \item Respecting rest requirements and availability constraints
+    \item Fulfilling contract doctors' specific shift requirements
+    \item Limiting consecutive working days to prevent fatigue
+\end{enumerate}
+
+The phase-based approach allows the algorithm to address specific issues during optimization, while the intelligent move selection ensures efficient exploration of the solution space. The meta-optimization of weights enables finding the best balance between different constraints for each specific scheduling problem.
+
+The addition of contract doctor support and shift templates significantly enhances the system's flexibility, allowing it to accommodate various hospital staffing models and contractual requirements. The strict enforcement of rest patterns and consecutive work limits promotes healthier work schedules for doctors.
+
+The final schedule satisfies all hard constraints while minimizing violations of soft constraints according to their relative importance in the hierarchical evaluation framework. This produces schedules that are not only feasible but also fair and satisfactory for all doctors.
+
+\end{document}

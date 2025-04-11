@@ -35,3 +35,6 @@ default
 backend/__pycache__/schedule_optimizer.cpython-312.pyc
 frontend/.env
 animations
+*.aux
+*.out
+*.pdf
