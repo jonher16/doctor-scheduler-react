@@ -637,10 +637,18 @@ function DoctorAvailabilityCalendar({ doctors, availability, initialYear, setAva
                   flexDirection: 'column',
                   border: !dayObj.empty && selectedDoctor !== 'all' && 
                          (dayObj.doctorAvailability[selectedDoctor] === 'Available') 
-                         ? '1px solid #4caf50' // Green border for available days when a doctor is selected
-                         : 'none',
+                         ? '1px solid #4caf50' : 'none',
+                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                   '&:hover': {
-                    boxShadow: dayObj.empty ? 'none' : '0 2px 4px rgba(0,0,0,0.1)'
+                    boxShadow: dayObj.empty ? 'none' : '0 4px 8px rgba(0,0,0,0.12)',
+                    transform: dayObj.empty ? 'none' : 'translateY(-3px) scale(1.02)',
+                    zIndex: 1,
+                    bgcolor: dayObj.empty ? 'transparent' : 'rgba(25, 118, 210, 0.04)',
+                    '& .editIcon': {
+                      opacity: 1,
+                      transform: 'scale(1.2)',
+                      color: 'primary.main'
+                    }
                   },
                   cursor: dayObj.empty ? 'default' : 'pointer'
                 }}
@@ -661,7 +669,16 @@ function DoctorAvailabilityCalendar({ doctors, availability, initialYear, setAva
                         {dayObj.day}
                       </Typography>
                       <Tooltip title="Edit Availability">
-                        <EditIcon fontSize="small" sx={{ color: 'action.active', opacity: 0.6, fontSize: '0.8rem' }} />
+                        <EditIcon 
+                          className="editIcon"
+                          fontSize="small" 
+                          sx={{ 
+                            color: 'action.active', 
+                            opacity: 0.6, 
+                            fontSize: '0.8rem',
+                            transition: 'all 0.3s ease'
+                          }} 
+                        />
                       </Tooltip>
                     </Box>
                     

@@ -532,14 +532,31 @@ function App() {
                   py: 1.5,
                   bgcolor: isActive ? 'rgba(25, 118, 210, 0.08)' : 'transparent',
                   '&:hover': {
-                    bgcolor: isActive ? 'rgba(25, 118, 210, 0.12)' : 'rgba(0, 0, 0, 0.04)'
+                    bgcolor: isActive ? 'rgba(25, 118, 210, 0.15)' : 'rgba(25, 118, 210, 0.08)',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                    transform: 'translateX(3px)',
+                    borderRadius: '4px',
                   },
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease-in-out',
+                  borderRadius: '4px',
+                  mx: 1,
+                  position: 'relative'
                 }}
               >
                 <ListItemIcon sx={{ 
                   color: isActive ? 'primary.main' : 'inherit',
-                  minWidth: 45
+                  minWidth: 45,
+                  transition: 'color 0.2s ease-in-out',
+                  '& .MuiSvgIcon-root': {
+                    transition: 'transform 0.2s ease-in-out',
+                  },
+                  '.MuiListItem-root:hover &': {
+                    color: 'primary.main',
+                    '& .MuiSvgIcon-root': {
+                      transform: 'scale(1.1)',
+                    },
+                  }
                 }}>
                   {item.icon}
                 </ListItemIcon>
@@ -547,7 +564,12 @@ function App() {
                   primary={item.text} 
                   primaryTypographyProps={{ 
                     fontWeight: isActive ? 500 : 400,
-                    color: isActive ? 'primary.main' : 'inherit'
+                    color: isActive ? 'primary.main' : 'inherit',
+                    transition: 'color 0.2s ease-in-out, font-weight 0.2s ease-in-out',
+                    '.MuiListItem-root:hover &': {
+                      color: 'primary.main',
+                      fontWeight: 500
+                    }
                   }} 
                 />
                 {isActive && (

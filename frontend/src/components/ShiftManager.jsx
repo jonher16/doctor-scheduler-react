@@ -579,10 +579,11 @@ function ShiftManager() {
                   cursor: dayObj.empty ? 'default' : 'pointer',
                   display: 'flex',
                   flexDirection: 'column',
-                  transition: 'all 0.2s ease-in-out',
+                  backgroundColor: 'background.paper',
+                  transition: 'box-shadow 0.2s ease, background-color 0.2s ease',
                   '&:hover': {
-                    transform: dayObj.empty ? 'none' : 'scale(1.02)',
-                    boxShadow: dayObj.empty ? 'none' : '0 4px 8px rgba(0,0,0,0.1)'
+                    boxShadow: dayObj.empty ? 'none' : '0 6px 12px rgba(0,0,0,0.1)',
+                    backgroundColor: dayObj.empty ? 'background.paper' : 'rgba(25, 118, 210, 0.04)',
                   }
                 }}
                 onClick={() => !dayObj.empty && handleDayClick(dayObj)}

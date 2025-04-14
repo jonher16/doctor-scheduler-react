@@ -309,18 +309,78 @@ export default function ExcelDownloadButton({ schedule, doctors, selectedMonth, 
         fontSize: '0.875rem',
         lineHeight: '1.75',
         letterSpacing: '0.02857em',
-        textTransform: 'uppercase',
+        textTransform: 'none',
         minWidth: '64px',
-        padding: '6px 16px',
-        borderRadius: '4px',
-        transition: 'background-color 250ms cubic-bezier(0.4, 0, 0.2, 1) 0ms, box-shadow 250ms cubic-bezier(0.4, 0, 0.2, 1) 0ms, border-color 250ms cubic-bezier(0.4, 0, 0.2, 1) 0ms, color 250ms cubic-bezier(0.4, 0, 0.2, 1) 0ms',
+        padding: '8px 18px',
+        borderRadius: '8px',
+        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
         color: 'rgb(255, 255, 255)',
         backgroundColor: isExporting ? 'rgba(25, 118, 210, 0.7)' : 'rgb(25, 118, 210)',
         boxShadow: 'rgba(0, 0, 0, 0.2) 0px 3px 1px -2px, rgba(0, 0, 0, 0.14) 0px 2px 2px 0px, rgba(0, 0, 0, 0.12) 0px 1px 5px 0px',
         border: '0px',
-        textAlign: 'center'
+        textAlign: 'center',
+        overflow: 'hidden',
+        
+        ':hover': {
+          backgroundColor: 'rgb(21, 101, 192)',
+          boxShadow: 'rgba(0, 0, 0, 0.2) 0px 3px 1px -2px, rgba(0, 0, 0, 0.14) 0px 3px 3px 0px, rgba(0, 0, 0, 0.12) 0px 2px 5px 0px',
+          transform: 'translateY(-1px)'
+        }
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.backgroundColor = 'rgb(21, 101, 192)';
+        e.currentTarget.style.boxShadow = 'rgba(0, 0, 0, 0.2) 0px 3px 1px -2px, rgba(0, 0, 0, 0.14) 0px 3px 3px 0px, rgba(0, 0, 0, 0.12) 0px 2px 5px 0px';
+        e.currentTarget.style.transform = 'translateY(-1px)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.backgroundColor = isExporting ? 'rgba(25, 118, 210, 0.7)' : 'rgb(25, 118, 210)';
+        e.currentTarget.style.boxShadow = 'rgba(0, 0, 0, 0.2) 0px 3px 1px -2px, rgba(0, 0, 0, 0.14) 0px 2px 2px 0px, rgba(0, 0, 0, 0.12) 0px 1px 5px 0px';
+        e.currentTarget.style.transform = 'translateY(0)';
+      }}
+      onMouseDown={(e) => {
+        const button = e.currentTarget;
+        const ripple = document.createElement('span');
+        const rect = button.getBoundingClientRect();
+        const size = Math.max(rect.width, rect.height);
+        const x = e.clientX - rect.left - size / 2;
+        const y = e.clientY - rect.top - size / 2;
+        
+        ripple.style.width = ripple.style.height = `${size}px`;
+        ripple.style.left = `${x}px`;
+        ripple.style.top = `${y}px`;
+        ripple.className = 'ripple';
+        
+        button.appendChild(ripple);
+        
+        setTimeout(() => {
+          ripple.remove();
+        }, 600);
       }}
     >
+      <style>
+        {`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+          
+          @keyframes ripple {
+            to {
+              transform: scale(4);
+              opacity: 0;
+            }
+          }
+          
+          .ripple {
+            position: absolute;
+            border-radius: 50%;
+            background-color: rgba(255, 255, 255, 0.7);
+            transform: scale(0);
+            animation: ripple 0.6s linear;
+            pointer-events: none;
+          }
+        `}
+      </style>
       {isExporting ? (
         <>
           <svg
@@ -345,20 +405,18 @@ export default function ExcelDownloadButton({ schedule, doctors, selectedMonth, 
               strokeWidth="3.6"
             />
           </svg>
-          <style>
-            {`
-              @keyframes spin {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
-              }
-            `}
-          </style>
           Exporting...
         </>
       ) : (
         <>
           <svg 
-            style={{ marginRight: '8px', width: '20px', height: '20px' }} 
+            style={{ 
+              marginRight: '10px', 
+              width: '20px', 
+              height: '20px',
+              transition: 'transform 0.3s ease'
+            }} 
+            className="download-icon"
             focusable="false" 
             aria-hidden="true" 
             viewBox="0 0 24 24"

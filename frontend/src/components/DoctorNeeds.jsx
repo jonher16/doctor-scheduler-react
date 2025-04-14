@@ -669,9 +669,63 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
         <Tabs 
           value={viewMode} 
           onChange={handleViewModeChange}
-          variant="standard"
-          aria-label="View mode tabs"
-          sx={{ borderBottom: 1, borderColor: 'divider' }}
+          variant="scrollable"
+          scrollButtons={false}
+          allowScrollButtonsMobile
+          sx={{
+            borderBottom: 1,
+            borderColor: 'divider',
+            '& .MuiTabs-scrollButtons': {
+              opacity: 0.6,
+              '&.Mui-disabled': {
+                opacity: 0,
+              },
+            },
+            '& .MuiTab-root': {
+              minHeight: '64px',
+              textTransform: 'none',
+              fontSize: '0.9rem',
+              transition: 'all 0.2s ease-in-out',
+              px: 2,
+              mx: 0.3,
+              borderRadius: '8px 8px 0 0',
+              '&:hover': {
+                backgroundColor: 'rgba(25, 118, 210, 0.08)',
+                color: 'primary.main',
+                transform: 'translateY(-2px)',
+                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03)',
+                '& .MuiSvgIcon-root': {
+                  transform: 'scale(1.1)',
+                  color: 'primary.main',
+                }
+              },
+              '&.Mui-selected': {
+                fontWeight: 'bold',
+                '& .MuiSvgIcon-root': {
+                  color: 'primary.main',
+                }
+              },
+              '&:focus': {
+                outline: 'none'
+              },
+              '&.Mui-focusVisible': {
+                backgroundColor: 'rgba(25, 118, 210, 0.12)',
+                outline: 'none',
+                boxShadow: 'inset 0px 0px 0px 1px rgba(25, 118, 210, 0.5)'
+              }
+            },
+            '& .MuiTab-iconWrapper': {
+              transition: 'transform 0.2s ease-in-out',
+              marginRight: 1
+            }
+          }}
+          TabIndicatorProps={{
+            style: {
+              height: '3px',
+              borderRadius: '3px 3px 0 0',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+            }
+          }}
         >
           <Tab 
             value="table" 
