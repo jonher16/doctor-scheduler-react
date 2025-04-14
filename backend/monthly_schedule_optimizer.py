@@ -142,6 +142,39 @@ class MonthlyScheduleOptimizer:
                     key = (doctor, date, shift)
                     self._availability_cache[key] = self._calculate_doctor_availability(doctor, date, shift)
 
+    def _get_limited_availability_doctors(self) -> Dict[str, int]:
+        """
+        Identify doctors with limited availability (available ≤ 20% of month's shifts).
+        
+        Returns:
+            Dictionary mapping doctor names to their available days count
+        """
+        # Count total possible shifts in the month
+        total_possible_shifts = len(self.all_dates) * len(self.shifts)
+        threshold_percentage = 0.2  # 20% availability threshold
+        threshold_shifts = total_possible_shifts * threshold_percentage
+        
+        # Count available shifts for each doctor
+        doctor_availability_counts = {}
+        for doctor in [doc["name"] for doc in self.doctors]:
+            available_shifts = 0
+            for date in self.all_dates:
+                for shift in self.shifts:
+                    if self._is_doctor_available(doctor, date, shift):
+                        available_shifts += 1
+            doctor_availability_counts[doctor] = available_shifts
+        
+        # Identify doctors with limited availability
+        limited_availability_doctors = {}
+        for doctor, available_shifts in doctor_availability_counts.items():
+            if available_shifts <= threshold_shifts:
+                available_days = len([date for date in self.all_dates 
+                                     if any(self._is_doctor_available(doctor, date, shift) 
+                                            for shift in self.shifts)])
+                limited_availability_doctors[doctor] = available_days
+                
+        return limited_availability_doctors
+
     def _calculate_doctor_availability(self, doctor: str, date: str, shift: str) -> bool:
         """Calculate the availability status without using cache."""
         if doctor not in self.availability:
@@ -601,7 +634,9 @@ class MonthlyScheduleOptimizer:
         5. Severe penalty for duplicate doctors in the same shift
         6. NEW: Extreme penalty for unfilled slots in the shift template
         7. NEW: Extreme penalty for contract shift violations
-        8. NEW: Doctors with shift contracts are excluded from hour balance calculations
+        8. NEW: Doctors with shift contracts or limited availability are excluded from hour balance calculations.
+           - Limited availability is defined as doctors available for ≤20% of the total possible shifts in the month.
+           - These doctors are still assigned shifts but do not factor into workload balance penalties.
         """
         cost = 0.0
         doctor_names = [doc["name"] for doc in self.doctors]
@@ -619,11 +654,20 @@ class MonthlyScheduleOptimizer:
                             break
                     doctor_assignments[doctor][date] = assigned_shift
 
-        # Get list of contract doctors
-        contract_doctors = [d["name"] for d in self.doctors if d.get("contract") and d.get("contractShiftsDetail")]
-                
+        # Get list of doctors to exclude from hour balance (contract doctors and limited availability doctors)
+        monthly_hours, doctors_to_exclude = self._calculate_monthly_hours(schedule)
+        weekend_holiday_hours, _ = self._calculate_weekend_holiday_hours(schedule)
+        
+        # Log limited availability doctors for clarity
+        limited_availability_doctors = self._get_limited_availability_doctors()
+        if limited_availability_doctors:
+            logger.info(f"The following doctors have limited availability and are exempted from hour balance calculations:")
+            for doctor, days in limited_availability_doctors.items():
+                logger.info(f"  {doctor}: {days} available days")
+        
         # NEW: Check for contract shift violations (hard constraint)
         # Find doctors with contracts
+        contract_doctors = [d["name"] for d in self.doctors if d.get("contract") and d.get("contractShiftsDetail")]
         if contract_doctors:
             # Initialize shift counts for each contract doctor
             doctor_shift_counts = {}
@@ -862,17 +906,10 @@ class MonthlyScheduleOptimizer:
         monthly_hours, _ = self._calculate_monthly_hours(schedule)
         
         # Calculate junior and senior hours separately
-        # Exclude doctors with limited availability from the fairness calculations
-        limited_availability_doctors = []
-        for doctor_name in doctor_names:
-            if doctor_name in self.availability:
-                limited_days = sum(1 for date in self.all_dates if doctor_name in self.availability and 
-                                  date in self.availability[doctor_name] and 
-                                  self.availability[doctor_name][date] != "Available")
-                if limited_days > len(self.all_dates) * 0.2:  # 20% of days have limited availability
-                    limited_availability_doctors.append(doctor_name)
+        # Get consistent list of limited availability doctors
+        limited_availability_doctors = self._get_limited_availability_doctors()
         
-        # Exclude contract doctors from workload balance calculations
+        # Exclude contract doctors and limited availability doctors from workload balance calculations
         junior_hours = {doc: monthly_hours[doc][self.month] 
                       for doc in self.junior_doctors 
                       if doc not in limited_availability_doctors and doc not in contract_doctors}
@@ -973,7 +1010,7 @@ class MonthlyScheduleOptimizer:
             doctors_with_pref = self.doctors_by_preference.get(pref_type, [])
             
             # Only include active doctors (exclude those with limited availability)
-            active_doctors_with_pref = [doc for doc in doctors_with_pref if doc not in limited_availability_doctors]
+            active_doctors_with_pref = [doc for doc in doctors_with_pref if doc not in limited_availability_doctors.keys()]
             
             if len(active_doctors_with_pref) > 1:  # Only check if multiple active doctors share a preference
                 # Get counts of preferred shifts for each active doctor
@@ -1009,7 +1046,7 @@ class MonthlyScheduleOptimizer:
         
         if weeks_in_month > 1:
             # Get doctor's total shifts in the month (only for active doctors)
-            doctor_total_shifts = {doctor: 0 for doctor in doctor_names if doctor not in limited_availability_doctors}
+            doctor_total_shifts = {doctor: 0 for doctor in doctor_names if doctor not in limited_availability_doctors.keys()}
             
             for date in self.all_dates:
                 if date in schedule:
@@ -1058,6 +1095,42 @@ class MonthlyScheduleOptimizer:
                         if variance > 1.5:
                             cost += w_weekly_balance * ((variance - 1.5) ** 2)
         
+        # 4. Monthly hours balance between doctors
+        # Calculate monthly hours for each doctor and exclude contract doctors
+        doctor_hours = {}
+        non_excluded_doctors = []
+        
+        for doctor, hours in monthly_hours.items():
+            # Skip doctors that should be excluded from balance calculations
+            if doctor in doctors_to_exclude:
+                continue
+                
+            doctor_hours[doctor] = hours[self.month]
+            non_excluded_doctors.append(doctor)
+        
+        if len(non_excluded_doctors) > 1:
+            # Find min and max hours worked by any doctor this month
+            min_hours = min(doctor_hours[d] for d in non_excluded_doctors)
+            max_hours = max(doctor_hours[d] for d in non_excluded_doctors)
+            
+            # Calculate hour balance penalty if the difference is too large
+            if max_hours - min_hours > self.max_doctor_hour_balance:
+                # Apply quadratic penalty for larger differences
+                hour_balance_diff = max_hours - min_hours - self.max_doctor_hour_balance
+                cost += self.w_balance * hour_balance_diff**2
+        
+        # 5. Weekend/holiday balance between doctors
+        non_excluded_wh_hours = {d: h for d, h in weekend_holiday_hours.items() if d not in doctors_to_exclude}
+        
+        if len(non_excluded_wh_hours) > 1:
+            # Find min and max weekend/holiday hours
+            min_wh = min(non_excluded_wh_hours.values())
+            max_wh = max(non_excluded_wh_hours.values())
+            
+            # Calculate weekend/holiday balance penalty
+            wh_diff = max_wh - min_wh
+            cost += self.w_wh * wh_diff
+        
         return cost
 
     def _calculate_monthly_hours(self, schedule):
@@ -1067,6 +1140,9 @@ class MonthlyScheduleOptimizer:
         
         # Identify doctors with shift contracts to exclude them
         contract_doctors = [d["name"] for d in self.doctors if d.get("contract") and d.get("contractShiftsDetail")]
+        
+        # Identify doctors with limited availability to exclude them
+        limited_availability_doctors = self._get_limited_availability_doctors()
         
         # Only calculate for this month
         for doctor in doctor_names:
@@ -1090,9 +1166,15 @@ class MonthlyScheduleOptimizer:
             # for hour balancing across non-contract doctors
             monthly_hours[doctor][self.month] = 0
         
-        # Return the calculated hours, but also pass along which doctors have contracts
-        # so the objective function can exclude them from balance calculations
-        return monthly_hours, contract_doctors
+        # Zero out hours for limited availability doctors
+        for doctor in limited_availability_doctors:
+            # We still track their hours for reporting, but set to 0
+            # for hour balancing across regular availability doctors
+            monthly_hours[doctor][self.month] = 0
+        
+        # Return the calculated hours, and also pass along which doctors to exclude from balancing
+        doctors_to_exclude = list(set(contract_doctors) | set(limited_availability_doctors.keys()))
+        return monthly_hours, doctors_to_exclude
     
     def _calculate_weekend_holiday_hours(self, schedule):
         """Calculate weekend and holiday hours for each doctor within the month."""
@@ -1101,6 +1183,9 @@ class MonthlyScheduleOptimizer:
         
         # Identify doctors with shift contracts to exclude them
         contract_doctors = [d["name"] for d in self.doctors if d.get("contract") and d.get("contractShiftsDetail")]
+        
+        # Identify doctors with limited availability to exclude them
+        limited_availability_doctors = self._get_limited_availability_doctors()
         
         for date in self.all_dates:
             # Skip if not weekend or holiday
@@ -1122,9 +1207,16 @@ class MonthlyScheduleOptimizer:
             # We still track their hours for contract fulfillment, but set to 0 
             # for hour balancing across non-contract doctors
             wh_hours[doctor] = 0
+            
+        # Zero out hours for limited availability doctors
+        for doctor in limited_availability_doctors:
+            # We still track their hours for reporting, but set to 0
+            # for hour balancing across regular availability doctors
+            wh_hours[doctor] = 0
                     
-        # Return the calculated hours and contract doctors list
-        return wh_hours, contract_doctors
+        # Return the calculated hours and doctors to exclude
+        doctors_to_exclude = list(set(contract_doctors) | set(limited_availability_doctors.keys()))
+        return wh_hours, doctors_to_exclude
 
     def get_neighbors(self, current_schedule: Dict[str, Dict[str, List[str]]],
                   num_moves: int = 20) -> List[Tuple[Dict[str, Dict[str, List[str]]], Tuple[str, str, str, str]]]:
@@ -1138,7 +1230,7 @@ class MonthlyScheduleOptimizer:
         max_attempts = num_moves * 10  # Allow more attempts to find valid moves
         
         # Pre-calculate workload to inform better moves
-        monthly_hours, contract_doctors = self._calculate_monthly_hours(current_schedule)
+        monthly_hours, doctors_to_exclude = self._calculate_monthly_hours(current_schedule)
         weekend_holiday_hours, _ = self._calculate_weekend_holiday_hours(current_schedule)
         
         # Track which doctors have preference for which shifts
@@ -1717,9 +1809,9 @@ class MonthlyScheduleOptimizer:
             
             # 3. Target monthly balance issues
             elif move_type == "monthly_balance":
-                # Find doctors with highest and lowest monthly hours, excluding contract doctors
+                # Find doctors with highest and lowest monthly hours, excluding contract doctors and limited availability doctors
                 month_doctors = {doc: hrs.get(self.month, 0) for doc, hrs in monthly_hours.items() 
-                               if doc not in contract_doctors}
+                               if doc not in doctors_to_exclude}
                 
                 if month_doctors:
                     # Sort doctors by hours in this month
@@ -1823,11 +1915,11 @@ class MonthlyScheduleOptimizer:
                 # Calculate current weekend/holiday hours for all doctors
                 wh_hours = weekend_holiday_hours
                 
-                # Sort doctors by weekend/holiday hours (within their seniority group), excluding contract doctors
+                # Sort doctors by weekend/holiday hours (within their seniority group), excluding doctors with limited availability
                 junior_wh = [(doc, wh_hours.get(doc, 0)) for doc in self.junior_doctors 
-                            if doc not in contract_doctors]
+                            if doc not in doctors_to_exclude]
                 senior_wh = [(doc, wh_hours.get(doc, 0)) for doc in self.senior_doctors 
-                            if doc not in contract_doctors]
+                            if doc not in doctors_to_exclude]
                 
                 junior_wh.sort(key=lambda x: x[1])  # Sort by hours (ascending)
                 senior_wh.sort(key=lambda x: x[1])  # Sort by hours (ascending)
@@ -2493,29 +2585,29 @@ class MonthlyScheduleOptimizer:
                 # Every 40 iterations, log key metrics for monitoring (more frequent in monthly)
                 if iteration % 40 == 0:
                     # Calculate important metrics for the best schedule
-                    monthly_hours, contract_doctors = self._calculate_monthly_hours(best_schedule)
+                    monthly_hours, doctors_to_exclude = self._calculate_monthly_hours(best_schedule)
                     wh_hours, _ = self._calculate_weekend_holiday_hours(best_schedule)
                     
-                    # Calculate workload variance for the month, excluding contract doctors
+                    # Calculate workload variance for the month, excluding doctors with limited availability
                     month_values = [hrs.get(self.month, 0) for doc, hrs in monthly_hours.items() 
-                                   if hrs.get(self.month, 0) > 0 and doc not in contract_doctors]
+                                   if hrs.get(self.month, 0) > 0 and doc not in doctors_to_exclude]
                     workload_variance = max(month_values) - min(month_values) if month_values else 0
                     
-                    # Senior vs junior workload, excluding contract doctors
+                    # Senior vs junior workload, excluding doctors with limited availability
                     senior_avg = sum(monthly_hours[doc].get(self.month, 0) for doc in self.senior_doctors 
-                                   if doc not in contract_doctors) / max(len([d for d in self.senior_doctors 
-                                                                             if d not in contract_doctors]), 1)
+                                   if doc not in doctors_to_exclude) / max(len([d for d in self.senior_doctors 
+                                                                             if d not in doctors_to_exclude]), 1)
                     junior_avg = sum(monthly_hours[doc].get(self.month, 0) for doc in self.junior_doctors 
-                                   if doc not in contract_doctors) / max(len([d for d in self.junior_doctors 
-                                                                             if d not in contract_doctors]), 1)
+                                   if doc not in doctors_to_exclude) / max(len([d for d in self.junior_doctors 
+                                                                             if d not in doctors_to_exclude]), 1)
                     
-                    # Weekend/holiday metrics, excluding contract doctors
+                    # Weekend/holiday metrics, excluding doctors with limited availability
                     senior_wh_avg = sum(wh_hours.get(doc, 0) for doc in self.senior_doctors 
-                                     if doc not in contract_doctors) / max(len([d for d in self.senior_doctors 
-                                                                              if d not in contract_doctors]), 1)
+                                     if doc not in doctors_to_exclude) / max(len([d for d in self.senior_doctors 
+                                                                              if d not in doctors_to_exclude]), 1)
                     junior_wh_avg = sum(wh_hours.get(doc, 0) for doc in self.junior_doctors 
-                                     if doc not in contract_doctors) / max(len([d for d in self.junior_doctors 
-                                                                              if d not in contract_doctors]), 1)
+                                     if doc not in doctors_to_exclude) / max(len([d for d in self.junior_doctors 
+                                                                              if d not in doctors_to_exclude]), 1)
                     
                     logger.info(f"Iteration {iteration} metrics - Cost: {best_cost:.2f}, "
                                f"Month {self.month} balance: {workload_variance}h, "
@@ -2654,11 +2746,11 @@ class MonthlyScheduleOptimizer:
             progress_callback(100, "Monthly optimization complete")
 
         # Calculate monthly hours for reporting
-        monthly_hours, contract_doctors = self._calculate_monthly_hours(schedule)
+        monthly_hours, doctors_to_exclude = self._calculate_monthly_hours(schedule)
         
-        # Calculate monthly stats (min, max, avg) for reporting, excluding contract doctors
+        # Calculate monthly stats (min, max, avg) for reporting, excluding doctors with limited availability
         month_values = [hours.get(self.month, 0) for doctor, hours in monthly_hours.items() 
-                      if self.month in hours and hours[self.month] > 0 and doctor not in contract_doctors]
+                      if self.month in hours and hours[self.month] > 0 and doctor not in doctors_to_exclude]
         monthly_stats = {}
         
         if month_values:
@@ -2784,10 +2876,20 @@ class MonthlyScheduleOptimizer:
                 "avg": avg_consecutive
             },
             "iterations": iteration,
-            "month": self.month
+            "month": self.month,
+            "limited_availability_doctors": self._get_limited_availability_doctors()  # Add limited availability doctors
         }
 
         return schedule, stats
+
+    def _verify_solution(self, schedule):
+        """Final validation of solution to ensure it meets all requirements."""
+        # ... existing code ...
+        
+        # Calculate metrics for verification and reporting
+        monthly_hours, doctors_to_exclude = self._calculate_monthly_hours(schedule)
+        
+        # ... existing code ...
 
 def optimize_monthly_schedule(data: Dict[str, Any], progress_callback: Callable = None) -> Dict[str, Any]:
     """

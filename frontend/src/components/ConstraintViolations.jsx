@@ -86,7 +86,7 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
         setHasData(false);
         setIsLoading(false);
         return; // Exit early if no data
-        }
+    }
 
     setHasData(true);
 
@@ -140,6 +140,34 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
         details: []
       }
     };
+
+    // Calculate working days for doctors early so we can identify limited availability doctors
+    const doctorWorkingDays = {};
+    
+    for (const date of monthDates) {
+      if (!schedule[date]) continue;
+      
+      for (const shift of ['Day', 'Evening', 'Night']) {
+        if (!schedule[date][shift]) continue;
+        
+        for (const doctor of schedule[date][shift]) {
+          doctorWorkingDays[doctor] = (doctorWorkingDays[doctor] || 0) + 1;
+        }
+      }
+    }
+    
+    // Identify doctors with limited availability (≤ 4 days in the month)
+    const limitedAvailabilityDoctors = new Set();
+    for (const [doctor, days] of Object.entries(doctorWorkingDays)) {
+      if (days <= 4) {
+        limitedAvailabilityDoctors.add(doctor);
+      }
+    }
+    
+    if (limitedAvailabilityDoctors.size > 0) {
+      console.log(`Excluding ${limitedAvailabilityDoctors.size} doctors with limited availability (≤ 4 days):`, 
+        Array.from(limitedAvailabilityDoctors).join(', '));
+    }
 
     // 1. Check for doctors working the next day after a night shift
     for (let i = 0; i < monthDates.length - 1; i++) {
@@ -304,12 +332,16 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
     // Save doctor hours for debugging
     console.log("Doctor hours calculated in ConstraintViolations:", doctorHours);
     
+    // Count working days for each doctor in this month
+    // We already calculated this above, so we can remove this section
+      
     // Separate junior and senior hours
     for (const doctor of doctors) {
-      // Skip contract doctors for hour balance calculations
+      // Skip contract doctors and doctors with limited availability
       const isContractDoctor = doctor.contract && doctor.contractShiftsDetail;
+      const hasLimitedAvailability = limitedAvailabilityDoctors && limitedAvailabilityDoctors.has(doctor.name);
       
-      if (doctorHours[doctor.name] > 0 && !isContractDoctor) {
+      if (doctorHours[doctor.name] > 0 && !isContractDoctor && !hasLimitedAvailability) {
         if (doctor.seniority === "Senior") {
           seniorHours.push({ name: doctor.name, hours: doctorHours[doctor.name] });
         } else {
@@ -321,33 +353,6 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
     // 6a. Check doctor hour balance - more than 1 shift (8h) difference
     if (Object.keys(doctorHours).length > 0) {
       console.log("Calculating doctor hour balance with hours:", doctorHours);
-      
-      // Count working days for each doctor in this month
-      const doctorWorkingDays = {};
-      for (const date of monthDates) {
-        if (!schedule[date]) continue;
-        
-        for (const shift of ['Day', 'Evening', 'Night']) {
-          if (!schedule[date][shift]) continue;
-          
-          for (const doctor of schedule[date][shift]) {
-            doctorWorkingDays[doctor] = (doctorWorkingDays[doctor] || 0) + 1;
-          }
-        }
-      }
-      
-      // Identify doctors with limited availability (≤ 4 days in the month)
-      const limitedAvailabilityDoctors = new Set();
-      for (const [doctor, days] of Object.entries(doctorWorkingDays)) {
-        if (days <= 4) {
-          limitedAvailabilityDoctors.add(doctor);
-        }
-      }
-      
-      if (limitedAvailabilityDoctors.size > 0) {
-        console.log(`Excluding ${limitedAvailabilityDoctors.size} doctors with limited availability (≤ 4 days):`, 
-          Array.from(limitedAvailabilityDoctors).join(', '));
-      }
       
       // Find doctors with contracts
       const contractDoctors = doctors.filter(doctor => doctor.contract && doctor.contractShiftsDetail)
@@ -454,10 +459,11 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
     
     // Separate junior and senior weekend/holiday hours
     for (const doctor of doctors) {
-      // Skip contract doctors for weekend/holiday hour calculations
+      // Skip contract doctors and doctors with limited availability
       const isContractDoctor = doctor.contract && doctor.contractShiftsDetail;
+      const hasLimitedAvailability = limitedAvailabilityDoctors && limitedAvailabilityDoctors.has(doctor.name);
       
-      if (weekendHolidayHours[doctor.name] > 0 && !isContractDoctor) {
+      if (weekendHolidayHours[doctor.name] > 0 && !isContractDoctor && !hasLimitedAvailability) {
         if (doctor.seniority === "Senior") {
           seniorWHHours.push({ name: doctor.name, hours: weekendHolidayHours[doctor.name] });
         } else {
