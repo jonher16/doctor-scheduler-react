@@ -134,7 +134,8 @@ class WeightOptimizer:
             "w_night_gap": 999999, 
             "w_wrong_pref_night": 999999, # evening/day pref assigned to night
             "w_consec_night": 999999, #consecutive night shifts
-            "w_evening_day": 999999
+            "w_evening_day": 999999,
+            "w_max_shifts_per_week": 999999  # Maximum shifts per week constraint
         }
         
         # Track doctors with same preferences for fairness calculations
@@ -577,9 +578,13 @@ class WeightOptimizer:
         # Get monthly hours from stats
         monthly_hours = stats.get("monthly_hours", {})
         
-        # Get lists of senior and junior doctors
-        senior_doctors = [doc["name"] for doc in self.doctors if doc.get("seniority", "Junior") == "Senior"]
-        junior_doctors = [doc["name"] for doc in self.doctors if doc.get("seniority", "Junior") != "Senior"]
+        # Get lists of senior and junior doctors, excluding those with contracts
+        senior_doctors = [doc["name"] for doc in self.doctors 
+                         if doc.get("seniority", "Junior") == "Senior" 
+                         and not doc.get("contract", False)]
+        junior_doctors = [doc["name"] for doc in self.doctors 
+                         if doc.get("seniority", "Junior") != "Senior" 
+                         and not doc.get("contract", False)]
         
         # Get the month we're evaluating - critical for correct filtering
         target_month = self.month if self.month is not None else datetime.date.today().month
@@ -634,8 +639,12 @@ class WeightOptimizer:
         holiday_metrics = stats.get("holiday_metrics", {})
         
         # Get lists of senior and junior doctors
-        senior_doctors = [doc["name"] for doc in self.doctors if doc.get("seniority", "Junior") == "Senior"]
-        junior_doctors = [doc["name"] for doc in self.doctors if doc.get("seniority", "Junior") != "Senior"]
+        senior_doctors = [doc["name"] for doc in self.doctors 
+                         if doc.get("seniority", "Junior") == "Senior"
+                         and not doc.get("contract", False)]
+        junior_doctors = [doc["name"] for doc in self.doctors 
+                         if doc.get("seniority", "Junior") != "Senior"
+                         and not doc.get("contract", False)]
         
         # Calculate weekend/holiday hours EXACTLY as the UI does
         senior_wh_hours = []
@@ -816,7 +825,7 @@ class WeightOptimizer:
 
     def _check_contract_shift_violations(self, schedule: Dict) -> int:
         """
-        Check for contract shift violations - doctors who have a contract must receive exact number of shifts by type.
+        Check for contract shift violations.
         
         Args:
             schedule: The schedule to check
@@ -824,14 +833,28 @@ class WeightOptimizer:
         Returns:
             Number of contract shift violations
         """
-        violations = 0
+        violations_count = 0
         
-        # Find doctors with contracts
-        contract_doctors = [d for d in self.doctors if d.get("contract") and d.get("contractShiftsDetail")]
+        # Get a list of dates to check - filtered by month if monthly optimization
+        dates_to_check = []
+        for date in schedule.keys():
+            # Skip if not in the target month for monthly optimization
+            if self.month is not None:
+                d_date = datetime.date.fromisoformat(date)
+                if d_date.month != self.month:
+                    continue
+                # Also check year if it's provided
+                if self.year is not None and d_date.year != self.year:
+                    continue
+            dates_to_check.append(date)
+        
+        # Find doctors with contract shifts
+        contract_doctors = [doc for doc in self.doctors if doc.get("contract", False) and doc.get("contractShiftsDetail")]
+        
         if not contract_doctors:
-            return 0  # No contract doctors, no violations possible
-        
-        # Initialize shift counts for each contract doctor
+            return 0  # No contract doctors to check
+            
+        # Count the actual shifts worked by each doctor
         doctor_shift_counts = {}
         for doctor in contract_doctors:
             doctor_shift_counts[doctor["name"]] = {
@@ -839,50 +862,114 @@ class WeightOptimizer:
                 "Evening": 0,
                 "Night": 0
             }
-        
-        # Get all dates specific to the target month and year
-        month_dates = []
-        all_dates = sorted(schedule.keys())
-        for date in all_dates:
-            try:
-                date_obj = datetime.date.fromisoformat(date)
-                if date_obj.month == self.month and (self.year is None or date_obj.year == self.year):
-                    month_dates.append(date)
-            except (ValueError, TypeError):
-                continue
-        
-        # Count the actual shifts worked by each doctor
-        for date in month_dates:
-            if date not in schedule:
-                continue
             
+        for date in dates_to_check:
             for shift in ["Day", "Evening", "Night"]:
-                if shift not in schedule[date]:
+                if shift not in schedule.get(date, {}):
                     continue
-                
+                    
                 for doctor in schedule[date][shift]:
-                    # Check if this is a contract doctor
                     if doctor in doctor_shift_counts:
                         doctor_shift_counts[doctor][shift] += 1
-        
-        # Compare with expected contract shift numbers and count violations
+                    
+        # Compare actual vs. expected shifts
         for doctor in contract_doctors:
             doctor_name = doctor["name"]
+            
+            if doctor_name not in doctor_shift_counts:
+                continue
+                
             actual_shifts = doctor_shift_counts[doctor_name]
+            
+            detail = doctor.get("contractShiftsDetail", {})
             expected_shifts = {
-                "Day": doctor.get("contractShiftsDetail", {}).get("day", 0),
-                "Evening": doctor.get("contractShiftsDetail", {}).get("evening", 0),
-                "Night": doctor.get("contractShiftsDetail", {}).get("night", 0)
+                "Day": detail.get("day", 0),
+                "Evening": detail.get("evening", 0),
+                "Night": detail.get("night", 0)
             }
             
-            # Check if there's a mismatch between actual and expected shifts
+            # Check if there's a violation for any shift type
             if (actual_shifts["Day"] != expected_shifts["Day"] or
                 actual_shifts["Evening"] != expected_shifts["Evening"] or
                 actual_shifts["Night"] != expected_shifts["Night"]):
-                violations += 1
-                logger.warning(f"Contract shift violation for {doctor_name}: Expected {expected_shifts}, got {actual_shifts}")
+                violations_count += 1
+                
+        return violations_count
+    
+    def _check_max_shifts_per_week(self, schedule: Dict) -> int:
+        """
+        Check for violations of the maximum shifts per week constraint.
         
-        return violations
+        Args:
+            schedule: The schedule to check
+            
+        Returns:
+            Number of violations
+        """
+        violations_count = 0
+        
+        # Get a list of dates to check - filtered by month if monthly optimization
+        dates_to_check = []
+        for date in schedule.keys():
+            # Skip if not in the target month for monthly optimization
+            if self.month is not None:
+                d_date = datetime.date.fromisoformat(date)
+                if d_date.month != self.month:
+                    continue
+                # Also check year if it's provided
+                if self.year is not None and d_date.year != self.year:
+                    continue
+            dates_to_check.append(date)
+        
+        if not dates_to_check:
+            return 0
+        
+        # Group dates by week
+        week_map = {}
+        for date_str in dates_to_check:
+            d_date = datetime.date.fromisoformat(date_str)
+            # Get ISO week number
+            week_num = d_date.isocalendar()[1]
+            
+            if week_num not in week_map:
+                week_map[week_num] = []
+            week_map[week_num].append(date_str)
+        
+        # Count shifts per doctor per week
+        doctor_weekly_shifts = {}
+        for week_num, dates in week_map.items():
+            for date in dates:
+                for shift in ["Day", "Evening", "Night"]:
+                    if shift not in schedule.get(date, {}):
+                        continue
+                    
+                    for doctor in schedule[date][shift]:
+                        if doctor not in doctor_weekly_shifts:
+                            doctor_weekly_shifts[doctor] = {}
+                        
+                        if week_num not in doctor_weekly_shifts[doctor]:
+                            doctor_weekly_shifts[doctor][week_num] = 0
+                        
+                        doctor_weekly_shifts[doctor][week_num] += 1
+        
+        # Check for maximum shifts per week violations
+        # EXCLUDE contract doctors from this check
+        for doctor in self.doctors:
+            # Skip contract doctors - they have fixed monthly shifts
+            if doctor.get("contract", False):
+                continue
+                
+            max_shifts = doctor.get("maxShiftsPerWeek", 0)
+            doctor_name = doctor["name"]
+            
+            if max_shifts > 0 and doctor_name in doctor_weekly_shifts:
+                for week_num, shifts in doctor_weekly_shifts[doctor_name].items():
+                    if shifts > max_shifts:
+                        violations_count += 1
+                        logger.debug(f"Doctor {doctor_name} has {shifts} shifts in week {week_num}, "
+                                     f"which exceeds their maximum of {max_shifts}")
+        
+        return violations_count
 
     def _verify_constraints(self, schedule, stats, log_details=False):
         """
@@ -912,6 +999,8 @@ class WeightOptimizer:
         verification_results["coverage"] = self._check_coverage_errors(schedule) == 0
         # Updated: Contract shifts is now a hard constraint
         verification_results["contract_shifts"] = self._check_contract_shift_violations(schedule) == 0
+        # Add maximum shifts per week constraint
+        verification_results["max_shifts_per_week"] = self._check_max_shifts_per_week(schedule) == 0
         
         # Soft constraints
         verification_results["doctor_balance"] = self._verify_no_doctor_hour_balance_violations(schedule, stats)
@@ -1742,8 +1831,12 @@ def optimize_weights(data: Dict[str, Any], progress_callback: Callable = None) -
         monthly_hours = stats.get("monthly_hours", {})
         
         # Get senior and junior doctors
-        senior_doctors = [doc["name"] for doc in doctors if doc.get("seniority", "Junior") == "Senior"]
-        junior_doctors = [doc["name"] for doc in doctors if doc.get("seniority", "Junior") != "Senior"]
+        senior_doctors = [doc["name"] for doc in doctors 
+                 if doc.get("seniority", "Junior") == "Senior"
+                 and not doc.get("contract", False)]
+        junior_doctors = [doc["name"] for doc in doctors 
+                 if doc.get("seniority", "Junior") != "Senior"
+                 and not doc.get("contract", False)]
         
         # Calculate and print hours for each doctor group
         target_month = month if month is not None else datetime.date.today().month

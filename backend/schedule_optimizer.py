@@ -46,7 +46,8 @@ class ScheduleOptimizer:
         self.doctor_info = {
             doc["name"]: {
                 "seniority": doc.get("seniority", "Junior"),
-                "pref": doc.get("pref", "None")
+                "pref": doc.get("pref", "None"),
+                "maxShiftsPerWeek": doc.get("maxShiftsPerWeek", 0)  # Get maxShiftsPerWeek with default of 0 (no limit)
             } for doc in doctors
         }
         
@@ -115,6 +116,7 @@ class ScheduleOptimizer:
         self.w_senior_workload = 20  # New penalty for seniors working more than juniors
         self.w_preference_fairness = 5  # New penalty for unfair distribution among same-preference doctors
         self.w_duplicate_penalty = 10000  # New severe penalty for duplicate doctor in same shift (must be severe)
+        self.w_max_shifts_per_week = 5000  # New severe penalty for exceeding max shifts per week (hard constraint)
         
         # Cache doctor availability status for improved performance
         self._availability_cache = {}
@@ -378,6 +380,7 @@ class ScheduleOptimizer:
         3. Better shift preference handling
         4. Preference fairness among doctors with same preference
         5. Added severe penalty for duplicate doctors in the same shift
+        6. Added maximum shifts per week constraint
         """
         cost = 0.0
         doctor_names = [doc["name"] for doc in self.doctors]
@@ -446,6 +449,19 @@ class ScheduleOptimizer:
                     # Log the issue for debugging
                     duplicates = [d for d in shift_doctors if shift_doctors.count(d) > 1]
                     logger.warning(f"Duplicate doctor(s) detected in {date}, {shift}: {duplicates}")
+
+        # New penalty: Maximum shifts per week constraint
+        weekly_shifts = self._calculate_weekly_shifts(schedule)
+        for doctor, shifts_by_week in weekly_shifts.items():
+            max_shifts = self.doctor_info[doctor]["maxShiftsPerWeek"]
+            if max_shifts > 0:  # Only check if there's a limit set (>0)
+                for week, shift_count in shifts_by_week.items():
+                    if shift_count > max_shifts:
+                        # Apply a severe penalty for each shift over the maximum
+                        excess = shift_count - max_shifts
+                        cost += self.w_max_shifts_per_week * excess
+                        logger.warning(f"Doctor {doctor} has {shift_count} shifts in week {week}, "
+                                      f"which exceeds their maximum of {max_shifts}")
 
         # 3. Rest constraints: penalize a night shift followed by a day or evening shift (hard constraint)
         for i in range(len(self.all_dates) - 1):
@@ -680,6 +696,33 @@ class ScheduleOptimizer:
                     
         return wh_hours
 
+    def _calculate_weekly_shifts(self, schedule: Dict[str, Dict[str, List[str]]]) -> Dict[str, Dict[int, int]]:
+        """
+        Calculate the number of shifts per week for each doctor.
+        Returns a dictionary mapping doctor name to a dictionary mapping week number to shift count.
+        """
+        # Initialize result
+        weekly_shifts = {doc["name"]: {} for doc in self.doctors}
+        
+        # Maps date string to ISO week number
+        date_to_week = {}
+        for date_str in self.all_dates:
+            date = datetime.date.fromisoformat(date_str)
+            week = date.isocalendar()[1]  # Get ISO week number
+            date_to_week[date_str] = week
+        
+        # Count shifts per week
+        for date, shifts in schedule.items():
+            week = date_to_week[date]
+            for shift_type, doctors in shifts.items():
+                for doctor in doctors:
+                    if doctor in weekly_shifts:
+                        if week not in weekly_shifts[doctor]:
+                            weekly_shifts[doctor][week] = 0
+                        weekly_shifts[doctor][week] += 1
+        
+        return weekly_shifts
+
     def get_neighbors(self, current_schedule: Dict[str, Dict[str, List[str]]],
                   num_moves: int = 20) -> List[Tuple[Dict[str, Dict[str, List[str]]], Tuple[str, str, str, str]]]:
         """
@@ -691,6 +734,7 @@ class ScheduleOptimizer:
         - Seniors working fewer hours, especially on weekends/holidays
         - Monthly workload balance
         - Checks for and prevents duplicate doctors in the same shift
+        - Respects maximum shifts per week constraint
         """
         neighbors = []
         attempts = 0
@@ -699,6 +743,7 @@ class ScheduleOptimizer:
         # Pre-calculate monthly workload to inform better moves
         monthly_hours = self._calculate_monthly_hours(current_schedule)
         weekend_holiday_hours = self._calculate_weekend_holiday_hours(current_schedule)
+        weekly_shifts = self._calculate_weekly_shifts(current_schedule)
         
         # Calculate monthly averages
         avg_monthly_hours = {}
@@ -726,6 +771,17 @@ class ScheduleOptimizer:
                     if pref == f"{shift} Only":
                         preference_satisfaction[doctor] += 1
         
+        # Check for violations of maximum shifts per week
+        max_shifts_violations = {}
+        for doctor, shifts_by_week in weekly_shifts.items():
+            max_allowed = self.doctor_info[doctor]["maxShiftsPerWeek"]
+            if max_allowed > 0:  # Only check if a limit is set
+                for week, count in shifts_by_week.items():
+                    if count > max_allowed:
+                        if doctor not in max_shifts_violations:
+                            max_shifts_violations[doctor] = []
+                        max_shifts_violations[doctor].append((week, count, max_allowed))
+        
         # More intelligent neighbor generation to target problem areas
         while len(neighbors) < num_moves and attempts < max_attempts:
             attempts += 1
@@ -739,14 +795,100 @@ class ScheduleOptimizer:
             move_successful = False
             
             # Decide which type of move to prioritize based on issues
+            move_types = ["evening_preference", "senior_workload", "monthly_balance", "weekend_holiday_balance", "fix_duplicates", "random"]
+            weights = [0.3, 0.3, 0.2, 0.2, 0.5, 0.1]
+            
+            # Add max_shifts_per_week move type with high priority if there are violations
+            if max_shifts_violations:
+                move_types.append("max_shifts_per_week")
+                weights.append(0.8)  # High priority for this move type
+            
             move_type = random.choices(
-                ["evening_preference", "senior_workload", "monthly_balance", "weekend_holiday_balance", "fix_duplicates", "random"],
-                weights=[0.3, 0.3, 0.2, 0.2, 0.5, 0.1],  # Added high priority for fixing duplicates
+                move_types,
+                weights=weights,
                 k=1
             )[0]
             
+            # New move type: Fix maximum shifts per week violations
+            if move_type == "max_shifts_per_week" and max_shifts_violations:
+                # Select a doctor with violations
+                doctor_with_violation = random.choice(list(max_shifts_violations.keys()))
+                # Get one of their violations
+                week_info = random.choice(max_shifts_violations[doctor_with_violation])
+                week_num, current_count, max_allowed = week_info
+                
+                # Find a date in this week where the doctor works
+                week_dates = []
+                for date_str in self.all_dates:
+                    date_obj = datetime.date.fromisoformat(date_str)
+                    if date_obj.isocalendar()[1] == week_num:
+                        week_dates.append(date_str)
+                
+                # Find shifts where this doctor works in this week
+                potential_moves = []
+                for d in week_dates:
+                    if d not in current_schedule:
+                        continue
+                    
+                    for s in self.shifts:
+                        if s not in current_schedule[d]:
+                            continue
+                        
+                        if doctor_with_violation in current_schedule[d][s]:
+                            idx = current_schedule[d][s].index(doctor_with_violation)
+                            potential_moves.append((d, s, idx))
+                
+                if potential_moves:
+                    # Select a random shift to change
+                    d, s, index = random.choice(potential_moves)
+                    date = d
+                    shift = s
+                    idx = index
+                    old_doctor = doctor_with_violation
+                    
+                    # Find an available doctor who doesn't have max shift violations
+                    available_doctors = []
+                    for doctor in [doc["name"] for doc in self.doctors]:
+                        if doctor == old_doctor:
+                            continue
+                        
+                        if doctor in current_schedule[date][shift]:
+                            continue  # Skip if already in this shift
+                        
+                        # Skip doctors who already have max shifts violations
+                        if doctor in max_shifts_violations:
+                            continue
+                        
+                        # Check weekly shifts - skip if this would cause a new violation
+                        max_allowed_for_doc = self.doctor_info[doctor]["maxShiftsPerWeek"]
+                        if max_allowed_for_doc > 0:  # Only check if they have a limit
+                            week = datetime.date.fromisoformat(date).isocalendar()[1]
+                            current_shifts = weekly_shifts.get(doctor, {}).get(week, 0)
+                            if current_shifts >= max_allowed_for_doc:
+                                continue  # This would cause a new violation
+                        
+                        if not self._is_doctor_available(doctor, date, shift):
+                            continue
+                        
+                        # Check if not already assigned to another shift that day
+                        already_assigned = False
+                        for other_shift in self.shifts:
+                            if other_shift == shift:
+                                continue
+                            if other_shift in current_schedule[date] and doctor in current_schedule[date][other_shift]:
+                                already_assigned = True
+                                break
+                        
+                        if not already_assigned:
+                            available_doctors.append(doctor)
+                    
+                    if available_doctors:
+                        new_doctor = random.choice(available_doctors)
+                        move_successful = True
+                        logger.info(f"Generated max_shifts_per_week move: {date}, {shift}, replacing {old_doctor} with {new_doctor}")
+            
             # New special mode: Look for and fix duplicate doctors in shifts
-            if move_type == "fix_duplicates":
+            elif move_type == "fix_duplicates":
                 duplicates_found = False
                 for d in self.all_dates:
                     if d not in current_schedule:
@@ -1437,6 +1579,7 @@ class ScheduleOptimizer:
                     # Calculate important metrics for the best schedule
                     monthly_hours = self._calculate_monthly_hours(best_schedule)
                     wh_hours = self._calculate_weekend_holiday_hours(best_schedule)
+                    weekly_shifts = self._calculate_weekly_shifts(best_schedule)
                     
                     # Monthly balance metrics
                     monthly_imbalances = {}
@@ -1483,101 +1626,43 @@ class ScheduleOptimizer:
                 progress_callback(50 + int(40 * iteration / max_iterations),
                                 f"Iteration {iteration}: Best cost = {best_cost:.2f} ({current_phase} phase)")
 
-        solution_time = time.time() - start_time
-
-        # -------------------------------
-        # Calculate final statistics
-        # -------------------------------
-        schedule = best_schedule
-        doctor_names = [doc["name"] for doc in self.doctors]
-        doctor_shift_counts = {doc: 0 for doc in doctor_names}
-        preference_metrics = {}
-        weekend_metrics = {}
-        holiday_metrics = {}
-
-        for doc in self.doctors:
-            name = doc["name"]
-            pref = doc.get("pref", "None")
-            preference_metrics[name] = {"preference": pref, "preferred_shifts": 0, "other_shifts": 0}
-            weekend_metrics[name] = 0
-            holiday_metrics[name] = 0
-
-        for date in self.all_dates:
-            if date not in schedule:
-                continue
-                
-            for shift in self.shifts:
-                if shift not in schedule[date]:
-                    continue
-                    
-                for doctor in schedule[date][shift]:
-                    doctor_shift_counts[doctor] += 1
-                    
-                    if date in self.weekends:
-                        weekend_metrics[doctor] += 1
-                        
-                    if date in self.holidays:
-                        holiday_metrics[doctor] += 1
-                        
-                    doc_info = next((d for d in self.doctors if d["name"] == doctor), None)
-                    if doc_info and "pref" in doc_info and doc_info["pref"] != "None":
-                        if (doc_info["pref"] == "Day Only" and shift == "Day") or \
-                           (doc_info["pref"] == "Evening Only" and shift == "Evening") or \
-                           (doc_info["pref"] == "Night Only" and shift == "Night"):
-                            preference_metrics[doctor]["preferred_shifts"] += 1
-                        else:
-                            preference_metrics[doctor]["other_shifts"] += 1
-
-        coverage_errors = 0
-        for date in self.all_dates:
-            if date not in schedule:
-                coverage_errors += len(self.shifts)
-                continue
-                
-            for shift in self.shifts:
-                if shift not in schedule[date]:
-                    coverage_errors += 1
-                    continue
-                    
-                if len(schedule[date][shift]) != self.shift_requirements[shift]:
-                    coverage_errors += 1
-
-        # Check for duplicate doctors in shifts in final schedule
-        duplicate_count = 0
-        for date in self.all_dates:
-            if date not in schedule:
-                continue
-                
-            for shift in self.shifts:
-                if shift not in schedule[date]:
-                    continue
-                    
-                shift_doctors = schedule[date][shift]
-                unique_doctors = set(shift_doctors)
-                if len(shift_doctors) > len(unique_doctors):
-                    duplicate_count += len(shift_doctors) - len(unique_doctors)
-
-        if progress_callback:
-            progress_callback(100, "Optimization complete")
-
-        # Calculate monthly hours for each doctor for reporting
-        monthly_hours = self._calculate_monthly_hours(schedule)
+        end_time = time.time()
+        logger.info(f"Optimization complete. Best cost: {best_cost}")
         
-        # Calculate monthly stats (min, max, avg) for reporting
+        # Track and return statistics about the schedule
+        stats = {}
+        
+        # Calculate monthly hours for each doctor
+        monthly_hours = self._calculate_monthly_hours(best_schedule)
+        
+        # Find monthly hour distribution for each month
         monthly_stats = {}
         for month in range(1, 13):
-            month_values = [hours.get(month, 0) for doctor, hours in monthly_hours.items() if month in hours and hours[month] > 0]
+            month_values = [hrs.get(month, 0) for doc, hrs in monthly_hours.items() if hrs.get(month, 0) > 0]
             if month_values:
-                mean = sum(month_values) / len(month_values)
                 monthly_stats[month] = {
                     "min": min(month_values),
                     "max": max(month_values),
-                    "avg": mean,
-                    "std_dev": (sum((v - mean) ** 2 for v in month_values) / len(month_values)) ** 0.5
+                    "avg": sum(month_values) / len(month_values),
+                    "variance": max(month_values) - min(month_values)
                 }
         
-        # Check for availability violations in final schedule
-        availability_violations = 0
+        stats["monthly"] = monthly_stats
+        
+        # Calculate totals for each doctor
+        doctor_totals = {}
+        for doctor, months in monthly_hours.items():
+            doctor_totals[doctor] = sum(months.values())
+        
+        stats["totals"] = doctor_totals
+        
+        # Calculate preference satisfaction
+        pref_stats = {
+            "Day Only": {"total": 0, "satisfied": 0},
+            "Evening Only": {"total": 0, "satisfied": 0},
+            "Night Only": {"total": 0, "satisfied": 0}
+        }
+        
         for date in self.all_dates:
             if date not in best_schedule:
                 continue
@@ -1587,26 +1672,63 @@ class ScheduleOptimizer:
                     continue
                     
                 for doctor in best_schedule[date][shift]:
-                    if not self._is_doctor_available(doctor, date, shift):
-                        availability_violations += 1
+                    pref = self.doctor_info[doctor]["pref"]
+                    if pref in pref_stats:
+                        pref_stats[pref]["total"] += 1
+                        if pref.startswith(f"{shift} Only"):
+                            pref_stats[pref]["satisfied"] += 1
         
-        stats = {
-            "status": "Tabu Search completed",
-            "solution_time_seconds": solution_time,
-            "objective_value": best_cost,
-            "coverage_errors": coverage_errors,
-            "availability_violations": availability_violations,
-            "duplicate_doctors": duplicate_count,
-            "doctor_shift_counts": doctor_shift_counts,
-            "preference_metrics": preference_metrics,
-            "weekend_metrics": weekend_metrics,
-            "holiday_metrics": holiday_metrics,
-            "monthly_hours": monthly_hours,
-            "monthly_stats": monthly_stats,
-            "iterations": iteration
+        stats["preferences"] = pref_stats
+        
+        # Calculate weekend/holiday distribution
+        wh_hours = self._calculate_weekend_holiday_hours(best_schedule)
+        
+        # Calculate WH stats by seniority
+        junior_wh = [wh_hours[doc] for doc in self.junior_doctors if doc in wh_hours]
+        senior_wh = [wh_hours[doc] for doc in self.senior_doctors if doc in wh_hours]
+        
+        wh_stats = {
+            "junior": {
+                "min": min(junior_wh) if junior_wh else 0,
+                "max": max(junior_wh) if junior_wh else 0,
+                "avg": sum(junior_wh) / len(junior_wh) if junior_wh else 0
+            },
+            "senior": {
+                "min": min(senior_wh) if senior_wh else 0,
+                "max": max(senior_wh) if senior_wh else 0,
+                "avg": sum(senior_wh) / len(senior_wh) if senior_wh else 0
+            }
         }
-
-        return schedule, stats
+        
+        stats["weekend_holiday"] = wh_stats
+        
+        # Calculate max shifts per week violations
+        weekly_shifts = self._calculate_weekly_shifts(best_schedule)
+        max_shifts_violations = {}
+        
+        for doctor, shifts_by_week in weekly_shifts.items():
+            max_allowed = self.doctor_info[doctor]["maxShiftsPerWeek"]
+            if max_allowed > 0:  # Only check if a limit is set
+                violations = []
+                for week, count in shifts_by_week.items():
+                    if count > max_allowed:
+                        violations.append({
+                            "week": week,
+                            "count": count,
+                            "max_allowed": max_allowed,
+                            "excess": count - max_allowed
+                        })
+                
+                if violations:
+                    max_shifts_violations[doctor] = violations
+        
+        stats["max_shifts_violations"] = max_shifts_violations
+        stats["total_max_shifts_violations"] = sum(len(v) for v in max_shifts_violations.values())
+        
+        if progress_callback:
+            progress_callback(100, "Optimization complete!")
+            
+        return best_schedule, stats
 
 def optimize_schedule(data: Dict[str, Any], progress_callback: Callable = None) -> Dict[str, Any]:
     """

@@ -62,6 +62,21 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
     return doctor ? doctor.pref || "None" : "None";
   };
 
+  // Helper function to get week number
+  function getWeekNumber(d) {
+    // Copy date so don't modify original
+    d = new Date(d);
+    // Set to nearest Thursday: current date + 4 - current day number
+    // Make Sunday's day number 7
+    d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+    // Get first day of year
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    // Calculate full weeks to nearest Thursday
+    const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    // Return week number
+    return weekNo;
+  }
+
   // Function to check all violations
   const checkViolations = () => {
     setIsLoading(true);
@@ -136,6 +151,11 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
       },
       // New contract shift violations
       contractShiftViolations: {
+        count: 0,
+        details: []
+      },
+      // New maximum shifts per week violations
+      maxShiftsPerWeekViolations: {
         count: 0,
         details: []
       }
@@ -624,6 +644,71 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
       }
     }
 
+    // Calculate weekly shifts per doctor
+    if (monthDates.length > 0) {
+      // Group dates by week
+      const weekMap = {};
+      for (const dateStr of monthDates) {
+        if (!schedule[dateStr]) continue;
+        
+        const date = new Date(dateStr);
+        // Get ISO week number (1-53)
+        const weekNum = getWeekNumber(date);
+        
+        if (!weekMap[weekNum]) {
+          weekMap[weekNum] = [];
+        }
+        weekMap[weekNum].push(dateStr);
+      }
+      
+      // Count shifts per doctor per week
+      const doctorWeeklyShifts = {};
+      Object.entries(weekMap).forEach(([weekNum, dates]) => {
+        dates.forEach(date => {
+          for (const shift of ['Day', 'Evening', 'Night']) {
+            if (!schedule[date][shift]) continue;
+            
+            for (const doctor of schedule[date][shift]) {
+              if (!doctorWeeklyShifts[doctor]) {
+                doctorWeeklyShifts[doctor] = {};
+              }
+              
+              if (!doctorWeeklyShifts[doctor][weekNum]) {
+                doctorWeeklyShifts[doctor][weekNum] = 0;
+              }
+              
+              doctorWeeklyShifts[doctor][weekNum]++;
+            }
+          }
+        });
+      });
+      
+      // Check for maximum shifts per week violations
+      for (const doctor of doctors) {
+        // Skip contract doctors - they have fixed monthly shifts
+        if (doctor.contract && doctor.contractShiftsDetail) {
+          continue;
+        }
+        
+        const maxShiftsPerWeek = doctor.maxShiftsPerWeek || 0;
+        
+        if (maxShiftsPerWeek > 0 && doctorWeeklyShifts[doctor.name]) {
+          Object.entries(doctorWeeklyShifts[doctor.name]).forEach(([weekNum, shifts]) => {
+            if (shifts > maxShiftsPerWeek) {
+              violationsData.maxShiftsPerWeekViolations.count++;
+              violationsData.maxShiftsPerWeekViolations.details.push({
+                doctor: doctor.name,
+                week: weekNum,
+                shifts: shifts,
+                maxAllowed: maxShiftsPerWeek,
+                excess: shifts - maxShiftsPerWeek
+              });
+            }
+          });
+        }
+      }
+    }
+
     // Calculate total violations
     const total = Object.values(violationsData).reduce((sum, { count }) => sum + count, 0);
     
@@ -821,6 +906,16 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
                       icon={violations.contractShiftViolations.count > 0 ? <ErrorIcon /> : <CheckIcon />}
                       label={`Contract Shifts: ${violations.contractShiftViolations.count}`}
                       color={violations.contractShiftViolations.count > 0 ? "error" : "success"}
+                      sx={{ width: '100%', justifyContent: 'flex-start' }}
+                    />
+                  </Box>
+                </Grid>
+                <Grid item xs={6}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                    <Chip 
+                      icon={violations.maxShiftsPerWeekViolations?.count > 0 ? <ErrorIcon /> : <CheckIcon />}
+                      label={`Max Shifts/Week: ${violations.maxShiftsPerWeekViolations?.count || 0}`}
+                      color={violations.maxShiftsPerWeekViolations?.count > 0 ? "error" : "success"}
                       sx={{ width: '100%', justifyContent: 'flex-start' }}
                     />
                   </Box>
@@ -1343,6 +1438,50 @@ function ConstraintViolations({ doctors, schedule, holidays, selectedMonth, sele
                   </Box>
                 ))}
               </Box>
+            ) : (
+              <Typography>No violations of this type.</Typography>
+            )}
+          </AccordionDetails>
+        </Accordion>
+
+        {/* Maximum Shifts Per Week Violations */}
+        <Accordion 
+          disabled={violations.maxShiftsPerWeekViolations?.count === 0}
+          sx={{
+            borderLeft: violations.maxShiftsPerWeekViolations?.count > 0 ? '4px solid' : 'none',
+            borderColor: 'error.main',
+          }}
+        >
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+              <Typography sx={{ flexGrow: 1 }}>Maximum Shifts Per Week Violations ({violations.maxShiftsPerWeekViolations?.count || 0})</Typography>
+              <Chip size="small" color="error" label="Hard Constraint" sx={{ ml: 2 }} />
+            </Box>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Typography variant="body2" sx={{ mb: 2, fontStyle: 'italic', color: 'error.main' }}>
+              Critical violation: Doctors are assigned more shifts in a week than their configured maximum limit.
+            </Typography>
+            {violations.maxShiftsPerWeekViolations?.details?.length > 0 ? (
+              <List>
+                {violations.maxShiftsPerWeekViolations.details.map((violation, index) => (
+                  <ListItem key={`max-shifts-${index}`} divider>
+                    <ListItemText 
+                      primary={
+                        <Typography variant="body1" fontWeight="medium">
+                          {violation.doctor} ({isSeniorDoctor(violation.doctor) ? 'Senior' : 'Junior'})
+                        </Typography>
+                      }
+                      secondary={
+                        <Typography variant="body2" color="text.secondary">
+                          Week {violation.week}: {violation.shifts} shifts assigned (maximum: {violation.maxAllowed}, 
+                          excess: {violation.excess})
+                        </Typography>
+                      }
+                    />
+                  </ListItem>
+                ))}
+              </List>
             ) : (
               <Typography>No violations of this type.</Typography>
             )}

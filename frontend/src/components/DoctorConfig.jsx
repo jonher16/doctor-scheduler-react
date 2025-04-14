@@ -59,7 +59,8 @@ function DoctorConfig({ doctors, setDoctors }) {
       day: 0,
       evening: 0,
       night: 0
-    }
+    },
+    maxShiftsPerWeek: 0
   });
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
@@ -99,7 +100,8 @@ function DoctorConfig({ doctors, setDoctors }) {
         day: 0,
         evening: 0,
         night: 0
-      }
+      },
+      maxShiftsPerWeek: 0
     });
     setOpenDialog(true);
   };
@@ -131,7 +133,8 @@ function DoctorConfig({ doctors, setDoctors }) {
     setNewDoctor({ 
       ...doctor, 
       hasContractShifts: doctor.contract || false,
-      contractShifts: contractShiftsObj
+      contractShifts: contractShiftsObj,
+      maxShiftsPerWeek: doctor.maxShiftsPerWeek || 0
     });
     setOpenDialog(true);
   };
@@ -220,6 +223,19 @@ function DoctorConfig({ doctors, setDoctors }) {
       doctorToSave.contractShifts = 0;
       doctorToSave.contractShiftsDetail = null;
     }
+
+    // Validate maxShiftsPerWeek as a non-negative integer
+    if (doctorToSave.maxShiftsPerWeek < 0) {
+      setSnackbar({
+        open: true,
+        message: 'Maximum shifts per week cannot be negative',
+        severity: 'error'
+      });
+      return;
+    }
+    
+    // Ensure it's saved as a number
+    doctorToSave.maxShiftsPerWeek = parseInt(doctorToSave.maxShiftsPerWeek) || 0;
 
     let updatedDoctors;
     if (editingDoctor !== null) {
@@ -406,13 +422,14 @@ function DoctorConfig({ doctors, setDoctors }) {
                 <TableCell><Typography variant="subtitle2">Seniority</Typography></TableCell>
                 <TableCell><Typography variant="subtitle2">Preference</Typography></TableCell>
                 <TableCell><Typography variant="subtitle2">Contract Shifts</Typography></TableCell>
+                <TableCell><Typography variant="subtitle2">Max Shifts/Week</Typography></TableCell>
                 <TableCell><Typography variant="subtitle2">Actions</Typography></TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {localDoctors.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} align="center">
+                  <TableCell colSpan={6} align="center">
                     <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
                       No doctors configured. Add a doctor to get started.
                     </Typography>
@@ -444,6 +461,16 @@ function DoctorConfig({ doctors, setDoctors }) {
                       {doctor.hasContractShifts ? 
                         renderContractShiftChips(doctor.contractShiftsDetail || doctor.contractShifts) : 
                         <Typography variant="body2" color="text.secondary">None</Typography>
+                      }
+                    </TableCell>
+                    <TableCell>
+                      {doctor.maxShiftsPerWeek > 0 ? 
+                        <Chip 
+                          label={`${doctor.maxShiftsPerWeek} shifts`} 
+                          color="warning" 
+                          size="small"
+                        /> : 
+                        <Typography variant="body2" color="text.secondary">No limit</Typography>
                       }
                     </TableCell>
                     <TableCell>
@@ -600,6 +627,32 @@ function DoctorConfig({ doctors, setDoctors }) {
                             />
                           </Grid>
                         ))}
+                        
+                        {/* Maximum Shifts Per Week field moved inside contract section */}
+                        <Grid item xs={12}>
+                          <Divider sx={{ my: 2 }} />
+                          <Typography variant="subtitle2" gutterBottom>
+                            Weekly Shift Limit
+                          </Typography>
+                          <TextField
+                            label="Maximum Shifts Per Week"
+                            type="number"
+                            fullWidth
+                            size="small"
+                            variant="outlined"
+                            InputProps={{ 
+                              inputProps: { min: 0 },
+                            }}
+                            value={newDoctor.maxShiftsPerWeek}
+                            onChange={(e) => handleInputChange({
+                              target: {
+                                name: 'maxShiftsPerWeek',
+                                value: parseInt(e.target.value) || 0
+                              }
+                            })}
+                            helperText="Hard constraint: Maximum number of shifts the doctor can work in a single week (0 = no limit)"
+                          />
+                        </Grid>
                       </Grid>
                     </CardContent>
                   </>
