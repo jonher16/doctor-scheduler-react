@@ -32,12 +32,29 @@ import {
 import { getMonthName } from '../utils/dateUtils';
 import { useYear } from '../contexts/YearContext';
 
+// Constants for localStorage keys
+const LAST_SELECTED_SCHEDULE_MONTH_KEY = 'generateSchedule_lastSelectedMonth';
+
 const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl }) => {
   const { selectedYear } = useYear();
 
+  // Get the last selected month from localStorage or default to next month
+  const getInitialMonth = () => {
+    const savedMonth = localStorage.getItem(LAST_SELECTED_SCHEDULE_MONTH_KEY);
+    if (savedMonth !== null) {
+      const month = parseInt(savedMonth, 10);
+      if (!isNaN(month) && month >= 1 && month <= 12) {
+        return month;
+      }
+    }
+    // Default to next month (current month + 1, capped at 12)
+    const nextMonth = Math.min(new Date().getMonth() + 2, 12);
+    return nextMonth;
+  };
+
   // Schedule type: 'monthly' or 'weight'
   const [scheduleType, setScheduleType] = useState('monthly');
-  const [month, setMonth] = useState(new Date().getMonth() + 2); // Current month (1-12)
+  const [month, setMonth] = useState(getInitialMonth);
   const [optimizing, setOptimizing] = useState(false);
   const [taskId, setTaskId] = useState(null);
   const [progress, setProgress] = useState(0);
@@ -54,6 +71,11 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
   // For polling task progress
   const pollingInterval = useRef(null);
   const abortControllerRef = useRef(null);
+  
+  // Save selected month to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem(LAST_SELECTED_SCHEDULE_MONTH_KEY, month.toString());
+  }, [month]);
 
   // Clean up polling when component unmounts
   useEffect(() => {

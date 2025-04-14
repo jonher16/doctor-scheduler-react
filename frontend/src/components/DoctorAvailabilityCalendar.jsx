@@ -35,9 +35,24 @@ import {
 
 import { monthNames, dayNames } from '../utils/dateUtils';
 
+// Constants for localStorage keys
+const LAST_VIEWED_MONTH_KEY = 'doctorCalendar_lastViewedMonth';
+
 function DoctorAvailabilityCalendar({ doctors, availability, initialYear, setAvailability }) {
   
-  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
+  // Get the last viewed month from localStorage or default to current month
+  const getInitialMonth = () => {
+    const savedMonth = localStorage.getItem(LAST_VIEWED_MONTH_KEY);
+    if (savedMonth !== null) {
+      const month = parseInt(savedMonth, 10);
+      if (!isNaN(month) && month >= 0 && month <= 11) {
+        return month;
+      }
+    }
+    return new Date().getMonth();
+  };
+  
+  const [currentMonth, setCurrentMonth] = useState(getInitialMonth);
   const [currentYear, setCurrentYear] = useState(() => {
     // Convert to number in case it's a string and validate
     const year = Number(initialYear);
@@ -75,20 +90,29 @@ function DoctorAvailabilityCalendar({ doctors, availability, initialYear, setAva
     }
   }, [initialYear]);
   
+  // Save current month to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem(LAST_VIEWED_MONTH_KEY, currentMonth.toString());
+  }, [currentMonth]);
+
   // Update local availability when the prop changes
   useEffect(() => {
     // Always update from the parent availability to ensure we stay in sync with changes
     // from "Mark as Unavailable" and other external updates
-    const deepCopy = JSON.parse(JSON.stringify(availability || {}));
-    setLocalAvailability(deepCopy);
+    if (availability) {
+      const deepCopy = JSON.parse(JSON.stringify(availability || {}));
+      setLocalAvailability(deepCopy);
+      // Force regenerate calendar days when availability changes
+      generateCalendarDays(deepCopy);
+    }
   }, [availability]);
 
   // Generate days for the current month view
   useEffect(() => {
-    generateCalendarDays();
-  }, [currentMonth, currentYear, selectedDoctor, localAvailability]);
+    generateCalendarDays(localAvailability);
+  }, [currentMonth, currentYear, selectedDoctor, localAvailability, doctors]);
 
-  const generateCalendarDays = () => {
+  const generateCalendarDays = (availabilityData = localAvailability) => {
     // Use currentYear instead of initialYear to ensure it's properly validated
     const year = currentYear;
     const month = currentMonth;
@@ -127,18 +151,17 @@ function DoctorAvailabilityCalendar({ doctors, availability, initialYear, setAva
         // Get availability for all doctors
         doctors.forEach(doc => {
           const doctorName = doc.name;
-          // Filter availability by current year - only check dates that match the current year
-          if (localAvailability[doctorName] && localAvailability[doctorName][date]) {
-            doctorAvailability[doctorName] = localAvailability[doctorName][date];
+          // Check if the doctor has availability data for this date
+          if (availabilityData && availabilityData[doctorName] && availabilityData[doctorName][date]) {
+            doctorAvailability[doctorName] = availabilityData[doctorName][date];
           } else {
             doctorAvailability[doctorName] = 'Available'; // Default if not specified
           }
         });
       } else {
         // Get availability for selected doctor
-        // Filter availability by current year - only check dates that match the current year
-        if (localAvailability[selectedDoctor] && localAvailability[selectedDoctor][date]) {
-          doctorAvailability[selectedDoctor] = localAvailability[selectedDoctor][date];
+        if (availabilityData && availabilityData[selectedDoctor] && availabilityData[selectedDoctor][date]) {
+          doctorAvailability[selectedDoctor] = availabilityData[selectedDoctor][date];
         } else {
           doctorAvailability[selectedDoctor] = 'Available'; // Default if not specified
         }

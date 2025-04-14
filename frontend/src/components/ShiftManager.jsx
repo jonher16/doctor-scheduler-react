@@ -48,9 +48,25 @@ const DEFAULT_REQUIREMENTS = {
   "Night": 2
 };
 
+// Constants for localStorage keys
+const LAST_VIEWED_SHIFT_MONTH_KEY = 'shiftManager_lastViewedMonth';
+
 function ShiftManager() {
   const { selectedYear } = useYear();
-  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
+  
+  // Get the last viewed month from localStorage or default to current month
+  const getInitialMonth = () => {
+    const savedMonth = localStorage.getItem(LAST_VIEWED_SHIFT_MONTH_KEY);
+    if (savedMonth !== null) {
+      const month = parseInt(savedMonth, 10);
+      if (!isNaN(month) && month >= 0 && month <= 11) {
+        return month;
+      }
+    }
+    return new Date().getMonth();
+  };
+  
+  const [currentMonth, setCurrentMonth] = useState(getInitialMonth);
   const [calendarDays, setCalendarDays] = useState([]);
   const [selectedDay, setSelectedDay] = useState(null);
   const [shiftTemplate, setShiftTemplate] = useState({});
@@ -78,6 +94,11 @@ function ShiftManager() {
     message: '',
     severity: 'success'
   });
+  
+  // Save current month to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem(LAST_VIEWED_SHIFT_MONTH_KEY, currentMonth.toString());
+  }, [currentMonth]);
 
   // Initialize template with default shifts when component mounts
   useEffect(() => {

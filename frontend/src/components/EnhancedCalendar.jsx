@@ -14,6 +14,9 @@ import {
 } from '@mui/icons-material';
 import { isLeapYear, getDaysInMonth, monthNames, dayNames } from '../utils/dateUtils';
 
+// Constants for localStorage keys
+const LAST_VIEWED_NONAV_MONTH_KEY = 'enhancedCalendar_lastViewedMonth';
+
 function EnhancedCalendar({ 
   value, 
   onChange, 
@@ -21,7 +24,8 @@ function EnhancedCalendar({
   maxDate, 
   isRangeMode = false, 
   initialYear,
-  initialMonth
+  initialMonth,
+  onMonthChange
 }) {
   
   // Parse the initial date(s) if provided or use current date + 1 month
@@ -33,6 +37,17 @@ function EnhancedCalendar({
     if (initialMonth !== undefined) {
       const month = Number(initialMonth);
       if (!isNaN(month) && month >= 0 && month <= 11) {
+        const year = initialYear ? Number(initialYear) : systemYear;
+        return new Date(year, month, 1);
+      }
+    }
+    
+    // Check for saved month in localStorage
+    const savedMonth = localStorage.getItem(LAST_VIEWED_NONAV_MONTH_KEY);
+    if (savedMonth !== null) {
+      const month = parseInt(savedMonth, 10);
+      if (!isNaN(month) && month >= 0 && month <= 11) {
+        // Use the saved month with the appropriate year
         const year = initialYear ? Number(initialYear) : systemYear;
         return new Date(year, month, 1);
       }
@@ -90,6 +105,11 @@ function EnhancedCalendar({
   const [rangeEnd, setRangeEnd] = useState(isRangeMode && Array.isArray(value) ? value[1] : null);
   const [selectionStep, setSelectionStep] = useState(rangeStart ? 'end' : 'start');
 
+  // Save current month to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem(LAST_VIEWED_NONAV_MONTH_KEY, currentDate.getMonth().toString());
+  }, [currentDate]);
+
   // Update the calendar when the external value changes
   useEffect(() => {
     if (!isRangeMode && value && typeof value === 'string' && value !== selectedDate) {
@@ -145,12 +165,20 @@ function EnhancedCalendar({
 
   // Navigate to previous month
   const prevMonth = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+    const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
+    setCurrentDate(newDate);
+    if (onMonthChange) {
+      onMonthChange(newDate.getMonth());
+    }
   };
 
   // Navigate to next month
   const nextMonth = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+    const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
+    setCurrentDate(newDate);
+    if (onMonthChange) {
+      onMonthChange(newDate.getMonth());
+    }
   };
 
   // Format a day object into a YYYY-MM-DD string

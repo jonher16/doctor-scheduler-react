@@ -43,6 +43,9 @@ import EnhancedCalendar from './EnhancedCalendar';
 import HolidayCalendar from './HolidayCalendar';
 import { useYear } from '../contexts/YearContext';
 
+// Constants for localStorage keys
+const LAST_POPUP_HOLIDAY_MONTH_KEY = 'holidayConfig_popupLastViewedMonth';
+
 function HolidayConfig({ holidays, setHolidays }) {
   const { selectedYear } = useYear();
   const [localHolidays, setLocalHolidays] = useState(holidays);
@@ -66,6 +69,9 @@ function HolidayConfig({ holidays, setHolidays }) {
   // State for merged holidays in the table view
   const [mergedHolidays, setMergedHolidays] = useState([]);
 
+  // State to remember last selected month for popup calendar
+  const [lastPopupMonth, setLastPopupMonth] = useState(null);
+
   // Get the current month's index (0-11)
   const getCurrentMonth = () => {
     return new Date().getMonth();
@@ -74,6 +80,18 @@ function HolidayConfig({ holidays, setHolidays }) {
   // Get the next month's index (0-11)
   const getNextMonth = () => {
     return (getCurrentMonth() + 1) % 12;
+  };
+
+  // Get stored month from localStorage or use next month as fallback
+  const getStoredOrNextMonth = () => {
+    const savedMonth = localStorage.getItem(LAST_POPUP_HOLIDAY_MONTH_KEY);
+    if (savedMonth !== null) {
+      const month = parseInt(savedMonth, 10);
+      if (!isNaN(month) && month >= 0 && month <= 11) {
+        return month;
+      }
+    }
+    return getNextMonth();
   };
 
   // Get month from a date string in format 'YYYY-MM-DD'
@@ -86,10 +104,21 @@ function HolidayConfig({ holidays, setHolidays }) {
     return null;
   };
 
+  // Load initial popup month from localStorage
+  useEffect(() => {
+    setLastPopupMonth(getStoredOrNextMonth());
+  }, []);
+
   // Update local state when holidays prop changes
   useEffect(() => {
     setLocalHolidays(holidays);
   }, [holidays]);
+
+  // Save popup month to localStorage when it changes
+  const handlePopupMonthChange = (month) => {
+    setLastPopupMonth(month);
+    localStorage.setItem(LAST_POPUP_HOLIDAY_MONTH_KEY, month.toString());
+  };
 
   // Handle opening the add holiday dialog
   const handleOpenDialog = () => {
@@ -547,8 +576,9 @@ function HolidayConfig({ holidays, setHolidays }) {
                       ? getMonthFromDateString(selectedDate[0])
                       : typeof selectedDate === 'string' && selectedDate
                         ? getMonthFromDateString(selectedDate)
-                        : getNextMonth()
+                        : lastPopupMonth || getNextMonth()
                 }
+                onMonthChange={handlePopupMonthChange}
               />
             </Grid>
             <Grid item xs={12}>

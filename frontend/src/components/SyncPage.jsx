@@ -43,6 +43,9 @@ import {
 import { CloudSyncService } from '../services/CloudSyncService';
 import { getMonthName } from '../utils/dateUtils';
 
+// Constants for localStorage keys
+const LAST_SYNC_MONTH_KEY = 'syncPage_lastViewedMonth';
+
 const SyncPage = ({ doctors, setDoctors, availability, setAvailability }) => {
   // State for tracking sync operations
   const [loading, setLoading] = useState({
@@ -65,11 +68,28 @@ const SyncPage = ({ doctors, setDoctors, availability, setAvailability }) => {
     completion: localStorage.getItem('lastCompletionSync') ? new Date(localStorage.getItem('lastCompletionSync')) : null
   });
   
+  // Get the last viewed month from localStorage or default to current month
+  const getInitialMonth = () => {
+    const savedMonth = localStorage.getItem(LAST_SYNC_MONTH_KEY);
+    if (savedMonth !== null) {
+      const month = parseInt(savedMonth, 10);
+      if (!isNaN(month) && month >= 1 && month <= 12) {
+        return month;
+      }
+    }
+    return new Date().getMonth() + 1; // 1-based month (1-12)
+  };
+  
   // State for month selection and completion status
   const currentDate = new Date();
-  const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth() + 1);
+  const [selectedMonth, setSelectedMonth] = useState(getInitialMonth);
   const [selectedYear, setSelectedYear] = useState(2025); // Hard-coded to 2025 as per your application
   const [completionStatus, setCompletionStatus] = useState(null);
+  
+  // Save selected month to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem(LAST_SYNC_MONTH_KEY, selectedMonth.toString());
+  }, [selectedMonth]);
 
   // Function to sync doctor data
   const syncDoctors = async () => {

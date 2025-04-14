@@ -34,10 +34,26 @@ import { monthNames, dayNames } from '../utils/dateUtils';
 
 import { useYear } from '../contexts/YearContext';
 
+// Constants for localStorage keys
+const LAST_VIEWED_HOLIDAY_MONTH_KEY = 'holidayCalendar_lastViewedMonth';
+
 function HolidayCalendar({ holidays, setHolidays }) {
 
   const { selectedYear } = useYear();
-  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
+  
+  // Get the last viewed month from localStorage or default to current month
+  const getInitialMonth = () => {
+    const savedMonth = localStorage.getItem(LAST_VIEWED_HOLIDAY_MONTH_KEY);
+    if (savedMonth !== null) {
+      const month = parseInt(savedMonth, 10);
+      if (!isNaN(month) && month >= 0 && month <= 11) {
+        return month;
+      }
+    }
+    return new Date().getMonth();
+  };
+  
+  const [currentMonth, setCurrentMonth] = useState(getInitialMonth);
   const [currentYear, setCurrentYear] = useState(selectedYear);
   const [calendarDays, setCalendarDays] = useState([]);
   
@@ -60,6 +76,16 @@ function HolidayCalendar({ holidays, setHolidays }) {
     'Short': '#ff9800', // Orange
     'Long': '#f44336'   // Red
   };
+  
+  // Save current month to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem(LAST_VIEWED_HOLIDAY_MONTH_KEY, currentMonth.toString());
+  }, [currentMonth]);
+
+  // Update year when selectedYear changes
+  useEffect(() => {
+    setCurrentYear(selectedYear);
+  }, [selectedYear]);
 
   // Generate days for the current month view
   useEffect(() => {
@@ -317,20 +343,7 @@ function HolidayCalendar({ holidays, setHolidays }) {
           Holiday Calendar
         </Typography>
         
-        <Button
-          variant="outlined"
-          startIcon={<EventNoteIcon />}
-          onClick={() => {
-            setSelectedDay(null);
-            setCurrentHolidayDate(null);
-            setHolidayType('Short');
-            setIsEditMode(false);
-            setConsecutiveDays([]);
-            setDialogOpen(true);
-          }}
-        >
-          Add Holiday
-        </Button>
+        
       </Box>
       
       <Paper elevation={3} sx={{ p: 2, mb: 4 }}>

@@ -507,9 +507,46 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
     const newConstraints = [...constraints];
     newConstraints.splice(index, 1);
     setConstraints(newConstraints);
+    
+    // Also update the parent availability state
+    const newAvailability = JSON.parse(JSON.stringify(availability || {}));
+    if (newAvailability[constraintToRemove.doctor] && 
+        newAvailability[constraintToRemove.doctor][constraintToRemove.date]) {
+      delete newAvailability[constraintToRemove.doctor][constraintToRemove.date];
+      setAvailability(newAvailability);
+    }
+    
     setSnackbar({
       open: true,
       message: `Removed constraint for Dr. ${constraintToRemove.doctor} on ${constraintToRemove.date}`,
+      severity: 'info'
+    });
+  };
+
+  // Remove all dates in a merged constraint group
+  const removeMergedConstraint = (constraint) => {
+    // Remove all constraints in this merged group
+    const newConstraints = constraints.filter(c => 
+      !(constraint.doctor === c.doctor && constraint.dates.includes(c.date))
+    );
+    setConstraints(newConstraints);
+    
+    // Also update the parent availability state
+    const newAvailability = JSON.parse(JSON.stringify(availability || {}));
+    
+    // Remove each date in the merged constraint
+    if (newAvailability[constraint.doctor]) {
+      constraint.dates.forEach(date => {
+        if (newAvailability[constraint.doctor][date]) {
+          delete newAvailability[constraint.doctor][date];
+        }
+      });
+      setAvailability(newAvailability);
+    }
+    
+    setSnackbar({
+      open: true,
+      message: `Removed availability constraints for Dr. ${constraint.doctor} from ${constraint.startDate} to ${constraint.endDate}`,
       severity: 'info'
     });
   };
@@ -591,6 +628,19 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
   // Get the next month's index (0-11)
   const getNextMonth = () => {
     return (getCurrentMonth() + 1) % 12;
+  };
+
+  // Get stored month from localStorage or use next month as fallback
+  const getStoredOrNextMonth = () => {
+    const LAST_VIEWED_NONAV_MONTH_KEY = 'enhancedCalendar_lastViewedMonth';
+    const savedMonth = localStorage.getItem(LAST_VIEWED_NONAV_MONTH_KEY);
+    if (savedMonth !== null) {
+      const month = parseInt(savedMonth, 10);
+      if (!isNaN(month) && month >= 0 && month <= 11) {
+        return month;
+      }
+    }
+    return getNextMonth();
   };
 
   // Get month from a date string in format 'YYYY-MM-DD'
@@ -715,13 +765,7 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
                       <Tooltip title="Remove">
                         <IconButton 
                           color="error" 
-                          onClick={() => {
-                            // Remove all constraints in this merged group
-                            const newConstraints = constraints.filter(c => 
-                              !(constraint.doctor === c.doctor && constraint.dates.includes(c.date))
-                            );
-                            setConstraints(newConstraints);
-                          }}
+                          onClick={() => removeMergedConstraint(constraint)}
                           size="small"
                         >
                           <DeleteIcon />
@@ -793,13 +837,13 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
               <EnhancedCalendar 
                 value={newConstraint.date}
                 onChange={handleDateChange}
-                minDate={new Date().toISOString().split('T')[0]} // Today as min date
+                minDate={null}
                 isRangeMode={isRangeMode}
                 initialYear={selectedYear}
                 initialMonth={
                   editConstraintIndex !== null && Array.isArray(newConstraint.date) && newConstraint.date[0]
                     ? getMonthFromDateString(newConstraint.date[0])
-                    : getNextMonth()
+                    : getStoredOrNextMonth()
                 }
               />
             </Grid>
