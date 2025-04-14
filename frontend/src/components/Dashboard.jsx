@@ -240,7 +240,7 @@ function Dashboard({ doctors, schedule, holidays, availability, onScheduleUpdate
         
         {/* Excel Export Button */}
         {hasSchedule && (
-          <ExcelExportButton schedule={localSchedule} doctors={localDoctors} />
+          <ExcelExportButton schedule={localSchedule} doctors={localDoctors} selectedMonth={month} selectedYear={scheduleYear} />
         )}
       </Box>
 

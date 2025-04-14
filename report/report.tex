@@ -76,6 +76,8 @@ The scheduling algorithm satisfies the following consolidated requirements based
 
     \item \textbf{Contract Shift Requirements:} Doctors with shift contracts must receive exactly the specified number of shifts by type (Day, Evening, Night) each month.
     
+    \item \textbf{Maximum Shifts Per Week:} Doctors cannot be assigned more than their maximum allowed shifts per week. This limit varies by contract status and seniority level.
+    
     \item \textbf{Shift Template Adherence:} Shifts must be staffed exactly according to the shift template requirements, with no under-staffing or over-staffing.
     
     \item \textbf{Single Shift per Day:} Each doctor must be assigned to at most one shift per day.
@@ -130,7 +132,14 @@ The scheduling algorithm satisfies the following consolidated requirements based
         \item "None": No specific shift preference
     \end{itemize}
     
-    \item \textbf{Contract Status:} Doctors may have contracts specifying an exact number of shifts of each type (Day, Evening, Night) that they must work each month.
+    \item \textbf{Contract Status:} Doctors may have contracts specifying an exact number of shifts of each type (Day, Evening, Night) that they must work each month. Contract doctors have their own specific management in the system with priority handling during scheduling.
+    
+    \item \textbf{Maximum Shifts Per Week:} Doctors have individual limits on the maximum number of shifts they can work per week:
+    \begin{itemize}
+        \item Contract doctors: Customized based on their specific contract terms
+        \item Senior doctors: Generally lower maximum (typically 3-4 shifts per week)
+        \item Junior doctors: Higher maximum (typically 4-5 shifts per week)
+    \end{itemize}
     
     \item \textbf{Limited Availability:} Doctors may not be available on specific days and shifts in a month. Doctors with a very limited availability (unavailable for >20\% of the month) are excluded from some hour balance calculations.
 \end{itemize}
@@ -245,6 +254,15 @@ P_{contract}(s) = \sum_{i \in I_{contract}} w_{contract} \cdot \sum_{t \in S} |A
 \end{equation}
 
 where $I_{contract}$ is the set of doctors with contracts, $AC_{i,t}$ is the actual count of shifts of type $t$ assigned to doctor $i$, and $RC_{i,t}$ is the required count of shifts of type $t$ for doctor $i$.
+
+\subsubsection{Maximum Shifts Per Week Violation ($w_{max\_weekly} = 999999$)}
+This prevents doctors from being assigned more than their allowed maximum shifts in a week:
+
+\begin{equation}
+P_{max\_weekly}(s) = \sum_{i \in I} \sum_{w \in W} w_{max\_weekly} \cdot \max(0, WS_{i,w} - MaxShifts_i)
+\end{equation}
+
+where $WS_{i,w}$ is the number of shifts assigned to doctor $i$ in week $w$, and $MaxShifts_i$ is the maximum number of shifts allowed per week for doctor $i$.
 
 \subsubsection{Shift Template Violation ($w_{template} = 999999$)}
 This enforces exact adherence to the shift template requirements:
@@ -480,6 +498,9 @@ The system has specialized processing for doctors with contracts:
     \item The algorithm prioritizes moves that fix contract violations
     \item Contract fulfillment is treated as a hard constraint with maximum penalty
     \item The optimizer tracks specific day, evening, and night shift counts for each contract doctor
+    \item Contract doctors have customized maximum shifts per week limits based on their specific contract terms
+    \item Special neighborhood moves are designed to correct contract violations while preserving other constraints
+    \item Contract doctors receive priority in the assignment process, ensuring their requirements are met before balancing workload among other doctors
 \end{itemize}
 
 \subsection{Shift Template Usage}
@@ -535,6 +556,7 @@ The hospital scheduling system uses a sophisticated Tabu Search implementation w
     \item Distributing weekend/holiday shifts appropriately
     \item Respecting rest requirements and availability constraints
     \item Fulfilling contract doctors' specific shift requirements
+    \item Enforcing maximum shifts per week limits for each doctor based on contract status and seniority
     \item Limiting consecutive working days to prevent fatigue
 \end{enumerate}
 

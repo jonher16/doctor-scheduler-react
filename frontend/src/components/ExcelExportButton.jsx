@@ -5,7 +5,7 @@
 import React, { useState } from 'react';
 import * as XLSX from 'xlsx';
 
-export default function ExcelDownloadButton({ schedule, doctors }) {
+export default function ExcelDownloadButton({ schedule, doctors, selectedMonth, selectedYear }) {
   const [isExporting, setIsExporting] = useState(false);
 
   const handleExport = () => {
@@ -16,190 +16,268 @@ export default function ExcelDownloadButton({ schedule, doctors }) {
         // Create a new workbook
         const workbook = XLSX.utils.book_new();
         
-        // Process data for each month
-        for (let month = 1; month <= 12; month++) {
-          // Create array to hold all rows for this month's sheet
-          const rows = [];
-          const merges = [];
-          const daysInMonth = new Date(2025, month, 0).getDate();
-          const daysOfWeek = ["일", "월", "화", "수", "목", "금", "토"];
-          
-          // Block size (days per block in the view)
-          const blockSize = 7;
-          const numBlocks = Math.ceil(daysInMonth / blockSize);
-          
-          // Current row index for calculating merges
-          let rowIdx = 0;
-          
-          // Process each block
-          for (let block = 0; block < numBlocks; block++) {
-            const startDay = block * blockSize + 1;
-            const endDay = Math.min(startDay + blockSize - 1, daysInMonth);
-            
-            // Row 1: 시간/요일 header
-            const headerRow = ["시간", "요일"];
-            
-            // Add days of week
-            for (let day = startDay; day <= endDay; day++) {
-              const date = new Date(2025, month-1, day);
-              const dayOfWeek = daysOfWeek[date.getDay()];
-              headerRow.push(dayOfWeek);
-              headerRow.push(""); // Empty cell for B column
-              
-              // Add merge for this day header (spans A/B columns)
-              merges.push({
-                s: { r: rowIdx, c: headerRow.length - 2 },
-                e: { r: rowIdx, c: headerRow.length - 1 }
-              });
-            }
-            rows.push(headerRow);
-            rowIdx++;
-            
-            // Row 2: 날짜 row
-            const dateRow = ["날짜", ""];
-            
-            // Add dates
-            for (let day = startDay; day <= endDay; day++) {
-              const formattedDate = `${month}/${day}`;
-              dateRow.push(formattedDate);
-              dateRow.push(""); // Empty cell for B column
-              
-              // Add merge for this date (spans A/B columns)
-              merges.push({
-                s: { r: rowIdx, c: dateRow.length - 2 },
-                e: { r: rowIdx, c: dateRow.length - 1 }
-              });
-            }
-            rows.push(dateRow);
-            rowIdx++;
-            
-            // Row 3: 시간 with A/B columns
-            const abRow = ["시간", ""];
-            
-            // Add A/B for each day
-            for (let day = startDay; day <= endDay; day++) {
-              abRow.push("A");
-              abRow.push("B");
-            }
-            rows.push(abRow);
-            rowIdx++;
-            
-            // Rows 4-7: Shift assignments
-            const shiftLabels = ["D 08~16", "E 16~00", "당직 00~08", "PED11~19(19~07)"];
-            const shiftKeys = ["Day", "Evening", "Night", ""];
-            
-            for (let i = 0; i < shiftLabels.length; i++) {
-              const shiftRow = [shiftLabels[i], ""];
-              const shiftKey = shiftKeys[i];
-              
-              for (let day = startDay; day <= endDay; day++) {
-                const dateStr = `2025-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
-                const daySchedule = schedule[dateStr] || { Day: [], Evening: [], Night: [] };
-                
-                // Get scheduled doctors for this shift
-                let doctors = [];
-                if (shiftKey && daySchedule[shiftKey]) {
-                  doctors = daySchedule[shiftKey];
-                }
-                
-                // Add scheduled doctors
-                shiftRow.push(doctors[0] || "");
-                shiftRow.push(doctors[1] || "");
-              }
-              
-              rows.push(shiftRow);
-              rowIdx++;
-            }
-            
-            // Add a blank row between blocks if this isn't the last block
-            if (block < numBlocks - 1) {
-              rows.push(Array(headerRow.length).fill(""));
-              rowIdx++;
-            }
+        // Get shift template from localStorage
+        let shiftTemplate = {};
+        try {
+          const storedTemplate = localStorage.getItem('shiftTemplate');
+          if (storedTemplate) {
+            shiftTemplate = JSON.parse(storedTemplate);
           }
+        } catch (error) {
+          console.error('Error loading shift template:', error);
+        }
+
+        // If selectedMonth is not provided, default to current month
+        const month = selectedMonth || (new Date().getMonth() + 1);
+        const year = selectedYear || 2025;
+        
+        // First pass: determine the maximum number of doctors for any shift in the month
+        let maxDoctorsPerShift = 2; // Default minimum
+        for (let day = 1; day <= new Date(year, month, 0).getDate(); day++) {
+          const dateStr = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+          const daySchedule = schedule[dateStr] || {};
           
-          // Create the worksheet
-          const ws = XLSX.utils.aoa_to_sheet(rows);
-          
-          // Add merged cells
-          ws['!merges'] = merges;
-          
-          // Apply cell styling
-          for (let r = 0; r < rows.length; r++) {
-            for (let c = 0; c < rows[r].length; c++) {
-              const cellAddress = XLSX.utils.encode_cell({r, c});
-              
-              // Skip empty cells
-              if (!ws[cellAddress]) continue;
-              
-              // Initialize styles if not present
-              if (!ws[cellAddress].s) ws[cellAddress].s = {};
-              
-              // Add alignment to all cells
-              ws[cellAddress].s.alignment = { horizontal: "center", vertical: "center" };
-              
-              // Style header cells (time, day of week)
-              if (r % 12 === 0 && (c <= 1 || rows[r][c] !== "")) {
-                ws[cellAddress].s.fill = { patternType: "solid", fgColor: { rgb: "D9D9D9" } }; // Gray background
-              }
-              
-              // Style day of week cells with colors
-              if (r % 12 === 0 && c > 1 && rows[r][c] !== "") {
-                const dayOfWeek = rows[r][c];
-                if (dayOfWeek === "일") {
-                  ws[cellAddress].s.font = { color: { rgb: "FF0000" } }; // Red for Sunday
-                }
-                else if (dayOfWeek === "토") {
-                  ws[cellAddress].s.font = { color: { rgb: "0000FF" } }; // Blue for Saturday
-                }
-              }
-              
-              // Style date cells with colors
-              if (r % 12 === 1 && c > 1 && rows[r][c] !== "") {
-                const dateStr = rows[r][c];
-                // Calculate day of week from the date
-                const [month, day] = dateStr.split('/').map(Number);
-                const date = new Date(2025, month - 1, day);
-                const dayOfWeek = date.getDay(); // 0 = Sunday, 6 = Saturday
-                
-                if (dayOfWeek === 0) {
-                  ws[cellAddress].s.font = { color: { rgb: "FF0000" } }; // Red for Sunday
-                }
-                else if (dayOfWeek === 6) {
-                  ws[cellAddress].s.font = { color: { rgb: "0000FF" } }; // Blue for Saturday
-                }
-              }
-              
-              // Style A/B columns in table header
-              if (r % 12 === 2 && c > 1) {
-                ws[cellAddress].s.fill = { patternType: "solid", fgColor: { rgb: "D9D9D9" } }; // Gray background
-              }
-              
-              // Style shift labels with yellow background
-              if ((r % 12 >= 3 && r % 12 <= 6) && c === 0) {
-                ws[cellAddress].s.fill = { patternType: "solid", fgColor: { rgb: "FFFF00" } }; // Yellow background
+          ["Day", "Evening", "Night"].forEach(shift => {
+            if (daySchedule[shift] && Array.isArray(daySchedule[shift])) {
+              const doctorCount = daySchedule[shift].length;
+              if (doctorCount > maxDoctorsPerShift) {
+                maxDoctorsPerShift = doctorCount;
               }
             }
-          }
-          
-          // Set column widths
-          const colWidths = [];
-          colWidths.push({ wch: 14 }); // 시간 column
-          colWidths.push({ wch: 5 });  // 요일 column
-          
-          // Set widths for day columns
-          for (let i = 0; i < daysInMonth * 2; i++) {
-            colWidths.push({ wch: 8 });
-          }
-          
-          ws['!cols'] = colWidths;
-          
-          // Add the worksheet to the workbook
-          XLSX.utils.book_append_sheet(workbook, ws, `${month}월`);
+          });
         }
         
+        // Process data for the selected month only
+        const rows = [];
+        const merges = [];
+        const daysInMonth = new Date(year, month, 0).getDate();
+        const daysOfWeek = ["일", "월", "화", "수", "목", "금", "토"];
+        
+        // Generate column labels (A, B, C, D, etc.)
+        const columnLabels = Array.from({ length: maxDoctorsPerShift }, (_, i) => 
+          String.fromCharCode(65 + i) // Convert 0->A, 1->B, 2->C, etc.
+        );
+        
+        // Block size (days per block in the view)
+        const blockSize = 7;
+        const numBlocks = Math.ceil(daysInMonth / blockSize);
+        
+        // Current row index for calculating merges
+        let rowIdx = 0;
+        
+        // Determine which shifts are in use for this month
+        const activeShifts = new Set();
+        for (let day = 1; day <= daysInMonth; day++) {
+          const dateStr = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+          
+          // Check shift template first
+          if (shiftTemplate[dateStr]) {
+            Object.keys(shiftTemplate[dateStr]).forEach(shift => {
+              activeShifts.add(shift);
+            });
+          } else {
+            // Default shifts if not in template
+            activeShifts.add("Day");
+            activeShifts.add("Evening");
+            activeShifts.add("Night");
+          }
+        }
+        
+        // Define shift labels and keys
+        const defaultShiftConfig = [
+          { label: "D 08~16", key: "Day" },
+          { label: "E 16~00", key: "Evening" },
+          { label: "당직 00~08", key: "Night" },
+          { label: "PED11~19(19~07)", key: "" }
+        ];
+        
+        // Filter to include only active shifts and optional PED shift
+        const shiftConfig = defaultShiftConfig.filter(config => 
+          activeShifts.has(config.key) || config.key === ""  // Keep empty key for PED row
+        );
+        
+        // Process each block
+        for (let block = 0; block < numBlocks; block++) {
+          const startDay = block * blockSize + 1;
+          const endDay = Math.min(startDay + blockSize - 1, daysInMonth);
+          
+          // Row 1: 시간/요일 header
+          const headerRow = ["시간", "요일"];
+          
+          // Add days of week with merged cells spanning all doctor columns
+          for (let day = startDay; day <= endDay; day++) {
+            const date = new Date(year, month-1, day);
+            const dayOfWeek = daysOfWeek[date.getDay()];
+            headerRow.push(dayOfWeek);
+            
+            // Add empty cells for each additional doctor column
+            for (let i = 1; i < maxDoctorsPerShift; i++) {
+              headerRow.push("");
+            }
+            
+            // Add merge for this day header (spans all doctor columns)
+            merges.push({
+              s: { r: rowIdx, c: headerRow.length - maxDoctorsPerShift },
+              e: { r: rowIdx, c: headerRow.length - 1 }
+            });
+          }
+          rows.push(headerRow);
+          rowIdx++;
+          
+          // Row 2: 날짜 row
+          const dateRow = ["날짜", ""];
+          
+          // Add dates with merged cells spanning all doctor columns
+          for (let day = startDay; day <= endDay; day++) {
+            const formattedDate = `${month}/${day}`;
+            dateRow.push(formattedDate);
+            
+            // Add empty cells for each additional doctor column
+            for (let i = 1; i < maxDoctorsPerShift; i++) {
+              dateRow.push("");
+            }
+            
+            // Add merge for this date (spans all doctor columns)
+            merges.push({
+              s: { r: rowIdx, c: dateRow.length - maxDoctorsPerShift },
+              e: { r: rowIdx, c: dateRow.length - 1 }
+            });
+          }
+          rows.push(dateRow);
+          rowIdx++;
+          
+          // Row 3: 시간 with column labels (A, B, C, D, etc.)
+          const columnLabelRow = ["시간", ""];
+          
+          // Add column labels for each day
+          for (let day = startDay; day <= endDay; day++) {
+            // Add a column label for each doctor slot
+            for (let i = 0; i < maxDoctorsPerShift; i++) {
+              columnLabelRow.push(columnLabels[i]);
+            }
+          }
+          rows.push(columnLabelRow);
+          rowIdx++;
+          
+          // Rows for each shift type
+          for (let i = 0; i < shiftConfig.length; i++) {
+            const { label, key: shiftKey } = shiftConfig[i];
+            const shiftRow = [label, ""];
+            
+            for (let day = startDay; day <= endDay; day++) {
+              const dateStr = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+              const daySchedule = schedule[dateStr] || {};
+              
+              // Get scheduled doctors for this shift
+              let doctors = [];
+              if (shiftKey && daySchedule[shiftKey]) {
+                doctors = daySchedule[shiftKey];
+              }
+              
+              // Add scheduled doctors (one per column)
+              for (let j = 0; j < maxDoctorsPerShift; j++) {
+                shiftRow.push(doctors[j] || "");
+              }
+            }
+            
+            rows.push(shiftRow);
+            rowIdx++;
+          }
+          
+          // Add a blank row between blocks if this isn't the last block
+          if (block < numBlocks - 1) {
+            rows.push(Array(headerRow.length).fill(""));
+            rowIdx++;
+          }
+        }
+        
+        // Create the worksheet
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+        
+        // Add merged cells
+        ws['!merges'] = merges;
+        
+        // Apply cell styling
+        for (let r = 0; r < rows.length; r++) {
+          for (let c = 0; c < rows[r].length; c++) {
+            const cellAddress = XLSX.utils.encode_cell({r, c});
+            
+            // Skip empty cells
+            if (!ws[cellAddress]) continue;
+            
+            // Initialize styles if not present
+            if (!ws[cellAddress].s) ws[cellAddress].s = {};
+            
+            // Add alignment to all cells
+            ws[cellAddress].s.alignment = { horizontal: "center", vertical: "center" };
+            
+            // Calculate the block position
+            const blockPosition = Math.floor(r / (4 + shiftConfig.length + 1)); // +1 for the empty row
+            const rowInBlock = r - blockPosition * (4 + shiftConfig.length + 1);
+            
+            // Style header cells (time, day of week)
+            if (rowInBlock === 0 && (c <= 1 || rows[r][c] !== "")) {
+              ws[cellAddress].s.fill = { patternType: "solid", fgColor: { rgb: "D9D9D9" } }; // Gray background
+            }
+            
+            // Style day of week cells with colors
+            if (rowInBlock === 0 && c > 1 && rows[r][c] !== "") {
+              const dayOfWeek = rows[r][c];
+              if (dayOfWeek === "일") {
+                ws[cellAddress].s.font = { color: { rgb: "FF0000" } }; // Red for Sunday
+              }
+              else if (dayOfWeek === "토") {
+                ws[cellAddress].s.font = { color: { rgb: "0000FF" } }; // Blue for Saturday
+              }
+            }
+            
+            // Style date cells with colors
+            if (rowInBlock === 1 && c > 1 && rows[r][c] !== "") {
+              const dateStr = rows[r][c];
+              // Calculate day of week from the date
+              const [month, day] = dateStr.split('/').map(Number);
+              const date = new Date(year, month - 1, day);
+              const dayOfWeek = date.getDay(); // 0 = Sunday, 6 = Saturday
+              
+              if (dayOfWeek === 0) {
+                ws[cellAddress].s.font = { color: { rgb: "FF0000" } }; // Red for Sunday
+              }
+              else if (dayOfWeek === 6) {
+                ws[cellAddress].s.font = { color: { rgb: "0000FF" } }; // Blue for Saturday
+              }
+            }
+            
+            // Style column label row (A, B, C, etc.)
+            if (rowInBlock === 2 && c > 1) {
+              ws[cellAddress].s.fill = { patternType: "solid", fgColor: { rgb: "D9D9D9" } }; // Gray background
+            }
+            
+            // Style shift labels with yellow background
+            if (rowInBlock >= 3 && rowInBlock < 3 + shiftConfig.length && c === 0) {
+              ws[cellAddress].s.fill = { patternType: "solid", fgColor: { rgb: "FFFF00" } }; // Yellow background
+            }
+          }
+        }
+        
+        // Set column widths
+        const colWidths = [];
+        colWidths.push({ wch: 14 }); // 시간 column
+        colWidths.push({ wch: 5 });  // 요일 column
+        
+        // Set widths for doctor columns
+        for (let i = 0; i < daysInMonth * maxDoctorsPerShift; i++) {
+          colWidths.push({ wch: 8 });
+        }
+        
+        ws['!cols'] = colWidths;
+        
+        // Add the worksheet to the workbook
+        const monthName = month.toString().padStart(2, '0');
+        XLSX.utils.book_append_sheet(workbook, ws, `${monthName}월`);
+        
         // Generate Excel file and trigger download
-        XLSX.writeFile(workbook, 'Schedule_2025.xlsx');
+        const fileName = `Schedule_${year}_${monthName}.xlsx`;
+        XLSX.writeFile(workbook, fileName);
         
       } catch (error) {
         console.error('Error generating Excel:', error);
