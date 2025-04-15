@@ -138,11 +138,18 @@ function Dashboard({ doctors, schedule, holidays, availability, onScheduleUpdate
       ...updatedSchedule,
       _metadata: { 
         ...(localSchedule._metadata || {}),
-        year: scheduleYear
+        year: scheduleYear,
+        lastModified: new Date().toISOString() // Add timestamp for tracking changes
       }
     };
     
+    // Update the local schedule state immediately
     setLocalSchedule(updatedScheduleWithMetadata);
+    
+    // Force recalculation of quick stats
+    if (hasSchedule) {
+      setQuickStats(getQuickStats());
+    }
     
     // Notify parent component if provided
     if (onScheduleUpdate) {
@@ -155,6 +162,9 @@ function Dashboard({ doctors, schedule, holidays, availability, onScheduleUpdate
       message: 'Schedule updated successfully',
       severity: 'success'
     });
+    
+    // Log the update for debugging
+    console.log("Schedule updated:", updatedScheduleWithMetadata);
   };
   
   const handleCloseNotification = () => {

@@ -952,13 +952,8 @@ class WeightOptimizer:
                         
                         doctor_weekly_shifts[doctor][week_num] += 1
         
-        # Check for maximum shifts per week violations
-        # EXCLUDE contract doctors from this check
+        # Check for maximum shifts per week violations for all doctors including contract doctors
         for doctor in self.doctors:
-            # Skip contract doctors - they have fixed monthly shifts
-            if doctor.get("contract", False):
-                continue
-                
             max_shifts = doctor.get("maxShiftsPerWeek", 0)
             doctor_name = doctor["name"]
             
@@ -966,7 +961,8 @@ class WeightOptimizer:
                 for week_num, shifts in doctor_weekly_shifts[doctor_name].items():
                     if shifts > max_shifts:
                         violations_count += 1
-                        logger.debug(f"Doctor {doctor_name} has {shifts} shifts in week {week_num}, "
+                        is_contract = "contract doctor" if doctor.get("contract", False) else "regular doctor"
+                        logger.debug(f"Doctor {doctor_name} ({is_contract}) has {shifts} shifts in week {week_num}, "
                                      f"which exceeds their maximum of {max_shifts}")
         
         return violations_count
@@ -1061,6 +1057,11 @@ class WeightOptimizer:
         for key, value in weights.items():
             if hasattr(optimizer, key):
                 setattr(optimizer, key, value)
+        
+        # Ensure the max shifts per week constraint is set with a high weight value
+        if "w_max_shifts_per_week" in weights:
+            optimizer.w_max_shifts_per_week = weights["w_max_shifts_per_week"]
+            logger.info(f"Set w_max_shifts_per_week to {weights['w_max_shifts_per_week']}")
         
         schedule, stats = optimizer.optimize(progress_callback=progress_callback)
         

@@ -13,9 +13,10 @@ import logging
 import threading
 import random
 import copy
-from typing import Dict, List, Any, Tuple, Set, Callable
+from typing import Dict, List, Any, Tuple, Set, Callable, Optional
 from collections import defaultdict
 import numpy as np
+import itertools
 
 # Configure logging
 logging.basicConfig(
@@ -120,6 +121,8 @@ class MonthlyScheduleOptimizer:
         self.w_evening_day = 100000     # Weight for evening→day pattern (super hard constraint)
         # NEW: Unfilled slots penalty - make it a super hard constraint
         self.w_unfilled_slots = 999999  # Highest penalty for unfilled slots in template
+        # NEW: Maximum shifts per week constraint - make it a super hard constraint
+        self.w_max_shifts_per_week = 999999  # Weight for exceeding maximum shifts per week
         
         # Cache doctor availability status for improved performance
         self._availability_cache = {}
@@ -262,13 +265,19 @@ class MonthlyScheduleOptimizer:
         return all_dates
 
     def _identify_weekends(self) -> Set[str]:
-        """Identify all weekend dates within the month."""
+        """Identify weekend days in the given dates."""
         weekends = set()
         for date_str in self.all_dates:
             d = datetime.date.fromisoformat(date_str)
-            if d.weekday() >= 5:  # Saturday=5, Sunday=6
+            # Weekend is Saturday (5) or Sunday (6)
+            if d.weekday() >= 5:
                 weekends.add(date_str)
         return weekends
+        
+    def _get_week_number(self, date_str):
+        """Get ISO week number for a date string."""
+        d = datetime.date.fromisoformat(date_str)
+        return d.isocalendar()[1]  # Returns the ISO week number (1-53)
 
     # -------------------------------
     # Tabu Search Helper Functions
@@ -1130,6 +1139,44 @@ class MonthlyScheduleOptimizer:
             # Calculate weekend/holiday balance penalty
             wh_diff = max_wh - min_wh
             cost += self.w_wh * wh_diff
+        
+        # NEW: Check the maximum shifts per week constraint
+        # Group dates by week
+        week_map = {}
+        for date in self.all_dates:
+            week_num = self._get_week_number(date)
+            if week_num not in week_map:
+                week_map[week_num] = []
+            week_map[week_num].append(date)
+            
+        # For each doctor, count shifts per week and apply max per week constraint
+        doctor_names = [doc["name"] for doc in self.doctors]
+        for doctor in doctor_names:
+            # Only check if the doctor has a max_shifts_per_week constraint
+            max_shifts_per_week = self.doctor_info[doctor].get("max_shifts_per_week", 0)
+            
+            if max_shifts_per_week > 0:
+                for week_num, dates in week_map.items():
+                    # Count shifts for this doctor in this week
+                    shifts_this_week = 0
+                    
+                    for date in dates:
+                        if date not in schedule:
+                            continue
+                            
+                        for shift in self.shifts:
+                            if shift in schedule[date] and doctor in schedule[date][shift]:
+                                shifts_this_week += 1
+                    
+                    # Apply severe penalty for exceeding max shifts per week
+                    if shifts_this_week > max_shifts_per_week:
+                        excess = shifts_this_week - max_shifts_per_week
+                        # Use the dedicated parameter for max shifts per week constraint
+                        if hasattr(self, 'w_max_shifts_per_week'):
+                            cost += self.w_max_shifts_per_week * (excess ** 2)  # Square to penalize more as excess increases
+                        else:
+                            # Fallback to high weight if parameter not set
+                            cost += self.w_rest * 10 * (excess ** 2)
         
         return cost
 
