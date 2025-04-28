@@ -65,7 +65,7 @@ const GenerateSchedule = ({ doctors, holidays, availability, setSchedule, apiUrl
   
   // Weight optimization options
   const [weightMaxIterations, setWeightMaxIterations] = useState(30);
-  const [weightParallelJobs, setWeightParallelJobs] = useState(10);
+  const [weightParallelJobs, setWeightParallelJobs] = useState(1);
   const [weightTimeLimit, setWeightTimeLimit] = useState(5);
   
   // For polling task progress

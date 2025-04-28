@@ -1,11 +1,10 @@
-// main.js - Fixed for Windows paths with spaces
+// main.js - Fixed for Windows paths with spaces and clean shutdown on close
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
-const { spawn } = require('child_process');
 const fs = require('fs');
+const { spawn, execSync, spawnSync } = require('child_process');
 const isDev = process.env.NODE_ENV === 'development';
 const PORT = 3000;
-const API_PORT = 5000;
 
 // Import default file copying functionality
 const { copyDefaultFilesToUserData } = require('./copy-defaults');
@@ -15,386 +14,287 @@ let mainWindow;
 let backendProcess;
 let backendLogs = [];
 
-// Add logging function for backend messages
+// --- Logging utility --------------------------------------------------------
 function logBackend(type, message) {
-  const logEntry = { 
-    type, 
-    message, 
-    timestamp: new Date().toISOString() 
+  const logEntry = {
+    type,
+    message,
+    timestamp: new Date().toISOString()
   };
   console.log(`[${type.toUpperCase()}] ${message}`);
   backendLogs.push(logEntry);
-  
-  // Save to log file in userData directory
+
   try {
     const logDir = path.join(app.getPath('userData'), 'logs');
     fs.mkdirSync(logDir, { recursive: true });
-    
     fs.appendFileSync(
       path.join(logDir, 'backend.log'),
       `[${logEntry.timestamp}] [${type.toUpperCase()}] ${message}\n`
     );
-  } catch (err) {
-    // Silently fail if we can't write to log file
-  }
-  
+  } catch { /* silently ignore */ }
+
   return logEntry;
 }
 
-// Function to get Backend directory
+// --- Backend path resolver -------------------------------------------------
 function getBackendDir() {
-  // In development mode, use the backend directory in the project
   if (isDev) {
     return path.join(__dirname, 'backend');
   }
-  
-  // In production, the backend should be in the resources directory
   return path.join(process.resourcesPath, 'backend');
 }
 
-// Helper function to set up logging for a process
+// --- Process logging setup -------------------------------------------------
 function setupProcessLogging(proc) {
   if (!proc) return;
-  
-  // Log stdout
+
   if (proc.stdout) {
-    proc.stdout.on('data', (data) => {
-      const message = data.toString().trim();
-      if (message) {
-        const logEntry = logBackend('stdout', message);
-        // Notify the renderer process of new logs
+    proc.stdout.on('data', data => {
+      const msg = data.toString().trim();
+      if (msg) {
+        const entry = logBackend('stdout', msg);
         if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('backend-log', logEntry);
+          mainWindow.webContents.send('backend-log', entry);
         }
       }
     });
   }
-  
-  // Log stderr
+
   if (proc.stderr) {
-    proc.stderr.on('data', (data) => {
-      const message = data.toString().trim();
-      if (message) {
-        const logEntry = logBackend('stderr', message);
-        // Notify the renderer process of new logs
+    proc.stderr.on('data', data => {
+      const msg = data.toString().trim();
+      if (msg) {
+        const entry = logBackend('stderr', msg);
         if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('backend-log', logEntry);
+          mainWindow.webContents.send('backend-log', entry);
         }
       }
     });
   }
-  
-  // Handle backend process exit
-  proc.on('close', (code) => {
-    logBackend('system', `Backend process exited with code ${code}`);
-    
-    // Notify the renderer if backend crashes unexpectedly
+
+  proc.on('close', code => {
+    logBackend('system', `Backend exited with code ${code}`);
     if (code !== 0 && mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('backend-exit', { code });
     }
-    
     backendProcess = null;
   });
-  
-  // Handle errors in starting process
-  proc.on('error', (err) => {
-    logBackend('error', `Backend process error: ${err.message}`);
+
+  proc.on('error', err => {
+    logBackend('error', `Backend error: ${err.message}`);
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('backend-exit', { 
-        code: -1, 
-        error: err.message 
-      });
+      mainWindow.webContents.send('backend-exit', { code: -1, error: err.message });
     }
   });
 }
 
-// Function to start backend server - Fixed for Windows paths with spaces
+// --- Start backend server -------------------------------------------------
 async function startBackendServer() {
   logBackend('info', 'Starting backend server...');
-  
-  // Find the backend directory
   const backendDir = getBackendDir();
-  
+
   if (!fs.existsSync(backendDir)) {
-    const errorMessage = `Backend directory not found at: ${backendDir}`;
-    logBackend('error', errorMessage);
-    
-    dialog.showErrorBox(
-      'Backend Not Found',
-      errorMessage + '\n\nPlease reinstall the application.'
-    );
-    
+    const msg = `Backend directory not found at: ${backendDir}`;
+    logBackend('error', msg);
+    dialog.showErrorBox('Backend Not Found', msg + '\n\nPlease reinstall.');
     app.quit();
     return;
   }
-  
+
   logBackend('info', `Using backend directory: ${backendDir}`);
-  
+
   try {
-    // List files in backend directory for debugging
-    let files = [];
-    try {
-      files = fs.readdirSync(backendDir);
-      logBackend('info', `Files in backend directory: ${files.join(', ')}`);
-    } catch (err) {
-      logBackend('error', `Error reading backend directory: ${err.message}`);
-    }
-    
-    // Try using the batch file first - this is better for Windows paths with spaces
-    const batchPath = path.join(backendDir, 'run_backend.bat');
-    
-    if (fs.existsSync(batchPath)) {
-      logBackend('info', `Found batch launcher: ${batchPath}`);
-      
-      // Use exec for batch files (better handling of paths with spaces)
-      const { exec } = require('child_process');
-      
-      // Properly quote the path for Windows
-      const quotedPath = `"${batchPath}"`;
-      
-      logBackend('info', `Executing: ${quotedPath}`);
-      backendProcess = exec(quotedPath, {
-        cwd: backendDir,
-        windowsHide: false
-      });
-      
-      logBackend('info', `Process started with batch script, PID: ${backendProcess.pid || 'unknown'}`);
-      
-      // Setup logging and error handling
-      setupProcessLogging(backendProcess);
-    }
-    // Fallback: Try the executable directly 
-    else {
-      const exePath = path.join(backendDir, 'hospital_backend.exe');
-      
-      if (fs.existsSync(exePath)) {
-        logBackend('info', `Found exe file: ${exePath}`);
-        
-        // Explicitly use cmd.exe to run the executable (handles spaces better)
-        const { exec } = require('child_process');
-        
-        // Construct a cmd.exe command that properly handles paths with spaces
-        const cmdCommand = `cmd.exe /c ""${exePath}""`;
-        
-        logBackend('info', `Starting backend with command: ${cmdCommand}`);
-        
-        backendProcess = exec(cmdCommand, {
-          cwd: backendDir
-        });
-        
-        logBackend('info', `Process started with PID: ${backendProcess.pid || 'unknown'}`);
-        
-        // Setup logging and error handling
-        setupProcessLogging(backendProcess);
-      }
-      // Fallback to app.py with Python 
-      else if (fs.existsSync(path.join(backendDir, 'app.py'))) {
-        const appPyPath = path.join(backendDir, 'app.py');
-        logBackend('info', `No executable or batch file found, falling back to Python: ${appPyPath}`);
-        
-        // Use python to run app.py
-        backendProcess = spawn('python', [`"${appPyPath}"`], {
-          cwd: backendDir,
-          shell: true,  // Important for Windows path handling
-          stdio: 'pipe'
-        });
-        
-        logBackend('info', `Process started with PID: ${backendProcess.pid || 'unknown'}`);
-        
-        // Setup logging and error handling
-        setupProcessLogging(backendProcess);
-      }
-      else {
-        throw new Error("No executable, batch file, or Python script found in backend directory");
+    const batch = path.join(backendDir, 'run_backend.bat');
+    if (fs.existsSync(batch)) {
+      logBackend('info', `Launching batch: ${batch}`);
+      backendProcess = spawn(batch, { cwd: backendDir, shell: true });
+    } else {
+      const exe = path.join(backendDir, 'hospital_backend.exe');
+      if (fs.existsSync(exe)) {
+        logBackend('info', `Launching exe: ${exe}`);
+        backendProcess = spawn('cmd.exe', ['/c', `"${exe}"`], { cwd: backendDir });
+      } else if (fs.existsSync(path.join(backendDir, 'app.py'))) {
+        const py = path.join(backendDir, 'app.py');
+        logBackend('info', `Falling back to Python: ${py}`);
+        backendProcess = spawn('python', [py], { cwd: backendDir, shell: true });
+      } else {
+        throw new Error('No launcher found (bat, exe, or app.py)');
       }
     }
-    
-    // Wait for the backend to start
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    logBackend('info', 'Backend server started (or wait time elapsed)');
-    
-  } catch (error) {
-    logBackend('error', `Failed to start backend server: ${error.message}`);
-    
-    dialog.showErrorBox(
-      'Backend Error',
-      `Failed to start the backend server: ${error.message}\n\nPlease reinstall the application.`
-    );
-    
+
+    setupProcessLogging(backendProcess);
+    // give it a moment
+    await new Promise(r => setTimeout(r, 2000));
+    logBackend('info', 'Backend start wait elapsed');
+  } catch (err) {
+    logBackend('error', `Failed to start backend: ${err.message}`);
+    dialog.showErrorBox('Backend Error', `Could not start backend:\n${err.message}`);
     app.quit();
   }
 }
 
-// Create the main browser window
+// --- Clean shutdown --------------------------------------------------------
+function terminateAllBackendProcesses() {
+  if (process.platform === 'win32') {
+    if (backendProcess && backendProcess.pid) {
+      logBackend('info', `Killing PID ${backendProcess.pid}`);
+      try {
+        spawnSync('taskkill', ['/F', '/T', '/PID', `${backendProcess.pid}`]);
+        logBackend('info', 'Primary process terminated');
+      } catch (e) {
+        logBackend('error', `Error killing PID: ${e.message}`);
+      }
+    }
+    try {
+      spawnSync('taskkill', ['/F', '/T', '/IM', 'hospital_backend.exe']);
+      logBackend('info', 'All hospital_backend.exe processes terminated');
+    } catch (e) {
+      logBackend('error', `Error sweeping exe: ${e.message}`);
+    }
+  } else {
+    if (backendProcess && backendProcess.pid) {
+      try {
+        process.kill(-backendProcess.pid, 'SIGKILL');
+        logBackend('info', 'Killed process group');
+      } catch (e) {
+        logBackend('error', `Unix kill error: ${e.message}`);
+      }
+    }
+    try {
+      spawnSync('pkill', ['-f', 'python.*app.py']);
+      logBackend('info', 'Pkilled Python backend processes');
+    } catch { /* ignore */ }
+  }
+  backendProcess = null;
+}
+
+// --- Electron lifecycle ----------------------------------------------------
+app.on('before-quit', () => {
+  if (backendProcess) {
+    logBackend('info', 'before-quit hook: terminating backend');
+    terminateAllBackendProcesses();
+  }
+});
+
+app.on('window-all-closed', () => {
+  if (backendProcess) {
+    logBackend('info', 'window-all-closed: terminating backend');
+    terminateAllBackendProcesses();
+  }
+  if (process.platform !== 'darwin') app.quit();
+});
+
+app.on('will-quit', () => {
+  if (backendProcess) {
+    logBackend('info', 'will-quit: terminating backend');
+    terminateAllBackendProcesses();
+  }
+});
+
+// --- Window creation -------------------------------------------------------
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
+    icon: path.join(__dirname, 'build/icon.png'),
     webPreferences: {
-      nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js')
-    },
-    icon: path.join(__dirname, 'build/icon.png')
+    }
   });
-  
-  // Load the app
+
   if (isDev) {
-    // In development, load from Vite dev server
     mainWindow.loadURL(`http://localhost:${PORT}`);
-    // Open DevTools
     mainWindow.webContents.openDevTools();
   } else {
-    // In production, load from built files
-    const indexPath = path.join(__dirname, 'dist', 'index.html');
-    logBackend('info', `Loading index.html from: ${indexPath}`);
-    
-    mainWindow.loadFile(indexPath);
+    const index = path.join(__dirname, 'dist/index.html');
+    logBackend('info', `Loading index.html from: ${index}`);
+    mainWindow.loadFile(index);
   }
-  
-  // Add context menu for inspecting elements in development
-  if (isDev) {
-    mainWindow.webContents.on('context-menu', (_, params) => {
-      const menu = require('electron').Menu.buildFromTemplate([
-        {
-          label: 'Inspect Element',
-          click: () => {
-            mainWindow.webContents.inspectElement(params.x, params.y);
-          }
-        },
-        {
-          label: 'Open Developer Tools',
-          click: () => {
-            mainWindow.webContents.openDevTools();
-          }
-        }
-      ]);
-      menu.popup();
-    });
-  }
-  
-  // Handle window close
+
+  // ⬇️ ensure backend is killed before window actually closes
+  mainWindow.on('close', (e) => {
+    if (backendProcess) {
+      e.preventDefault();
+      logBackend('info', 'Window close: terminating backend…');
+      terminateAllBackendProcesses();
+      mainWindow.destroy();
+      app.quit();
+    }
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
 }
 
-// Initialize the app
+// --- App ready -------------------------------------------------------------
 app.whenReady().then(async () => {
-  logBackend('info', `Starting application from: ${__dirname}`);
-  logBackend('info', `User data directory: ${app.getPath('userData')}`);
-  logBackend('info', `Resources path: ${process.resourcesPath}`);
-  
-  // Copy default files to userData directory (only happens on first run)
-  const defaultFilesCopy = await copyDefaultFilesToUserData();
-  logBackend('info', `Default files copied: ${defaultFilesCopy.filesCopied.join(', ') || 'none'}`);
-  if (defaultFilesCopy.filesMissing.length > 0) {
-    logBackend('info', `Default files not found: ${defaultFilesCopy.filesMissing.join(', ')}`);
+  logBackend('info', `App ready, cwd: ${__dirname}`);
+  const copyResult = await copyDefaultFilesToUserData();
+  logBackend('info', `Defaults copied: ${copyResult.filesCopied.join(', ')}`);
+  if (copyResult.filesMissing.length) {
+    logBackend('info', `Defaults missing: ${copyResult.filesMissing.join(', ')}`);
   }
-  
-  // Start the backend server
+
   await startBackendServer();
-  
-  // Create the main window
   createWindow();
-  
-  // Re-create window on activation (macOS)
+
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-    }
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
 
-// IPC handlers for communicating with the renderer process
-ipcMain.handle('get-backend-logs', () => {
-  return backendLogs;
-});
+// --- IPC Handlers ----------------------------------------------------------
+ipcMain.handle('get-backend-logs', () => backendLogs);
 
 ipcMain.handle('restart-backend', async () => {
   if (backendProcess) {
-    // Kill the existing process
-    backendProcess.kill();
+    logBackend('info', 'Restart: terminating existing backend');
+    terminateAllBackendProcesses();
   }
-  
-  // Start a new backend process
   await startBackendServer();
   return { success: true };
 });
 
-// Handler for loading files from userData
 ipcMain.handle('load-user-data-file', async (_, fileName) => {
-  try {
-    const filePath = path.join(app.getPath('userData'), fileName);
-    if (!fs.existsSync(filePath)) {
-      logBackend('info', `File not found in userData: ${fileName}`);
-      return null;
-    }
-    
-    logBackend('info', `Loading file from userData: ${filePath}`);
-    const fileContent = await fs.promises.readFile(filePath, 'utf8');
-    return JSON.parse(fileContent);
-  } catch (error) {
-    logBackend('error', `Error loading file ${fileName} from userData: ${error.message}`);
-    return null;
-  }
+  const fp = path.join(app.getPath('userData'), fileName);
+  if (!fs.existsSync(fp)) return null;
+  const content = await fs.promises.readFile(fp, 'utf8');
+  return JSON.parse(content);
 });
 
-// Handler for getting app paths (for debugging)
-ipcMain.handle('get-app-paths', () => {
-  return {
-    appPath: app.getAppPath(),
-    userData: app.getPath('userData'),
-    resourcesPath: process.resourcesPath,
-    currentDir: __dirname,
-    backendDir: getBackendDir()
-  };
+ipcMain.handle('get-app-paths', () => ({
+  appPath: app.getAppPath(),
+  userData: app.getPath('userData'),
+  resourcesPath: process.resourcesPath,
+  currentDir: __dirname,
+  backendDir: getBackendDir()
+}));
+
+ipcMain.handle('save-file', async (_, { defaultPath, filters, content, isBase64 }) => {
+  const { canceled, filePath } = await dialog.showSaveDialog({
+    defaultPath,
+    filters: filters || [{ name: 'All Files', extensions: ['*'] }],
+    properties: ['createDirectory', 'showOverwriteConfirmation']
+  });
+  if (canceled || !filePath) return { canceled: true };
+  if (isBase64) {
+    fs.writeFileSync(filePath, Buffer.from(content, 'base64'));
+  } else {
+    fs.writeFileSync(filePath, content);
+  }
+  logBackend('info', `File saved: ${filePath}`);
+  return { success: true, filePath };
 });
 
-app.on('window-all-closed', () => {
-  // Ensure backend process is terminated
-  if (backendProcess) {
-    logBackend('info', 'Terminating backend process on window close...');
-    try {
-      // Try more forceful termination
-      if (process.platform === 'win32') {
-        const { execSync } = require('child_process');
-        if (backendProcess.pid) {
-          execSync(`taskkill /pid ${backendProcess.pid} /T /F`);
-        }
-      } else {
-        backendProcess.kill('SIGKILL');
-      }
-    } catch (err) {
-      logBackend('error', `Error killing backend process: ${err.message}`);
-    }
-  }
-  
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
-});
-
-// Clean up the backend process when quitting
-app.on('will-quit', () => {
-  if (backendProcess) {
-    logBackend('info', 'Terminating backend process...');
-    try {
-      // Try more forceful termination
-      if (process.platform === 'win32') {
-        // On Windows, use taskkill to force terminate the process tree
-        const { execSync } = require('child_process');
-        if (backendProcess.pid) {
-          execSync(`taskkill /pid ${backendProcess.pid} /T /F`);
-        }
-      } else {
-        // On Unix systems, send SIGKILL for more forceful termination
-        backendProcess.kill('SIGKILL');
-      }
-    } catch (err) {
-      logBackend('error', `Error killing backend process: ${err.message}`);
-    } finally {
-      backendProcess = null;
-    }
-  }
+ipcMain.handle('open-file', async (_, { filters }) => {
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    filters: filters || [{ name: 'All Files', extensions: ['*'] }],
+    properties: ['openFile']
+  });
+  if (canceled || !filePaths.length) return { canceled: true };
+  const content = fs.readFileSync(filePaths[0], 'utf8');
+  logBackend('info', `File opened: ${filePaths[0]}`);
+  return { success: true, filePath: filePaths[0], content };
 });

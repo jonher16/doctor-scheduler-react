@@ -10,7 +10,6 @@ a = Analysis(
     hiddenimports=[ 
         'flask',  
         'flask_cors',  
-        'schedule_optimizer', 
         'random', 
         'copy', 
         'time', 

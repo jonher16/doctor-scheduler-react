@@ -42,6 +42,7 @@ import {
 import EnhancedCalendar from './EnhancedCalendar';
 import HolidayCalendar from './HolidayCalendar';
 import { useYear } from '../contexts/YearContext';
+import ConfigImportExport from './ConfigImportExport';
 
 // Constants for localStorage keys
 const LAST_POPUP_HOLIDAY_MONTH_KEY = 'holidayConfig_popupLastViewedMonth';
@@ -675,6 +676,16 @@ function HolidayConfig({ holidays, setHolidays }) {
           {snackbar.message}
         </Alert>
       </Snackbar>
+
+      {/* Add ConfigImportExport component */}
+      <ConfigImportExport 
+        doctors={[]} 
+        setDoctors={() => {}} 
+        holidays={localHolidays} 
+        setHolidays={setLocalHolidays}
+        availability={{}} 
+        setAvailability={() => {}}
+      />
     </Box>
   );
 }

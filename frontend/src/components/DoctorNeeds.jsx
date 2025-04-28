@@ -47,6 +47,7 @@ import {
 import EnhancedCalendar from './EnhancedCalendar';
 import DoctorAvailabilityCalendar from './DoctorAvailabilityCalendar';
 import { useYear } from '../contexts/YearContext';
+import ConfigImportExport from './ConfigImportExport';
 
 
 function DoctorNeeds({ doctors, setAvailability, availability }) {
@@ -728,28 +729,26 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
           }}
         >
           <Tab 
-            value="table" 
-            label="Table View" 
             icon={<ViewListIcon />} 
-            iconPosition="start"
+            label="List View" 
+            value="table"
           />
           <Tab 
-            value="calendar" 
-            label="Calendar View" 
             icon={<CalendarViewMonthIcon />} 
-            iconPosition="start"
+            label="Calendar View" 
+            value="calendar"
           />
         </Tabs>
-
+        
         <Box>
           <Button
             variant="contained"
-            startIcon={<CalendarTodayIcon />}
+            startIcon={<AddIcon />}
             onClick={handleOpenDialog}
             sx={{ mr: 2 }}
-            color="error"
+            color="primary"
           >
-            Mark As Unavailable
+            Mark as Unavailable
           </Button>
           <Button
             variant="outlined"
@@ -757,7 +756,7 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
             onClick={saveConstraints}
             color="primary"
           >
-            Save Availability
+            Save Changes
           </Button>
         </Box>
       </Box>
@@ -969,6 +968,16 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
           {snackbar.message}
         </Alert>
       </Snackbar>
+
+      {/* Add ConfigImportExport component */}
+      <ConfigImportExport 
+        doctors={[]} 
+        setDoctors={() => {}} 
+        holidays={{}} 
+        setHolidays={() => {}}
+        availability={availability} 
+        setAvailability={setAvailability}
+      />
     </Box>
   );
 }
