@@ -39,7 +39,8 @@ import {
   Event as EventIcon,
   Dashboard as DashboardIcon,
   CloudSync as CloudSyncIcon,
-  LocalHospital as HospitalIcon
+  LocalHospital as HospitalIcon,
+  ImportExport as ImportExportIcon
 } from '@mui/icons-material';
 
 // Import components
@@ -51,6 +52,7 @@ import Dashboard from './components/Dashboard';
 import BackendMonitor from './components/BackendMonitor';
 import SyncPage from './components/SyncPage';
 import ShiftManager from './components/ShiftManager';
+import ConfigImportExport from './components/ConfigImportExport';
 
 // Import utility functions
 import { getYearRange } from './utils/dateUtils';
@@ -111,6 +113,7 @@ const menuItems = [
   { text: 'Doctor Availability', icon: <CalendarTodayIcon />, component: 'availability' },
   { text: 'Shift Manager', icon: <EventIcon />, component: 'shiftmanager' },
   { text: 'Cloud Sync', icon: <CloudSyncIcon />, component: 'sync' },
+  { text: 'Import/Export', icon: <ImportExportIcon />, component: 'importexport' },
 ];
 
 // Determine if we're running in Electron
@@ -723,6 +726,15 @@ function App() {
       return <ShiftManager 
         doctors={doctors} 
         setDoctors={setDoctors} 
+        availability={availability} 
+        setAvailability={setAvailability}
+      />;
+      case 'importexport':
+      return <ConfigImportExport 
+        doctors={doctors} 
+        setDoctors={setDoctors} 
+        holidays={holidays}
+        setHolidays={setHolidays}
         availability={availability} 
         setAvailability={setAvailability}
       />;

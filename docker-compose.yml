@@ -1,0 +1,28 @@
+version: "3.8"
+
+services:
+  doctor-scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: doctor-scheduler:latest
+    container_name: doctor-scheduler
+    ports:
+      - "5000:5000"  # backend API
+      - "3000:3000"  # frontend static
+    environment:
+      - NODE_ENV=production
+      # override / confirm your Firebase keys here if needed
+      - VITE_FIREBASE_API_KEY=AIzaSyAtHR8wfNlWmSl8NazARJie00673F8H9B4
+      - VITE_FIREBASE_AUTH_DOMAIN=doctor-scheduler-portal.firebaseapp.com
+      - VITE_FIREBASE_PROJECT_ID=doctor-scheduler-portal
+      - VITE_FIREBASE_STORAGE_BUCKET=doctor-scheduler-portal.firebasestorage.app
+      - VITE_FIREBASE_MESSAGING_SENDER_ID=426313640263
+      - VITE_FIREBASE_APP_ID=1:426313640263:web:269ffc12b1af5122b44462
+    restart: always
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  doctor-scheduler-data:
+    name: doctor-scheduler-data

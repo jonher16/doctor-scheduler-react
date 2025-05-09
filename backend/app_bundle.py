@@ -21,7 +21,6 @@ import time
 
 
 # Import the optimizers
-from schedule_optimizer import optimize_schedule, ScheduleOptimizer
 from monthly_schedule_optimizer import optimize_monthly_schedule, MonthlyScheduleOptimizer
 from weight_optimizer import optimize_weights
 
@@ -165,33 +164,30 @@ def optimize():
         }
         
         # Check scheduling mode
-        scheduling_mode = data.get("scheduling_mode", "yearly")
+        scheduling_mode = data.get("scheduling_mode", "monthly")  # Default to monthly now
         
-        if scheduling_mode == "monthly":
-            month = data.get("month")
-            if month is None:
-                return jsonify({
-                    "error": "Month parameter is required for monthly scheduling"
-                }), 400
+        # Always use monthly optimization since yearly is not used
+        month = data.get("month")
+        if month is None:
+            return jsonify({
+                "error": "Month parameter is required for scheduling"
+            }), 400
                 
-            try:
-                month = int(month)
-                if month < 1 or month > 12:
-                    return jsonify({
-                        "error": f"Invalid month: {month}. Month must be between 1 and 12."
-                    }), 400
-            except ValueError:
+        try:
+            month = int(month)
+            if month < 1 or month > 12:
                 return jsonify({
-                    "error": f"Invalid month format: {month}. Month must be an integer."
+                    "error": f"Invalid month: {month}. Month must be between 1 and 12."
                 }), 400
+        except ValueError:
+            return jsonify({
+                "error": f"Invalid month format: {month}. Month must be an integer."
+            }), 400
                 
-            optimization_progress["message"] = f"Initializing optimization for month {month}"
+        optimization_progress["message"] = f"Initializing optimization for month {month}"
             
-            # Run monthly optimization
-            result = optimize_monthly_schedule(data, progress_callback=update_progress)
-        else:
-            # Run yearly optimization
-            result = optimize_schedule(data, progress_callback=update_progress)
+        # Run monthly optimization
+        result = optimize_monthly_schedule(data, progress_callback=update_progress)
         
         # Check for errors from the optimizer
         if "error" in result and result["error"]:
@@ -213,9 +209,8 @@ def optimize():
         
         # Save result to file with timestamp
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        mode_prefix = "monthly" if scheduling_mode == "monthly" else "yearly"
-        month_suffix = f"_month{month}" if scheduling_mode == "monthly" else ""
-        filename = f"{mode_prefix}_optimization_{timestamp}{month_suffix}.json"
+        mode_prefix = "monthly"  # Always use monthly prefix
+        filename = f"{mode_prefix}_optimization_{timestamp}_month{month}.json"
         filepath = os.path.join(RESULTS_DIR, filename)
         
         with open(filepath, 'w') as f:
@@ -281,20 +276,24 @@ def previous_runs():
                 
                 filepath = os.path.join(RESULTS_DIR, filename)
                 
-                # Extract timestamp and scheduling mode
-                scheduling_mode = "yearly"
-                if filename.startswith("monthly_optimization_"):
-                    scheduling_mode = "monthly"
-                    
-                timestamp_part = filename.split("_")[2] if scheduling_mode == "yearly" else filename.split("_")[2]
-                timestamp = timestamp_part.split(".")[0]
+                # All schedules are monthly
+                scheduling_mode = "monthly"
+                
+                # Extract timestamp from filename
+                parts = filename.split("_")
+                if len(parts) >= 3:
+                    timestamp = parts[2]
+                else:
+                    timestamp = "unknown"
                 
                 # Get month for monthly optimizations
                 month = None
-                if scheduling_mode == "monthly" and "_month" in filename:
-                    month_part = filename.split("_month")[1]
-                    if month_part and month_part[0].isdigit():
-                        month = int(month_part[0])
+                if "_month" in filename:
+                    try:
+                        month_part = filename.split("_month")[1].split(".")[0]
+                        month = int(month_part)
+                    except (IndexError, ValueError):
+                        pass
                 
                 # Get basic statistics from file
                 try:

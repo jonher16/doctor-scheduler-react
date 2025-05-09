@@ -45,6 +45,7 @@ import {
   Nightlight as NightIcon,
   Brightness4 as EveningIcon
 } from '@mui/icons-material';
+import ConfigImportExport from './ConfigImportExport';
 
 function DoctorConfig({ doctors, setDoctors }) {
   const [localDoctors, setLocalDoctors] = useState(doctors);
@@ -412,6 +413,16 @@ function DoctorConfig({ doctors, setDoctors }) {
           </Button>
         </Box>
       </Box>
+
+      {/* Add ConfigImportExport component */}
+      <ConfigImportExport 
+        doctors={doctors} 
+        setDoctors={setDoctors} 
+        holidays={{}} 
+        setHolidays={() => {}}
+        availability={{}} 
+        setAvailability={() => {}}
+      />
 
       <Paper elevation={1} sx={{ mb: 4 }}>
         <TableContainer>

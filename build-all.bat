@@ -617,10 +617,87 @@ echo ipcMain.handle^('get-backend-logs', ^(^) =^> {
 echo   return backendLogs;
 echo }^);
 echo.
+echo // Function to forcefully terminate all hospital_backend processes
+echo function terminateAllBackendProcesses^(^) {
+echo   if ^(process.platform === 'win32'^) {
+echo     try {
+echo       // First try to kill our known process
+echo       if ^(backendProcess ^&^& backendProcess.pid^) {
+echo         try {
+echo           const { execSync } = require^('child_process'^);
+echo           execSync^(`taskkill /pid ${backendProcess.pid} /T /F`^);
+echo           logBackend^('info', `Terminated backend process with PID: ${backendProcess.pid}`^);
+echo         } catch ^(err^) {
+echo           logBackend^('error', `Error killing known backend process: ${err.message}`^);
+echo         }
+echo       }
+echo.
+echo       // Then find and kill ALL hospital_backend.exe processes to be thorough
+echo       const { execSync } = require^('child_process'^);
+echo       logBackend^('info', 'Searching for any remaining hospital_backend.exe processes...'^);
+echo       
+echo       // Get a list of all hospital_backend.exe processes
+echo       const { exec } = require^('child_process'^);
+echo       exec^('tasklist /FI "IMAGENAME eq hospital_backend.exe" /FO CSV', ^(err, stdout^) =^> {
+echo         if ^(err^) {
+echo           logBackend^('error', `Error listing backend processes: ${err.message}`^);
+echo           return;
+echo         }
+echo         
+echo         // Parse CSV output to get PIDs
+echo         const lines = stdout.trim^(^).split^('\n'^);
+echo         if ^(lines.length ^> 1^) { // First line is header
+echo           logBackend^('info', `Found ${lines.length - 1} hospital_backend.exe processes still running`^);
+echo           
+echo           try {
+echo             // Kill all hospital_backend.exe processes forcefully
+echo             execSync^('taskkill /F /IM hospital_backend.exe /T'^);
+echo             logBackend^('info', 'Successfully terminated all hospital_backend.exe processes'^);
+echo           } catch ^(killErr^) {
+echo             logBackend^('error', `Error killing all backend processes: ${killErr.message}`^);
+echo           }
+echo         } else {
+echo           logBackend^('info', 'No additional hospital_backend.exe processes found'^);
+echo         }
+echo       }^);
+echo     } catch ^(err^) {
+echo       logBackend^('error', `Error in terminate all processes: ${err.message}`^);
+echo     }
+echo   } else {
+echo     // On Unix systems
+echo     if ^(backendProcess^) {
+echo       try {
+echo         backendProcess.kill^('SIGKILL'^);
+echo         logBackend^('info', 'Backend process terminated with SIGKILL'^);
+echo       } catch ^(err^) {
+echo         logBackend^('error', `Error killing backend process: ${err.message}`^);
+echo       }
+echo       
+echo       // Try to find other Python processes that might be running the backend
+echo       try {
+echo         const { exec } = require^('child_process'^);
+echo         exec^('pkill -f "python.*app.py"', ^(err^) =^> {
+echo           if ^(err ^&^& err.code !== 1^) { // pkill returns 1 if no processes found
+echo             logBackend^('error', `Error killing Python backend processes: ${err.message}`^);
+echo           } else {
+echo             logBackend^('info', 'All Python backend processes terminated'^);
+echo           }
+echo         }^);
+echo       } catch ^(err^) {
+echo         logBackend^('error', `Error in pkill command: ${err.message}`^);
+echo       }
+echo     }
+echo   }
+echo   
+echo   // Clear the reference regardless of success
+echo   backendProcess = null;
+echo }
+echo.
 echo ipcMain.handle^('restart-backend', async ^(^) =^> {
 echo   if ^(backendProcess^) {
 echo     // Kill the existing process
-echo     backendProcess.kill^(^);
+echo     logBackend^('info', 'Terminating backend processes before restart...'^);
+echo     terminateAllBackendProcesses^(^);
 echo   }
 echo   
 echo   // Start a new backend process
@@ -659,6 +736,12 @@ echo }^);
 echo.
 echo // Quit the app when all windows are closed ^(Windows ^& Linux^)
 echo app.on^('window-all-closed', ^(^) =^> {
+echo   // Ensure backend process is terminated
+echo   if ^(backendProcess^) {
+echo     logBackend^('info', 'Terminating backend processes on window close...'^);
+echo     terminateAllBackendProcesses^(^);
+echo   }
+echo   
 echo   if ^(process.platform !== 'darwin'^) {
 echo     app.quit^(^);
 echo   }
@@ -667,9 +750,8 @@ echo.
 echo // Clean up the backend process when quitting
 echo app.on^('will-quit', ^(^) =^> {
 echo   if ^(backendProcess^) {
-echo     logBackend^('info', 'Terminating backend process...'^);
-echo     backendProcess.kill^(^);
-echo     backendProcess = null;
+echo     logBackend^('info', 'Terminating backend processes...'^);
+echo     terminateAllBackendProcesses^(^);
 echo   }
 echo }^);
 ) > main.js

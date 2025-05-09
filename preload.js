@@ -16,6 +16,12 @@ contextBridge.exposeInMainWorld('electron', {
   // Get application paths
   getAppPaths: () => ipcRenderer.invoke('get-app-paths'),
   
+  // Save file using system dialog (for exports)
+  saveFile: (options) => ipcRenderer.invoke('save-file', options),
+  
+  // Open file using system dialog (for imports)
+  openFile: (options) => ipcRenderer.invoke('open-file', options),
+  
   // Listen for backend logs
   onBackendLog: (callback) => {
     ipcRenderer.on('backend-log', (_, data) => callback(data));
