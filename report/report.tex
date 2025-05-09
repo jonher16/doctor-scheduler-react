@@ -469,18 +469,7 @@ The algorithm terminates when one of the following conditions is met:
 
 \section{Implementation Specifics}
 
-\subsection{Yearly vs. Monthly Optimization}
-
-The system implements two optimization modes:
-
-\subsubsection{Yearly Optimization:}
-\begin{itemize}
-    \item Optimizes the entire year's schedule at once
-    \item Places greater emphasis on long-term fairness
-    \item Uses more iterations (1500) and larger tabu tenure (20)
-\end{itemize}
-
-\subsubsection{Monthly Optimization:}
+\subsection{Monthly Optimization:}
 \begin{itemize}
     \item Focuses on a single month for more refined scheduling
     \item Uses tighter constraints on workload balance (8 hours maximum difference)
@@ -542,6 +531,106 @@ The system includes specific optimizations for running in an Electron bundled ap
     \item Chunked processing to prevent UI freezing in interactive mode
     \item Dynamic adjustment of process management based on the hosting platform
     \item Special logging and error handling for the bundled environment
+\end{itemize}
+
+\section{Frontend Implementation}
+
+The application features a modern, responsive React-based frontend that provides an intuitive user interface for managing the doctor scheduling system. The frontend integrates seamlessly with the backend optimization algorithm and offers a comprehensive set of tools for administrators to configure, generate, visualize, and modify schedules.
+
+\subsection{Technology Stack}
+
+The frontend implementation employs the following technologies:
+\begin{itemize}
+    \item \textbf{React.js:} Core library for building the user interface components with functional components and hooks
+    \item \textbf{Material-UI (MUI):} Comprehensive component library providing a consistent design system
+    \item \textbf{Vite:} Modern build tool for faster development and optimized production builds
+    \item \textbf{Context API:} For state management across components, particularly for year selection
+    \item \textbf{Electron Integration:} Seamless desktop application capabilities through Electron
+    \item \textbf{LocalStorage:} For client-side data persistence between sessions
+    \item \textbf{Responsive Design:} Ensures usability across various screen sizes and devices
+\end{itemize}
+
+\subsection{Core Functionality}
+
+The frontend provides a comprehensive set of features organized into logical modules:
+
+\subsubsection{Doctor Configuration}
+\begin{itemize}
+    \item Management of doctor profiles including name, seniority level, and contract status
+    \item Configuration of shift preferences (Day Only, Evening Only, Night Only, None)
+    \item Specification of maximum weekly shifts and special requirements
+    \item Support for contract doctors with precise shift count requirements
+\end{itemize}
+
+\subsubsection{Holiday Configuration}
+\begin{itemize}
+    \item Definition of regular holidays and special long holidays
+    \item Calendar-based interface for selecting holiday dates
+    \item Differentiation between standard holidays and long holidays for scheduling purposes
+    \item Year-based holiday management with persistence
+\end{itemize}
+
+\subsubsection{Doctor Availability Management}
+\begin{itemize}
+    \item Interactive calendar for defining doctor availability for each shift type
+    \item Bulk operations for setting availability patterns
+    \item Individual day and shift-specific unavailability marking
+    \item Monthly and yearly availability views
+\end{itemize}
+
+\subsubsection{Shift Management}
+\begin{itemize}
+    \item Creation and modification of shift templates
+    \item Definition of staffing requirements for each shift type (Day, Evening, Night)
+    \item Custom staffing levels for special days or events
+    \item Template-based pattern application across multiple days
+\end{itemize}
+
+\subsubsection{Schedule Generation}
+\begin{itemize}
+    \item Interface for initiating both monthly and yearly schedule optimizations
+    \item Configuration of optimization parameters and constraints
+    \item Real-time progress tracking during schedule generation
+    \item Optimization control with stop and resume capabilities
+    \item Meta-optimizer configuration for weight adjustment
+\end{itemize}
+
+\subsection{Data Visualization}
+
+The frontend excels in presenting complex scheduling data through various visualization components:
+
+\subsubsection{Dashboard}
+\begin{itemize}
+    \item Comprehensive overview of the current schedule with key metrics
+    \item Statistics on workload distribution, preference satisfaction, and constraint violations
+    \item Quick navigation to detailed views and specific months
+    \item Export capabilities for sharing and reporting
+\end{itemize}
+
+\subsubsection{Calendar Views}
+\begin{itemize}
+    \item Interactive monthly calendar displaying all scheduled shifts
+    \item Color-coded representation of doctors and shift types
+    \item Drag-and-drop interface for manual schedule adjustments
+    \item Highlighting of holidays, weekends, and special scheduling considerations
+    \item Visual indicators for constraint violations
+\end{itemize}
+
+\subsubsection{Analytical Charts}
+\begin{itemize}
+    \item Monthly hours distribution charts showing workload balance
+    \item Weekend and holiday balance visualizations
+    \item Shift type distribution per doctor
+    \item Preference satisfaction metrics
+    \item Seniority-based comparative analytics
+\end{itemize}
+
+\subsubsection{Constraint Violation Reporting}
+\begin{itemize}
+    \item Detailed analysis of hard and soft constraint violations
+    \item Interactive tools for identifying and resolving scheduling conflicts
+    \item Priority-based visualization of constraint issues
+    \item Suggestions for resolving detected problems
 \end{itemize}
 
 \section{Conclusions}
