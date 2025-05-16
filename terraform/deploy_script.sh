@@ -3,6 +3,9 @@ set -e
 
 echo "=== Doctor Scheduler AWS Deployment Script ==="
 
+# Set default AWS region (can be overridden by terraform output later)
+DEFAULT_AWS_REGION="us-west-2"  # Change this to your preferred region if different
+
 # Initialize Terraform
 echo "Initializing Terraform..."
 terraform init
@@ -11,9 +14,12 @@ terraform init
 echo "Creating ECR repository..."
 terraform apply -target=aws_ecr_repository.app_repo -auto-approve
 
-# Get repository URL
-ECR_REPO_URL=$(terraform output -raw ecr_repository_url)
+# Try to get outputs or use defaults
+ECR_REPO_URL=$(terraform output -raw ecr_repository_url 2>/dev/null)
+AWS_REGION=$(terraform output -raw aws_region 2>/dev/null || echo "$DEFAULT_AWS_REGION")
+
 echo "ECR repository created: $ECR_REPO_URL"
+echo "Using AWS region: $AWS_REGION"
 
 # Build Docker image
 echo "Building Docker image..."
@@ -26,8 +32,7 @@ sudo docker tag doctor-scheduler:latest $ECR_REPO_URL:latest
 
 # Login to ECR
 echo "Logging in to ECR..."
-aws_region=$(terraform -chdir=terraform output -raw aws_region)
-sudo aws ecr get-login-password --region $aws_region | sudo docker login --username AWS --password-stdin $ECR_REPO_URL
+sudo aws ecr get-login-password --region $AWS_REGION | sudo docker login --username AWS --password-stdin $ECR_REPO_URL
 
 # Push Docker image to ECR
 echo "Pushing Docker image to ECR..."

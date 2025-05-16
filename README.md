@@ -266,10 +266,35 @@ To update the application after changes:
 
 ### Cleaning Up AWS Resources
 
-To avoid ongoing charges:
+To avoid ongoing charges, you can use the destroy script to automatically clean up all resources:
 
 ```bash
 cd terraform
+chmod +x destroy_script.sh
+./destroy_script.sh
+```
+
+This script will:
+- Automatically empty the ECR repository of all images
+- Run terraform destroy to remove all infrastructure
+- Handle error cases and proper cleanup
+
+Alternatively, you can manually clean up the resources:
+
+```bash
+cd terraform
+
+# First, empty the ECR repository (required before it can be deleted)
+REPO_NAME="doctor-scheduler"
+DIGEST_LIST=$(aws ecr list-images --repository-name "$REPO_NAME" --query 'imageIds[*].imageDigest' --output text)
+
+for digest in $DIGEST_LIST; do
+  aws ecr batch-delete-image \
+    --repository-name "$REPO_NAME" \
+    --image-ids imageDigest=$digest
+done
+
+# Then destroy all AWS resources
 terraform destroy -auto-approve
 ```
 

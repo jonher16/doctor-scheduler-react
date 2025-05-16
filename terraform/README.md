@@ -111,10 +111,37 @@ To update the application after making changes:
 
 ## Cleaning Up
 
-To destroy all created resources and avoid incurring charges:
+To destroy all created resources and avoid incurring charges, use the provided destroy script:
 
 ```bash
+./destroy_script.sh
+```
+
+This script will:
+- Check if the ECR repository exists and contains images
+- Safely delete all images from the repository
+- Run terraform destroy to remove all AWS resources
+
+Alternatively, you can manually clean up the resources:
+
+```bash
+# First, empty the ECR repository (required before it can be deleted)
+REPO_NAME="doctor-scheduler"
+DIGEST_LIST=$(aws ecr list-images --repository-name "$REPO_NAME" --query 'imageIds[*].imageDigest' --output text)
+
+for digest in $DIGEST_LIST; do
+  aws ecr batch-delete-image \
+    --repository-name "$REPO_NAME" \
+    --image-ids imageDigest=$digest
+done
+
+# Then destroy all AWS resources
 terraform destroy
+```
+
+You may encounter the following error if you try to destroy without emptying the repository first:
+```
+Error: ECR Repository not empty, consider using force_delete: operation error ECR: DeleteRepository, RepositoryNotEmptyException: The repository cannot be deleted because it still contains images
 ```
 
 ## Troubleshooting
