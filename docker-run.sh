@@ -21,7 +21,7 @@ fi
 
 # Build and start the containers
 echo "Building and starting the application containers..."
-docker-compose up --build
+sudo docker-compose up --build
 
 # The script will wait here until docker-compose is terminated
 # Then the cleanup function will be called automatically 

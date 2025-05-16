@@ -1,0 +1,21 @@
+# Example Terraform variables file
+# Copy this to terraform.tfvars and replace with your actual values
+
+# AWS region for deployment
+aws_region = "us-west-2"
+
+# Application name - used for naming resources
+app_name = "doctor-scheduler"
+
+# Firebase configuration - required for the application
+firebase_api_key             = "your-firebase-api-key"
+firebase_auth_domain         = "your-firebase-auth-domain"
+firebase_project_id          = "your-firebase-project-id"
+firebase_storage_bucket      = "your-firebase-storage-bucket"
+firebase_messaging_sender_id = "your-firebase-messaging-sender-id"
+firebase_app_id              = "your-firebase-app-id"
+
+# Optional customizations
+container_cpu    = 256
+container_memory = 512
+desired_count    = 1 

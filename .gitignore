@@ -7,10 +7,23 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Build output
 node_modules
 dist
 dist-ssr
 *.local
+build
+release
+bundled_backend
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv
+backend/__pycache__
+backend/results
+results
 
 # Editor directories and files
 .vscode/*
@@ -22,21 +35,43 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-results
-backend\__pycache__
-__pycache__
-backend/results
-build
-release
-bundled_backend
-.venv
-winehq.key
-default
-backend/__pycache__/schedule_optimizer.cpython-312.pyc
+
+# Environment variables & secrets
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.der
 frontend/.env
+docker-compose.*.yml
+!docker-compose.yml
+!docker-compose.dev.yml
+
+# Terraform
+.terraform/
+terraform.tfstate
+terraform.tfstate.*
+*.tfvars
+*.tfvars.json
+terraform/.terraform/
+terraform/doctor-scheduler-key-*.pem
+
+# Documentation
 animations
 *.aux
 *.out
 *.pdf
 *.tar
+*.tex
 report
+
+# Backup files
+*.bak
+*~
+*.backup
+*.swp
+*.lock.hcl

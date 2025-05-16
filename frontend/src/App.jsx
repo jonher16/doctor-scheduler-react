@@ -122,7 +122,7 @@ const isElectron = window.platform?.isElectron;
 // Set the API URL based on environment
 const API_URL = isElectron 
   ? 'http://localhost:5000/api'  // Local backend when in Electron
-  : import.meta.env.VITE_API_URL || 'http://localhost:5000/api'; // From env or default
+  : '/api'; // Use relative path for web version - will be proxied by Nginx or environment variables
 
 function App() {
   // Get the year range from the utility function for the selector options

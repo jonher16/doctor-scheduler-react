@@ -34,14 +34,14 @@ COPY backend/ ./
 # ─── Runtime image ──────────────────────────────────────
 FROM node:20-slim
 
-# Install Python & venv tools
-RUN apt-get update && apt-get install -y python3 python3-venv python3-pip python3-full \
+# Install Python, Nginx & other tools
+RUN apt-get update && apt-get install -y python3 python3-venv python3-pip python3-full nginx \
   && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Install `serve` for static files
-RUN npm install -g serve
-
 WORKDIR /app
+
+# Copy Nginx configuration
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # bring in built frontend + backend
 COPY --from=frontend-builder /frontend/../dist ./frontend/dist
@@ -57,9 +57,9 @@ RUN python3 -m venv .venv \
 WORKDIR /app
 
 # entrypoint
-COPY docker-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+COPY docker-entrypoint.sh /app/
+RUN chmod +x /app/docker-entrypoint.sh
 
 EXPOSE 3000 5000
 
-ENTRYPOINT ["docker-entrypoint.sh"]
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
