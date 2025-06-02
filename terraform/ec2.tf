@@ -68,7 +68,7 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 # Create the EC2 instance
 resource "aws_instance" "app_instance" {
   ami           = data.aws_ami.amazon_linux_2.id
-  instance_type = "t2.micro"
+  instance_type = "t2.medium"
   key_name      = aws_key_pair.app_key.key_name
 
   vpc_security_group_ids = [aws_security_group.app_sg.id]

@@ -63,9 +63,9 @@ class WeightOptimizer:
                  availability: Dict[str, Dict[str, str]],
                  month: int,
                  year: int = None,
-                 max_iterations: int = 20,
-                 parallel_jobs: int = 1,
-                 time_limit_minutes: int = 10,
+                 max_iterations: int = 50,  # Increased from 20 for t2.medium
+                 parallel_jobs: int = 2,   # Use both vCPUs on t2.medium
+                 time_limit_minutes: int = 15,  # Increased time limit for better optimization
                  shift_template: Dict[str, Dict[str, Dict[str, int]]] = None
                  ):
         """
@@ -101,6 +101,16 @@ class WeightOptimizer:
         self.max_iterations = max_iterations
         self.parallel_jobs = max(1, min(parallel_jobs, 10))  # Between 1 and 10 jobs
         self.time_limit_seconds = time_limit_minutes * 60
+        
+        # Early termination optimization for t2.medium
+        self.early_termination_enabled = True
+        self.min_iterations_before_termination = max(10, max_iterations // 5)  # At least 10 or 20% of max
+        self.no_improvement_threshold = max(5, max_iterations // 10)  # Stop if no improvement for 5+ iterations
+        self.target_score_threshold = 0.1  # If we achieve very low score, we can stop early
+        
+        # Smart weight exploration for faster convergence
+        self.exploration_strategy = "adaptive"  # Can be "random", "guided", or "adaptive"
+        self.successful_weight_regions = []  # Track areas of weight space that work well
         
         # Track the best configuration found
         self.best_weights = None
@@ -157,6 +167,16 @@ class WeightOptimizer:
         # Results storage
         self.results = []
         
+        # Log optimization settings for t2.medium
+        logger.info(f"WeightOptimizer configured for t2.medium optimization:")
+        logger.info(f"  - Max iterations: {self.max_iterations}")
+        logger.info(f"  - Parallel jobs: {self.parallel_jobs}")
+        logger.info(f"  - Time limit: {time_limit_minutes} minutes")
+        logger.info(f"  - Early termination: {self.early_termination_enabled}")
+        logger.info(f"  - Exploration strategy: {self.exploration_strategy}")
+        logger.info(f"  - Min iterations before termination: {self.min_iterations_before_termination}")
+        logger.info(f"  - No improvement threshold: {self.no_improvement_threshold}")
+        
         # Check if we're running in Electron bundled mode
         self.is_electron_bundled = is_electron_bundled()
         if self.is_electron_bundled:
@@ -173,17 +193,47 @@ class WeightOptimizer:
                 logger.info(f"Current multiprocessing start method: {current_method}")
 
     def _get_random_weights(self) -> Dict[str, Any]:
-        """Generate a random set of weights within the defined ranges."""
+        """Generate a random set of weights within the defined ranges using adaptive exploration."""
         weights = copy.deepcopy(self.fixed_weights)
         
-        for param, (min_val, max_val, step) in self.weight_ranges.items():
-            if step == 1:
-                # For integer parameters
-                weights[param] = random.randint(min_val, max_val)
-            else:
-                # For parameters with specific steps
-                steps = list(range(min_val, max_val + 1, step))
-                weights[param] = random.choice(steps)
+        # Use adaptive exploration if we have successful weight regions
+        if (self.exploration_strategy == "adaptive" and 
+            len(self.successful_weight_regions) > 0 and 
+            random.random() < 0.4):  # 40% chance to use guided exploration
+            
+            # Pick a successful weight configuration as a starting point
+            base_weights = random.choice(self.successful_weight_regions)
+            
+            for param, (min_val, max_val, step) in self.weight_ranges.items():
+                if param in base_weights:
+                    # Explore around the successful value with smaller variance
+                    base_val = base_weights[param]
+                    variance = (max_val - min_val) * 0.2  # 20% variance around successful value
+                    
+                    if step == 1:
+                        new_val = int(max(min_val, min(max_val, 
+                            base_val + random.randint(-int(variance), int(variance)))))
+                    else:
+                        steps_variance = max(1, int(variance / step))
+                        step_offset = random.randint(-steps_variance, steps_variance) * step
+                        new_val = max(min_val, min(max_val, base_val + step_offset))
+                    
+                    weights[param] = new_val
+                else:
+                    # Fall back to random generation for missing parameters
+                    if step == 1:
+                        weights[param] = random.randint(min_val, max_val)
+                    else:
+                        steps = list(range(min_val, max_val + 1, step))
+                        weights[param] = random.choice(steps)
+        else:
+            # Standard random generation
+            for param, (min_val, max_val, step) in self.weight_ranges.items():
+                if step == 1:
+                    weights[param] = random.randint(min_val, max_val)
+                else:
+                    steps = list(range(min_val, max_val + 1, step))
+                    weights[param] = random.choice(steps)
         
         # Special handling for preference weights dictionary
         weights["w_pref"] = {
@@ -1213,8 +1263,10 @@ class WeightOptimizer:
             weights = self._get_random_weights()
             weight_configs.append((weights, i + 1))
         
-        # Track iterations completed
+        # Track iterations completed and early termination
         completed = 0
+        iterations_without_improvement = 0
+        last_best_score = float('inf')
         active_futures = set()
         
         # Initialize tracking for best solution with soft constraint hierarchy
@@ -1227,6 +1279,20 @@ class WeightOptimizer:
             while (completed < self.max_iterations and 
                    time.time() - start_time < self.time_limit_seconds and
                    weight_configs):
+                
+                # Check early termination conditions
+                if (self.early_termination_enabled and 
+                    completed >= self.min_iterations_before_termination):
+                    
+                    # Stop if we found an excellent solution
+                    if self.best_score <= self.target_score_threshold:
+                        logger.info(f"Early termination: Excellent solution found (score: {self.best_score:.3f})")
+                        break
+                    
+                    # Stop if no improvement for too long
+                    if iterations_without_improvement >= self.no_improvement_threshold:
+                        logger.info(f"Early termination: No improvement for {iterations_without_improvement} iterations")
+                        break
                 
                 # Submit new tasks if we have capacity and configs left
                 while len(active_futures) < max_workers and weight_configs:
@@ -1253,21 +1319,33 @@ class WeightOptimizer:
                         self._store_result(current_weights, total_score, hard_violations, 
                                          has_doctor_hour_balance_violation, preference_violations, soft_score, stats)
                         
-                        # Update best if improved
-                        self._update_best_if_improved(current_weights, schedule, stats, total_score, hard_violations, 
-                                                    has_doctor_hour_balance_violation, preference_violations, soft_score)
+                        # Update best if improved and track improvement
+                        improved = self._update_best_if_improved(current_weights, schedule, stats, total_score, hard_violations, 
+                                                               has_doctor_hour_balance_violation, preference_violations, soft_score)
+                        
+                        # Update early termination tracking
+                        if improved:
+                            iterations_without_improvement = 0
+                            last_best_score = self.best_score
+                        else:
+                            iterations_without_improvement += 1
+                            
                     except Exception as e:
                         logger.error(f"Error processing future: {e}")
                         completed += 1
+                        iterations_without_improvement += 1
                 
                 # Report progress
                 if progress_callback:
                     self._report_progress(progress_callback, completed, self.max_iterations, 
                                         time.time() - start_time, self.time_limit_seconds)
             
-            # Cancel any remaining futures if we hit time limit
+            # Cancel any remaining futures if we hit time limit or early termination
             for future in active_futures:
                 future.cancel()
+                
+            logger.info(f"Parallel optimization completed: {completed}/{self.max_iterations} iterations, "
+                       f"best score: {self.best_score:.3f}, early termination: {completed < self.max_iterations}")
 
     def _optimize_bundled_app(self, progress_callback: Callable = None):
         """
@@ -1358,21 +1436,35 @@ class WeightOptimizer:
     # Add these helper methods before the optimize method
     def _store_result(self, weights, total_score, hard_violations, has_doctor_hour_balance_violation, 
                     preference_violations, soft_score, stats):
-        """Store results of a weight configuration evaluation."""
-        self.results.append({
-            "weights": copy.deepcopy(weights),
+        """Store results of a weight configuration evaluation with memory optimization."""
+        # Only store essential data to conserve memory on t2.medium
+        result = {
             "score": total_score,
             "hard_violations": hard_violations,
             "has_doctor_hour_balance_violation": has_doctor_hour_balance_violation,
             "preference_violations": preference_violations,
             "soft_score": soft_score,
-            "stats": {
+            # Store only key statistics, not full stats object
+            "stats_summary": {
                 "availability_violations": stats.get("availability_violations", 0),
                 "duplicate_doctors": stats.get("duplicate_doctors", 0),
                 "coverage_errors": stats.get("coverage_errors", 0),
                 "objective_value": stats.get("objective_value", 0)
             }
-        })
+        }
+        
+        # Only store weights for very good solutions to save memory
+        if hard_violations == 0 and soft_score < 100:  # Only promising solutions
+            result["weights"] = copy.deepcopy(weights)
+        
+        self.results.append(result)
+        
+        # Limit stored results to prevent memory issues on t2.medium
+        max_stored_results = 100  # Keep only best 100 results
+        if len(self.results) > max_stored_results:
+            # Sort by score and keep only the best ones
+            self.results.sort(key=lambda x: x["score"])
+            self.results = self.results[:max_stored_results]
 
     def _update_best_if_improved(self, weights, schedule, stats, total_score, hard_violations, 
                                 has_doctor_hour_balance_violation, preference_violations, soft_score):
@@ -1392,6 +1484,25 @@ class WeightOptimizer:
             self.best_weights = copy.deepcopy(weights)
             self.best_schedule = copy.deepcopy(schedule)
             self.best_stats = copy.deepcopy(stats)
+            
+            # Track successful weight configurations for adaptive exploration
+            if self.exploration_strategy == "adaptive":
+                # Only track really good solutions (no hard violations)
+                if hard_violations == 0:
+                    weight_config = {}
+                    for param in self.weight_ranges.keys():
+                        if param in weights:
+                            weight_config[param] = weights[param]
+                    
+                    # Add to successful regions, keep only the best 10
+                    self.successful_weight_regions.append(weight_config)
+                    if len(self.successful_weight_regions) > 10:
+                        self.successful_weight_regions.pop(0)
+                    
+                    logger.info(f"Added successful weight configuration to exploration memory")
+            
+            return True  # Indicate improvement found
+        return False  # No improvement
 
     def _report_progress(self, progress_callback, current_iteration, max_iterations, elapsed_time, time_limit):
         """Report progress to the callback function."""
@@ -1489,10 +1600,20 @@ def optimize_weights(data: Dict[str, Any], progress_callback: Callable = None) -
             year = datetime.date.today().year
             logger.info(f"Year was None, using current year: {year}")
         
-        # Meta-optimization parameters
-        max_iterations = data.get("max_iterations", 20)
-        parallel_jobs = data.get("parallel_jobs", 1)
-        time_limit_minutes = data.get("time_limit_minutes", 10)
+        # Meta-optimization parameters - Optimized for t2.medium (2 vCPU, 4GB RAM)
+        max_iterations = data.get("max_iterations", 50)  # Increased from 20
+        parallel_jobs = data.get("parallel_jobs", 2)     # Use both vCPUs
+        time_limit_minutes = data.get("time_limit_minutes", 15)  # More time for better results
+        
+        # Detect CPU count and optimize accordingly
+        cpu_count = multiprocessing.cpu_count()
+        if parallel_jobs == "auto":
+            # For t2.medium, use all available CPUs but cap at 4 to avoid memory issues
+            parallel_jobs = min(cpu_count, 4)
+            logger.info(f"Auto-detected {cpu_count} CPUs, using {parallel_jobs} parallel jobs")
+        elif parallel_jobs > cpu_count:
+            logger.warning(f"parallel_jobs ({parallel_jobs}) > CPU count ({cpu_count}), reducing to {cpu_count}")
+            parallel_jobs = cpu_count
         
         # Extract shift template from data
         shift_template = data.get('shift_template', {})
