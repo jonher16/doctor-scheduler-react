@@ -116,8 +116,8 @@ class WeightOptimizer:
         # Format: (min, max, step)
         self.weight_ranges = {
             "w_balance": (1000, 10000, 500),           # Monthly balance weight
-            "w_wh": (10, 100, 10),                # Weekend/holiday weight
             "w_senior_workload": (500, 10000, 1000),   # Senior workload difference
+            "w_wh": (10, 100, 10),                # Weekend/holiday weight
             "w_pref_junior": (50, 10000, 200),        # Junior preference weight
             "w_pref_senior": (100, 20000, 400),       # Senior preference weight
             "w_preference_fairness": (10, 1000, 100), # Preference fairness weight
@@ -130,12 +130,14 @@ class WeightOptimizer:
             "w_one_shift": 999999,          # Multiple shifts per day
             "w_rest": 999999,               # Inadequate rest after night shift
             "w_duplicate_penalty": 999999, # Duplicate doctor penalty
-            "w_night_day_gap": 999999,
-            "w_night_gap": 999999, 
+            "w_unfilled_slots": 999999, # Unfilled slots penalty
+            "w_night_day_gap": 999999, # Night day gap penalty
+            "w_night_gap": 999999, # Night gap penalty - Might be a duplicate cause sometimes merged with w_night_day_gap
+            "w_evening_day": 999999, # Evening day penalty
             "w_wrong_pref_night": 999999, # evening/day pref assigned to night
             "w_consec_night": 999999, #consecutive night shifts
-            "w_evening_day": 999999,
             "w_max_shifts_per_week": 999999  # Maximum shifts per week constraint
+            
         }
         
         # Track doctors with same preferences for fairness calculations

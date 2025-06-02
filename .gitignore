@@ -75,3 +75,5 @@ report
 *.backup
 *.swp
 *.lock.hcl
+
+diagrams
