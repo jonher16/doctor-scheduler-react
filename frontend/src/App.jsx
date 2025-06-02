@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import YearSelector from './components/YearSelector';
 import { YearProvider, useYear } from './contexts/YearContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
 import { 
   AppBar, 
   Toolbar, 
@@ -29,7 +31,9 @@ import {
   InputLabel,
   Avatar,
   Badge,
-  Tooltip
+  Tooltip,
+  Menu,
+  ListItemButton
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -40,7 +44,10 @@ import {
   Dashboard as DashboardIcon,
   CloudSync as CloudSyncIcon,
   LocalHospital as HospitalIcon,
-  ImportExport as ImportExportIcon
+  ImportExport as ImportExportIcon,
+  AccountCircle as AccountCircleIcon,
+  ExitToApp as LogoutIcon,
+  AdminPanelSettings as AdminIcon
 } from '@mui/icons-material';
 
 // Import components
@@ -53,6 +60,7 @@ import BackendMonitor from './components/BackendMonitor';
 import SyncPage from './components/SyncPage';
 import ShiftManager from './components/ShiftManager';
 import ConfigImportExport from './components/ConfigImportExport';
+import UserManagement from './components/UserManagement';
 
 // Import utility functions
 import { getYearRange } from './utils/dateUtils';
@@ -104,18 +112,6 @@ const theme = createTheme({
   },
 });
 
-// Menu items
-const menuItems = [
-  { text: 'Generate Schedule', icon: <EventIcon />, component: 'generate' },
-  { text: 'Dashboard', icon: <DashboardIcon />, component: 'dashboard' },
-  { text: 'Doctor Configuration', icon: <PersonIcon />, component: 'doctors' },
-  { text: 'Holiday Configuration', icon: <EventNoteIcon />, component: 'holidays' },
-  { text: 'Doctor Availability', icon: <CalendarTodayIcon />, component: 'availability' },
-  { text: 'Shift Manager', icon: <EventIcon />, component: 'shiftmanager' },
-  { text: 'Cloud Sync', icon: <CloudSyncIcon />, component: 'sync' },
-  { text: 'Import/Export', icon: <ImportExportIcon />, component: 'importexport' },
-];
-
 // Determine if we're running in Electron
 const isElectron = window.platform?.isElectron;
 
@@ -136,9 +132,13 @@ function App() {
   const [activeComponent, setActiveComponent] = useState('generate');
   const [isLoading, setIsLoading] = useState(true);
   const [appPaths, setAppPaths] = useState(null);
+  const [anchorEl, setAnchorEl] = useState(null);
   
   // Use the year context instead of local state
   const { selectedYear, yearChanged, resetYearChanged } = useYear();
+  
+  // Get auth context
+  const { currentUser, userProfile, logout, hasAdminAccess } = useAuth();
   
   // For notifications
   const [notification, setNotification] = useState({
@@ -146,6 +146,27 @@ function App() {
     message: '',
     severity: 'info'
   });
+
+  // Menu items - now includes user management for admins
+  const getMenuItems = () => {
+    const baseItems = [
+      { text: 'Generate Schedule', icon: <EventIcon />, component: 'generate' },
+      { text: 'Dashboard', icon: <DashboardIcon />, component: 'dashboard' },
+      { text: 'Doctor Configuration', icon: <PersonIcon />, component: 'doctors' },
+      { text: 'Holiday Configuration', icon: <EventNoteIcon />, component: 'holidays' },
+      { text: 'Doctor Availability', icon: <CalendarTodayIcon />, component: 'availability' },
+      { text: 'Shift Manager', icon: <EventIcon />, component: 'shiftmanager' },
+      { text: 'Cloud Sync', icon: <CloudSyncIcon />, component: 'sync' },
+      { text: 'Import/Export', icon: <ImportExportIcon />, component: 'importexport' },
+    ];
+
+    // Add user management for admin users
+    if (hasAdminAccess()) {
+      baseItems.push({ text: 'User Management', icon: <AdminIcon />, component: 'usermanagement' });
+    }
+
+    return baseItems;
+  };
 
   // Custom setter functions that also update localStorage
   const setDoctors = (newDoctors) => {
@@ -458,6 +479,29 @@ function App() {
     setNotification({...notification, open: false});
   };
 
+  // User profile menu handlers
+  const handleProfileMenuOpen = (event) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleProfileMenuClose = () => {
+    setAnchorEl(null);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      handleProfileMenuClose();
+    } catch (error) {
+      console.error('Logout failed:', error);
+      setNotification({
+        open: true,
+        message: 'Failed to logout',
+        severity: 'error'
+      });
+    }
+  };
+
   // Helper to check if menu item is active
   const isActiveRoute = (component) => {
     return activeComponent === component;
@@ -522,7 +566,7 @@ function App() {
       
       <Box sx={{ py: 1 }}>
         <List>
-          {menuItems.map((item) => {
+          {getMenuItems().map((item) => {
             const isActive = isActiveRoute(item.component);
             
             return (
@@ -738,6 +782,12 @@ function App() {
         availability={availability} 
         setAvailability={setAvailability}
       />;
+      case 'usermanagement':
+        return <UserManagement 
+          currentUser={currentUser}
+          userProfile={userProfile}
+          logout={logout}
+        />;
       default:
         return <DoctorConfig doctors={doctors} setDoctors={setDoctors} />;
     }
@@ -771,6 +821,55 @@ function App() {
             
             {/* Year selector */}
             <YearSelector />
+
+            {/* User Profile Menu */}
+            <Box sx={{ ml: 2 }}>
+              <Tooltip title="User Profile">
+                <IconButton
+                  size="large"
+                  aria-label="account of current user"
+                  aria-controls="profile-menu"
+                  aria-haspopup="true"
+                  onClick={handleProfileMenuOpen}
+                  color="inherit"
+                >
+                  <AccountCircleIcon />
+                </IconButton>
+              </Tooltip>
+              <Menu
+                id="profile-menu"
+                anchorEl={anchorEl}
+                anchorOrigin={{
+                  vertical: 'bottom',
+                  horizontal: 'right',
+                }}
+                keepMounted
+                transformOrigin={{
+                  vertical: 'top',
+                  horizontal: 'right',
+                }}
+                open={Boolean(anchorEl)}
+                onClose={handleProfileMenuClose}
+              >
+                <Box sx={{ px: 2, py: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
+                  <Typography variant="subtitle2" fontWeight="bold">
+                    {userProfile?.name || 'User'}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {userProfile?.email || currentUser?.email}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Role: {userProfile?.isHersAdmin ? 'Admin' : 'Doctor'}
+                  </Typography>
+                </Box>
+                <ListItemButton onClick={handleLogout}>
+                  <ListItemIcon>
+                    <LogoutIcon />
+                  </ListItemIcon>
+                  <ListItemText primary="Sign Out" />
+                </ListItemButton>
+              </Menu>
+            </Box>
           </Toolbar>
         </AppBar>
         
@@ -851,7 +950,11 @@ function App() {
 export default function AppWithYearContext() {
   return (
     <YearProvider>
-      <App />
+      <AuthProvider>
+        <ProtectedRoute>
+          <App />
+        </ProtectedRoute>
+      </AuthProvider>
     </YearProvider>
   );
 }
