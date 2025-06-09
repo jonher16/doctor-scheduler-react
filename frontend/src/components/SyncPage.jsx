@@ -38,10 +38,12 @@ import {
   Check as CheckIcon,
   Warning as WarningIcon,
   Refresh as RefreshIcon,
-  ErrorOutline as ErrorIcon
+  ErrorOutline as ErrorIcon,
+  Visibility as ViewIcon
 } from '@mui/icons-material';
 import { CloudSyncService } from '../services/CloudSyncService';
 import { getMonthName } from '../utils/dateUtils';
+import DoctorAvailabilityView from './DoctorAvailabilityView';
 
 // Constants for localStorage keys
 const LAST_SYNC_MONTH_KEY = 'syncPage_lastViewedMonth';
@@ -67,6 +69,9 @@ const SyncPage = ({ doctors, setDoctors, availability, setAvailability }) => {
     availability: localStorage.getItem('lastAvailabilitySync') ? new Date(localStorage.getItem('lastAvailabilitySync')) : null,
     completion: localStorage.getItem('lastCompletionSync') ? new Date(localStorage.getItem('lastCompletionSync')) : null
   });
+  
+  // State for doctor calendar view
+  const [viewingDoctorCalendar, setViewingDoctorCalendar] = useState(null);
   
   // Get the last viewed month from localStorage or default to current month
   const getInitialMonth = () => {
@@ -232,6 +237,48 @@ const SyncPage = ({ doctors, setDoctors, availability, setAvailability }) => {
     if (diffHrs < 24) return `${diffHrs} hour${diffHrs !== 1 ? 's' : ''} ago`;
     return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
   };
+
+  const doctorCompletionPercentage = completionStatus?.stats?.total
+    ? (completionStatus.stats.completed / completionStatus.stats.total) * 100
+    : 0;
+
+  // Function to handle viewing a doctor's calendar
+  const handleViewDoctorCalendar = async (doctorName) => {
+    // Sync availability data before showing the calendar to ensure we have the latest data
+    try {
+      setLoading(prev => ({ ...prev, availability: true }));
+      const cloudAvailability = await CloudSyncService.fetchDoctorAvailability();
+      const mergedAvailability = CloudSyncService.mergeAvailability(availability, cloudAvailability);
+      setAvailability(mergedAvailability);
+    } catch (error) {
+      console.error('Error syncing availability before viewing calendar:', error);
+      // Continue to show calendar even if sync fails, using existing data
+    } finally {
+      setLoading(prev => ({ ...prev, availability: false }));
+    }
+    
+    setViewingDoctorCalendar(doctorName);
+  };
+
+  // Function to go back to sync page
+  const handleBackToSync = () => {
+    setViewingDoctorCalendar(null);
+  };
+
+  // If viewing a doctor's calendar, render that component
+  if (viewingDoctorCalendar) {
+    return (
+      <DoctorAvailabilityView
+        doctorName={viewingDoctorCalendar}
+        onBack={handleBackToSync}
+        availability={availability}
+        initialMonth={selectedMonth}
+        initialYear={selectedYear}
+        onSyncAvailability={syncAvailability}
+        isLoading={loading.availability}
+      />
+    );
+  }
 
   return (
     <Box>
@@ -452,22 +499,18 @@ const SyncPage = ({ doctors, setDoctors, availability, setAvailability }) => {
                 </Typography>
                 
                 <Typography variant="body2" color="text.secondary">
-                  {completionStatus.stats.overallPercentage}% Complete overall
+                  {`${Math.round(doctorCompletionPercentage)}% Complete`}
                 </Typography>
               </Box>
               
               <LinearProgress 
                 variant="determinate" 
-                value={completionStatus.stats.overallPercentage}
-                color={completionStatus.stats.overallPercentage === 100 ? "success" : 
-                       completionStatus.stats.overallPercentage > 75 ? "info" :
-                       completionStatus.stats.overallPercentage > 50 ? "warning" : "error"}
+                value={doctorCompletionPercentage}
+                color={doctorCompletionPercentage === 100 ? "success" : 
+                       doctorCompletionPercentage > 75 ? "info" :
+                       doctorCompletionPercentage > 50 ? "warning" : "error"}
                 sx={{ height: 8, borderRadius: 4 }}
               />
-              
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1, textAlign: 'center' }}>
-                {completionStatus.stats.totalDaysCompleted} of {completionStatus.stats.totalPossibleDays} total days completed across all doctors
-              </Typography>
             </Box>
             
             {!completionStatus.isComplete && (
@@ -496,15 +539,19 @@ const SyncPage = ({ doctors, setDoctors, availability, setAvailability }) => {
                 <Table size="small" stickyHeader>
                   <TableHead>
                     <TableRow>
-                      <TableCell width="50%">Doctor Name</TableCell>
-                      <TableCell align="center">Status</TableCell>
-                      <TableCell align="center">Completion</TableCell>
+                      <TableCell width="40%">Doctor Name</TableCell>
+                      <TableCell align="center" width="30%">Status</TableCell>
+                      <TableCell align="center" width="30%">Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {completionStatus.doctorDetails.map((doctor, index) => (
                       <TableRow key={index} hover>
-                        <TableCell>{doctor.name}</TableCell>
+                        <TableCell>
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                            {doctor.name}
+                          </Typography>
+                        </TableCell>
                         <TableCell align="center">
                           <Chip 
                             label={doctor.completed ? "Completed" : "Not Completed"} 
@@ -513,26 +560,20 @@ const SyncPage = ({ doctors, setDoctors, availability, setAvailability }) => {
                           />
                         </TableCell>
                         <TableCell align="center">
-                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            <Box sx={{ width: '100%', mr: 1 }}>
-                              <LinearProgress
-                                variant="determinate"
-                                value={doctor.percentComplete}
-                                color={doctor.percentComplete === 100 ? "success" : 
-                                       doctor.percentComplete > 75 ? "info" :
-                                       doctor.percentComplete > 50 ? "warning" : "error"}
-                                sx={{ height: 8, borderRadius: 4 }}
-                              />
-                            </Box>
-                            <Box sx={{ minWidth: 65, textAlign: 'right' }}>
-                              <Typography variant="body2" color="text.secondary">
-                                {`${doctor.percentComplete}%`}
-                              </Typography>
-                              <Typography variant="caption" color="text.secondary">
-                                {`${doctor.daysCompleted}/${doctor.totalDays} days`}
-                              </Typography>
-                            </Box>
-                          </Box>
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            startIcon={<ViewIcon />}
+                            onClick={() => handleViewDoctorCalendar(doctor.name)}
+                            sx={{
+                              textTransform: 'none',
+                              fontSize: '0.75rem',
+                              px: 1.5,
+                              py: 0.5
+                            }}
+                          >
+                            View Calendar
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -592,9 +633,29 @@ const SyncPage = ({ doctors, setDoctors, availability, setAvailability }) => {
                           {results.doctors.data.map((doctor, index) => (
                             <ListItem key={index} divider={index < results.doctors.data.length - 1}>
                               <ListItemText 
-                                primary={doctor.name}
+                                primary={
+                                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                      {doctor.name}
+                                    </Typography>
+                                    <Button
+                                      variant="text"
+                                      size="small"
+                                      startIcon={<ViewIcon />}
+                                      onClick={() => handleViewDoctorCalendar(doctor.name)}
+                                      sx={{
+                                        textTransform: 'none',
+                                        fontSize: '0.7rem',
+                                        minWidth: 'auto',
+                                        px: 1
+                                      }}
+                                    >
+                                      View
+                                    </Button>
+                                  </Box>
+                                }
                                 secondary={
-                                  <Box>
+                                  <Box sx={{ mt: 0.5 }}>
                                     <Chip 
                                       label={doctor.seniority} 
                                       size="small" 
@@ -642,7 +703,27 @@ const SyncPage = ({ doctors, setDoctors, availability, setAvailability }) => {
                             return (
                               <ListItem key={index} divider={index < Object.keys(results.availability.data).length - 1}>
                                 <ListItemText 
-                                  primary={doctorName}
+                                  primary={
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                        {doctorName}
+                                      </Typography>
+                                      <Button
+                                        variant="text"
+                                        size="small"
+                                        startIcon={<ViewIcon />}
+                                        onClick={() => handleViewDoctorCalendar(doctorName)}
+                                        sx={{
+                                          textTransform: 'none',
+                                          fontSize: '0.7rem',
+                                          minWidth: 'auto',
+                                          px: 1
+                                        }}
+                                      >
+                                        View
+                                      </Button>
+                                    </Box>
+                                  }
                                   secondary={`${entriesCount} availability entries`}
                                 />
                               </ListItem>
