@@ -25,6 +25,7 @@ import {
   createTheme,
   Snackbar,
   Alert,
+  AlertTitle,
   FormControl,
   Select,
   MenuItem,
@@ -44,10 +45,10 @@ import {
   Dashboard as DashboardIcon,
   CloudSync as CloudSyncIcon,
   LocalHospital as HospitalIcon,
-  ImportExport as ImportExportIcon,
   AccountCircle as AccountCircleIcon,
   ExitToApp as LogoutIcon,
-  AdminPanelSettings as AdminIcon
+  AdminPanelSettings as AdminIcon,
+  Warning as WarningIcon
 } from '@mui/icons-material';
 
 // Import components
@@ -59,7 +60,6 @@ import Dashboard from './components/Dashboard';
 import BackendMonitor from './components/BackendMonitor';
 import SyncPage from './components/SyncPage';
 import ShiftManager from './components/ShiftManager';
-import ConfigImportExport from './components/ConfigImportExport';
 import UserManagement from './components/UserManagement';
 
 // Import utility functions
@@ -133,6 +133,8 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [appPaths, setAppPaths] = useState(null);
   const [anchorEl, setAnchorEl] = useState(null);
+  const [pendingNavigation, setPendingNavigation] = useState(null);
+  const [navigationBlocked, setNavigationBlocked] = useState(false);
   
   // Use the year context instead of local state
   const { selectedYear, yearChanged, resetYearChanged } = useYear();
@@ -157,7 +159,6 @@ function App() {
       { text: 'Doctor Availability', icon: <CalendarTodayIcon />, component: 'availability' },
       { text: 'Shift Manager', icon: <EventIcon />, component: 'shiftmanager' },
       { text: 'Cloud Sync', icon: <CloudSyncIcon />, component: 'sync' },
-      { text: 'Import/Export', icon: <ImportExportIcon />, component: 'importexport' },
     ];
 
     // Add user management for admin users
@@ -369,31 +370,14 @@ function App() {
       }
     }
     
-    return loadedDoctors && loadedHolidays;
+    return loadedHolidays;
   };
   
   // Load data from userData directory via Electron
   const loadFromUserData = async () => {
     if (!isElectron || !window.electron) return false;
     
-    let loadedDoctors = false;
     let loadedHolidays = false;
-    
-    // Load doctors if not available
-    if (!doctors || doctors.length === 0) {
-      try {
-        const defaultDoctors = await window.electron.loadUserDataFile('doctors.json');
-        if (defaultDoctors && defaultDoctors.length > 0) {
-          console.log("Loaded doctors from userData directory");
-          setDoctors(defaultDoctors); // This also saves to localStorage
-          loadedDoctors = true;
-        }
-      } catch (err) {
-        console.error("Error loading doctors from userData directory", err);
-      }
-    } else {
-      loadedDoctors = true;
-    }
     
     // Load holidays if not available
     if (!holidays || Object.keys(holidays).length === 0) {
@@ -411,32 +395,12 @@ function App() {
       loadedHolidays = true;
     }
     
-    return loadedDoctors && loadedHolidays;
+    return loadedHolidays;
   };
   
   // Load data from public JSON files
   const loadFromPublicFiles = async () => {
-    let loadedDoctors = false;
     let loadedHolidays = false;
-    
-    // Load doctors if not available
-    if (!doctors || doctors.length === 0) {
-      try {
-        const response = await fetch('/doctors.json');
-        if (response.ok) {
-          const data = await response.json();
-          if (data && data.length > 0) {
-            console.log("Loaded doctors from public file");
-            setDoctors(data); // This also saves to localStorage
-            loadedDoctors = true;
-          }
-        }
-      } catch (err) {
-        console.error("Error loading public doctors.json", err);
-      }
-    } else {
-      loadedDoctors = true;
-    }
     
     // Load holidays if not available
     if (!holidays || Object.keys(holidays).length === 0) {
@@ -457,7 +421,7 @@ function App() {
       loadedHolidays = true;
     }
     
-    return loadedDoctors && loadedHolidays;
+    return loadedHolidays;
   };
 
   const toggleDrawer = (open) => (event) => {
@@ -471,6 +435,12 @@ function App() {
   };
 
   const handleMenuItemClick = (component) => {
+    // Check if navigation is blocked (unsaved changes)
+    if (navigationBlocked && (activeComponent === 'doctors' || activeComponent === 'shiftmanager' || activeComponent === 'holidays' || activeComponent === 'availability')) {
+      setPendingNavigation(component);
+      return;
+    }
+    
     setActiveComponent(component);
     setDrawerOpen(false);
   };
@@ -565,6 +535,14 @@ function App() {
       <Divider />
       
       <Box sx={{ py: 1 }}>
+        {navigationBlocked && (activeComponent === 'doctors' || activeComponent === 'shiftmanager' || activeComponent === 'holidays' || activeComponent === 'availability') && (
+          <Box sx={{ px: 2, py: 1, mx: 1, bgcolor: 'warning.light', borderRadius: 1, mb: 1 }}>
+            <Typography variant="caption" color="warning.contrastText" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <WarningIcon fontSize="small" />
+              You have unsaved changes in {activeComponent === 'doctors' ? 'Doctor Configuration' : activeComponent === 'shiftmanager' ? 'Shift Manager' : activeComponent === 'holidays' ? 'Holiday Configuration' : 'Doctor Availability'}
+            </Typography>
+          </Box>
+        )}
         <List>
           {getMenuItems().map((item) => {
             const isActive = isActiveRoute(item.component);
@@ -692,14 +670,14 @@ function App() {
     const hasDoctors = doctors && doctors.length > 0;
     const hasHolidays = holidays && Object.keys(holidays).length > 0;
     
-    // If data is missing, show message with app paths for debugging
-    if ((!hasDoctors || !hasHolidays) && isElectron) {
+    // If holidays data is missing, show message with app paths for debugging
+    if (!hasHolidays && isElectron) {
       return (
         <Box>
           <Alert severity="warning" sx={{ mb: 3 }}>
-            <AlertTitle>Missing Data</AlertTitle>
-            {!hasDoctors && <p>No doctors data available. Please add doctors or check application installation.</p>}
-            {!hasHolidays && <p>No holidays data available. Please add holidays or check application installation.</p>}
+            <AlertTitle>Missing Holiday Data</AlertTitle>
+            <p>No holidays data available. Please check application installation.</p>
+            {!hasDoctors && <p>No doctors configured yet. You can add doctors using the Doctor Configuration menu.</p>}
           </Alert>
           
           {appPaths && (
@@ -726,17 +704,32 @@ function App() {
     
     switch (activeComponent) {
       case 'doctors':
-        return <DoctorConfig doctors={doctors} setDoctors={setDoctors} />;
+        return <DoctorConfig 
+          doctors={doctors} 
+          setDoctors={setDoctors} 
+          setNavigationBlock={setNavigationBlock}
+          onNavigationAfterSave={handleNavigationAfterSave}
+          onNavigationCancel={handleNavigationCancel}
+          pendingNavigation={pendingNavigation}
+        />;
       case 'holidays':
         return <HolidayConfig 
           holidays={holidays} 
           setHolidays={setHolidays}
+          setNavigationBlock={setNavigationBlock}
+          onNavigationAfterSave={handleNavigationAfterSave}
+          onNavigationCancel={handleNavigationCancel}
+          pendingNavigation={pendingNavigation}
         />;
       case 'availability':
         return <DoctorNeeds 
           doctors={doctors} 
           setAvailability={setAvailability} 
           availability={availability}
+          setNavigationBlock={setNavigationBlock}
+          onNavigationAfterSave={handleNavigationAfterSave}
+          onNavigationCancel={handleNavigationCancel}
+          pendingNavigation={pendingNavigation}
         />;
       case 'generate':
         return (
@@ -772,15 +765,10 @@ function App() {
         setDoctors={setDoctors} 
         availability={availability} 
         setAvailability={setAvailability}
-      />;
-      case 'importexport':
-      return <ConfigImportExport 
-        doctors={doctors} 
-        setDoctors={setDoctors} 
-        holidays={holidays}
-        setHolidays={setHolidays}
-        availability={availability} 
-        setAvailability={setAvailability}
+        setNavigationBlock={setNavigationBlock}
+        onNavigationAfterSave={handleNavigationAfterSave}
+        onNavigationCancel={handleNavigationCancel}
+        pendingNavigation={pendingNavigation}
       />;
       case 'usermanagement':
         return <UserManagement 
@@ -791,6 +779,26 @@ function App() {
       default:
         return <DoctorConfig doctors={doctors} setDoctors={setDoctors} />;
     }
+  };
+
+  // Function for components to register navigation blocking
+  const setNavigationBlock = (blocked) => {
+    setNavigationBlocked(blocked);
+  };
+
+  // Handle navigation after resolving unsaved changes
+  const handleNavigationAfterSave = () => {
+    if (pendingNavigation) {
+      setActiveComponent(pendingNavigation);
+      setPendingNavigation(null);
+    }
+    setNavigationBlocked(false);
+    setDrawerOpen(false);
+  };
+
+  // Handle navigation cancellation
+  const handleNavigationCancel = () => {
+    setPendingNavigation(null);
   };
 
   return (

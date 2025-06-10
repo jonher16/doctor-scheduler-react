@@ -37,7 +37,8 @@ import {
   EventNote as EventNoteIcon,
   ViewList as ViewListIcon,
   CalendarViewMonth as CalendarViewMonthIcon,
-  Edit as EditIcon
+  Edit as EditIcon,
+  Warning as WarningIcon
 } from '@mui/icons-material';
 import EnhancedCalendar from './EnhancedCalendar';
 import HolidayCalendar from './HolidayCalendar';
@@ -47,9 +48,19 @@ import ConfigImportExport from './ConfigImportExport';
 // Constants for localStorage keys
 const LAST_POPUP_HOLIDAY_MONTH_KEY = 'holidayConfig_popupLastViewedMonth';
 
-function HolidayConfig({ holidays, setHolidays }) {
+function HolidayConfig({ 
+  holidays, 
+  setHolidays,
+  setNavigationBlock, 
+  onNavigationAfterSave, 
+  onNavigationCancel, 
+  pendingNavigation 
+}) {
   const { selectedYear } = useYear();
   const [localHolidays, setLocalHolidays] = useState(holidays);
+  const [savedHolidays, setSavedHolidays] = useState(holidays);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
   
   // Changed selectedDate to store either a string (single date) or an array (date range)
   const [selectedDate, setSelectedDate] = useState('');
@@ -113,7 +124,36 @@ function HolidayConfig({ holidays, setHolidays }) {
   // Update local state when holidays prop changes
   useEffect(() => {
     setLocalHolidays(holidays);
+    setSavedHolidays(holidays);
   }, [holidays]);
+
+  // Check for unsaved changes when local holidays change
+  useEffect(() => {
+    const isDifferent = JSON.stringify(localHolidays) !== JSON.stringify(savedHolidays);
+    setHasUnsavedChanges(isDifferent);
+    
+    // Register navigation blocking if setNavigationBlock is provided
+    if (setNavigationBlock) {
+      setNavigationBlock(isDifferent);
+    }
+  }, [localHolidays, savedHolidays, setNavigationBlock]);
+
+  // Add page reload warning when there are unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (event) => {
+      if (hasUnsavedChanges) {
+        event.preventDefault();
+        event.returnValue = 'You have unsaved changes in your holiday configuration. Are you sure you want to leave?';
+        return 'You have unsaved changes in your holiday configuration. Are you sure you want to leave?';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [hasUnsavedChanges]);
 
   // Save popup month to localStorage when it changes
   const handlePopupMonthChange = (month) => {
@@ -373,6 +413,19 @@ function HolidayConfig({ holidays, setHolidays }) {
   // Save holidays back to parent component
   const saveHolidays = () => {
     setHolidays(localHolidays);
+    setSavedHolidays(localHolidays);
+    setHasUnsavedChanges(false);
+    
+    // Clear navigation blocking
+    if (setNavigationBlock) {
+      setNavigationBlock(false);
+    }
+    
+    // Handle pending navigation
+    if (onNavigationAfterSave && pendingNavigation) {
+      onNavigationAfterSave();
+    }
+    
     setSnackbar({
       open: true,
       message: 'Holiday configuration saved successfully!',
@@ -407,6 +460,33 @@ function HolidayConfig({ holidays, setHolidays }) {
       message: 'Holiday updated. Don\'t forget to save your changes!',
       severity: 'info'
     });
+  };
+
+  // Handle discarding changes
+  const handleDiscardChanges = () => {
+    setLocalHolidays(savedHolidays);
+    setHasUnsavedChanges(false);
+    
+    // Clear navigation blocking
+    if (setNavigationBlock) {
+      setNavigationBlock(false);
+    }
+    
+    // Handle pending navigation
+    if (onNavigationAfterSave && pendingNavigation) {
+      onNavigationAfterSave();
+    }
+    
+    setSnackbar({
+      open: true,
+      message: 'Changes discarded',
+      severity: 'info'
+    });
+  };
+
+  const handleSaveAndContinue = () => {
+    saveHolidays();
+    setShowUnsavedWarning(false);
   };
 
   return (
@@ -498,6 +578,28 @@ function HolidayConfig({ holidays, setHolidays }) {
         </Tabs>
 
         <Box>
+          {hasUnsavedChanges && (
+            <Chip
+              label="Draft - Unsaved Changes"
+              color="warning"
+              size="small"
+              icon={<WarningIcon />}
+              sx={{ 
+                fontWeight: 'bold',
+                mr: 2
+              }}
+            />
+          )}
+          {hasUnsavedChanges && (
+            <Button
+              variant="outlined"
+              color="error"
+              onClick={handleDiscardChanges}
+              sx={{ mr: 2 }}
+            >
+              Discard Changes
+            </Button>
+          )}
           <Button
             variant="contained"
             startIcon={<EventNoteIcon />}
@@ -512,6 +614,15 @@ function HolidayConfig({ holidays, setHolidays }) {
             startIcon={<SaveIcon />}
             onClick={saveHolidays}
             color="primary"
+            sx={hasUnsavedChanges ? { 
+              fontWeight: 'bold',
+              animation: 'pulse 2s infinite',
+              '@keyframes pulse': {
+                '0%': { opacity: 1 },
+                '50%': { opacity: 0.7 },
+                '100%': { opacity: 1 }
+              }
+            } : {}}
           >
             Save Holidays
           </Button>
@@ -676,6 +787,45 @@ function HolidayConfig({ holidays, setHolidays }) {
           {snackbar.message}
         </Alert>
       </Snackbar>
+
+      {/* Unsaved Changes Warning Dialog */}
+      <Dialog open={showUnsavedWarning || !!pendingNavigation} onClose={() => {
+        setShowUnsavedWarning(false);
+        if (onNavigationCancel) onNavigationCancel();
+      }} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <WarningIcon color="warning" />
+          Unsaved Changes
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" gutterBottom>
+            {pendingNavigation 
+              ? 'You have unsaved changes in your holiday configuration. What would you like to do before navigating away?'
+              : 'You have unsaved changes in your holiday configuration. What would you like to do?'
+            }
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            • Save Changes: Keep your modifications and save them
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            • Discard Changes: Revert to the last saved configuration
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => {
+            setShowUnsavedWarning(false);
+            if (onNavigationCancel) onNavigationCancel();
+          }} color="primary">
+            Cancel
+          </Button>
+          <Button onClick={handleDiscardChanges} color="error" variant="outlined">
+            Discard Changes
+          </Button>
+          <Button onClick={handleSaveAndContinue} color="primary" variant="contained">
+            Save Changes
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Add ConfigImportExport component */}
       <ConfigImportExport 

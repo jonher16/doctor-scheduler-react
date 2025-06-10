@@ -35,7 +35,8 @@ import {
   Save as SaveIcon,
   ExpandMore as ExpandMoreIcon,
   Settings as SettingsIcon,
-  RestartAlt as ResetIcon
+  RestartAlt as ResetIcon,
+  Warning as WarningIcon
 } from '@mui/icons-material';
 
 import { monthNames, dayNames } from '../utils/dateUtils';
@@ -51,7 +52,12 @@ const DEFAULT_REQUIREMENTS = {
 // Constants for localStorage keys
 const LAST_VIEWED_SHIFT_MONTH_KEY = 'shiftManager_lastViewedMonth';
 
-function ShiftManager() {
+function ShiftManager({ 
+  setNavigationBlock, 
+  onNavigationAfterSave, 
+  onNavigationCancel, 
+  pendingNavigation 
+}) {
   const { selectedYear } = useYear();
   
   // Get the last viewed month from localStorage or default to current month
@@ -70,6 +76,9 @@ function ShiftManager() {
   const [calendarDays, setCalendarDays] = useState([]);
   const [selectedDay, setSelectedDay] = useState(null);
   const [shiftTemplate, setShiftTemplate] = useState({});
+  const [savedShiftTemplate, setSavedShiftTemplate] = useState({});
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
   
   // Bulk operations dialog
   const [bulkDialog, setBulkDialog] = useState({
@@ -100,13 +109,53 @@ function ShiftManager() {
     localStorage.setItem(LAST_VIEWED_SHIFT_MONTH_KEY, currentMonth.toString());
   }, [currentMonth]);
 
+  // Check for unsaved changes when shift template changes
+  useEffect(() => {
+    const isDifferent = JSON.stringify(shiftTemplate) !== JSON.stringify(savedShiftTemplate);
+    console.log('Change detection:', {
+      isDifferent,
+      shiftTemplateKeys: Object.keys(shiftTemplate).length,
+      savedShiftTemplateKeys: Object.keys(savedShiftTemplate).length,
+      shiftTemplateStr: JSON.stringify(shiftTemplate).substring(0, 100) + '...',
+      savedShiftTemplateStr: JSON.stringify(savedShiftTemplate).substring(0, 100) + '...'
+    });
+    
+    setHasUnsavedChanges(isDifferent);
+    
+    // Register navigation blocking if setNavigationBlock is provided
+    if (setNavigationBlock) {
+      setNavigationBlock(isDifferent);
+    }
+  }, [shiftTemplate, savedShiftTemplate, setNavigationBlock]);
+
+  // Add page reload warning when there are unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (event) => {
+      if (hasUnsavedChanges) {
+        event.preventDefault();
+        event.returnValue = 'You have unsaved changes in your shift template. Are you sure you want to leave?';
+        return 'You have unsaved changes in your shift template. Are you sure you want to leave?';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [hasUnsavedChanges]);
+
   // Initialize template with default shifts when component mounts
   useEffect(() => {
     // Try to load existing template first
     try {
       const storedTemplate = localStorage.getItem('shiftTemplate');
       if (storedTemplate) {
-        setShiftTemplate(JSON.parse(storedTemplate));
+        const template = JSON.parse(storedTemplate);
+        // Ensure the template has all dates for the current month
+        const normalizedTemplate = ensureMonthTemplate(template);
+        setShiftTemplate(normalizedTemplate);
+        setSavedShiftTemplate(normalizedTemplate);
       } else {
         // If no stored template, create default template for the current month
         initializeDefaultTemplate();
@@ -116,7 +165,25 @@ function ShiftManager() {
       // Initialize default template as fallback
       initializeDefaultTemplate();
     }
-  }, [selectedYear]);
+  }, [selectedYear, currentMonth]);
+
+  // Ensure template has all dates for the current month
+  const ensureMonthTemplate = (template) => {
+    const normalizedTemplate = { ...template };
+    const year = selectedYear;
+    const month = currentMonth;
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    
+    // Create default shifts for each date that doesn't exist
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      if (!normalizedTemplate[date]) {
+        normalizedTemplate[date] = createDefaultShifts();
+      }
+    }
+    
+    return normalizedTemplate;
+  };
 
   // Generate days for the current month view
   useEffect(() => {
@@ -153,13 +220,7 @@ function ShiftManager() {
       const date = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
       
       // Get shifts for this date from the template
-      // Initialize default shifts if none exist
-      let dateShifts = shiftTemplate[date];
-      
-      // If no shifts defined for this date, create default ones
-      if (!dateShifts) {
-        dateShifts = createDefaultShifts();
-      }
+      const dateShifts = shiftTemplate[date] || createDefaultShifts();
       
       days.push({ 
         day: i, 
@@ -174,7 +235,7 @@ function ShiftManager() {
     setCalendarDays(days);
   };
 
-  // Initialize default template for the current month
+  // Initialize default template for the current month (used only on initial load)
   const initializeDefaultTemplate = () => {
     const defaultTemplate = {};
     
@@ -189,7 +250,9 @@ function ShiftManager() {
       defaultTemplate[date] = createDefaultShifts();
     }
     
+    // For initial load, both templates should be the same (no unsaved changes)
     setShiftTemplate(defaultTemplate);
+    setSavedShiftTemplate(defaultTemplate);
   };
   
   // Create default shifts for a date
@@ -203,19 +266,37 @@ function ShiftManager() {
 
   // Navigate to previous month
   const prevMonth = () => {
+    let newMonth, newYear = selectedYear;
     if (currentMonth === 0) {
-      setCurrentMonth(11);
+      newMonth = 11;
+      // Note: We don't change year for month navigation within the selected year
     } else {
-      setCurrentMonth(currentMonth - 1);
+      newMonth = currentMonth - 1;
+    }
+    setCurrentMonth(newMonth);
+    
+    // Normalize template for the new month
+    const normalizedTemplate = ensureMonthTemplate(shiftTemplate);
+    if (JSON.stringify(normalizedTemplate) !== JSON.stringify(shiftTemplate)) {
+      setShiftTemplate(normalizedTemplate);
     }
   };
 
   // Navigate to next month
   const nextMonth = () => {
+    let newMonth, newYear = selectedYear;
     if (currentMonth === 11) {
-      setCurrentMonth(0);
+      newMonth = 0;
+      // Note: We don't change year for month navigation within the selected year
     } else {
-      setCurrentMonth(currentMonth + 1);
+      newMonth = currentMonth + 1;
+    }
+    setCurrentMonth(newMonth);
+    
+    // Normalize template for the new month
+    const normalizedTemplate = ensureMonthTemplate(shiftTemplate);
+    if (JSON.stringify(normalizedTemplate) !== JSON.stringify(shiftTemplate)) {
+      setShiftTemplate(normalizedTemplate);
     }
   };
 
@@ -399,6 +480,18 @@ function ShiftManager() {
   const saveTemplate = () => {
     try {
       localStorage.setItem('shiftTemplate', JSON.stringify(shiftTemplate));
+      setSavedShiftTemplate(shiftTemplate);
+      setHasUnsavedChanges(false);
+      
+      // Clear navigation blocking
+      if (setNavigationBlock) {
+        setNavigationBlock(false);
+      }
+      
+      // Handle pending navigation
+      if (onNavigationAfterSave && pendingNavigation) {
+        onNavigationAfterSave();
+      }
       
       setSnackbar({
         open: true,
@@ -424,6 +517,34 @@ function ShiftManager() {
     setSnackbar({...snackbar, open: false});
   };
 
+  // Handle unsaved warning dialog actions
+  const handleDiscardChanges = () => {
+    setShiftTemplate(savedShiftTemplate);
+    setHasUnsavedChanges(false);
+    setShowUnsavedWarning(false);
+    
+    // Clear navigation blocking
+    if (setNavigationBlock) {
+      setNavigationBlock(false);
+    }
+    
+    // Handle pending navigation
+    if (onNavigationAfterSave && pendingNavigation) {
+      onNavigationAfterSave();
+    }
+    
+    setSnackbar({
+      open: true,
+      message: 'Changes discarded',
+      severity: 'info'
+    });
+  };
+
+  const handleSaveAndContinue = () => {
+    saveTemplate();
+    setShowUnsavedWarning(false);
+  };
+
   // Get color based on shift type
   const getShiftColor = (shift) => {
     switch(shift) {
@@ -440,29 +561,76 @@ function ShiftManager() {
 
   // Reset current month to defaults
   const resetMonthTemplate = () => {
-    if (window.confirm(`Are you sure you want to reset all shifts for ${monthNames[currentMonth]} ${selectedYear} to default requirements?`)) {
-      initializeDefaultTemplate();
+    const confirmMessage = hasUnsavedChanges 
+      ? `Are you sure you want to reset all shifts for ${monthNames[currentMonth]} ${selectedYear} to default requirements?\n\nWARNING: This will discard your current unsaved changes!`
+      : `Are you sure you want to reset all shifts for ${monthNames[currentMonth]} ${selectedYear} to default requirements?`;
       
-      setSnackbar({
-        open: true,
-        message: `Reset all shifts for ${monthNames[currentMonth]} to default requirements`,
-        severity: 'info'
-      });
+    if (window.confirm(confirmMessage)) {
+      const defaultTemplate = {};
+      
+      // Get all dates in the current month
+      const year = selectedYear;
+      const month = currentMonth;
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      
+      // Create default shifts for each date
+      for (let day = 1; day <= daysInMonth; day++) {
+        const date = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        defaultTemplate[date] = createDefaultShifts();
+      }
+      
+      // Save the reset template immediately
+      try {
+        localStorage.setItem('shiftTemplate', JSON.stringify(defaultTemplate));
+        setShiftTemplate(defaultTemplate);
+        setSavedShiftTemplate(defaultTemplate);
+        setHasUnsavedChanges(false);
+        
+        // Clear navigation blocking
+        if (setNavigationBlock) {
+          setNavigationBlock(false);
+        }
+        
+        // Handle pending navigation
+        if (onNavigationAfterSave && pendingNavigation) {
+          onNavigationAfterSave();
+        }
+        
+        setSnackbar({
+          open: true,
+          message: `Reset and saved all shifts for ${monthNames[currentMonth]} to default requirements`,
+          severity: 'success'
+        });
+      } catch (error) {
+        console.error('Error saving reset template:', error);
+        setSnackbar({
+          open: true,
+          message: 'Error saving reset template',
+          severity: 'error'
+        });
+      }
     }
   };
 
   // Quick adjust shift slots (used in the calendar view)
   const quickAdjustSlots = (date, shift, adjustment) => {
+    console.log(`quickAdjustSlots called: ${date}, ${shift}, ${adjustment}`);
+    
     const updatedTemplate = { ...shiftTemplate };
     
-    // Create date entry if it doesn't exist
+    // Ensure the date exists in the template
     if (!updatedTemplate[date]) {
       updatedTemplate[date] = createDefaultShifts();
+    } else {
+      // Make a deep copy of the date's shifts
+      updatedTemplate[date] = { ...updatedTemplate[date] };
     }
     
-    // Get current slots
+    // Get current slots - if shift doesn't exist, use default
     const currentSlots = updatedTemplate[date][shift]?.slots || DEFAULT_REQUIREMENTS[shift];
     const newSlots = Math.max(0, currentSlots + adjustment);
+    
+    console.log(`Current slots: ${currentSlots}, New slots: ${newSlots}`);
     
     if (newSlots === 0) {
       // Remove shift if no slots
@@ -479,6 +647,7 @@ function ShiftManager() {
       updatedTemplate[date][shift] = { slots: newSlots };
     }
     
+    console.log('Setting updated template:', JSON.stringify(updatedTemplate) !== JSON.stringify(shiftTemplate));
     setShiftTemplate(updatedTemplate);
     
     // Update selected day to reflect changes
@@ -511,7 +680,27 @@ function ShiftManager() {
           Bulk Operations
         </Button>
         
-        <Stack direction="row" spacing={2}>
+        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
+          {hasUnsavedChanges && (
+            <Chip
+              label="Draft - Unsaved Changes"
+              color="warning"
+              size="small"
+              icon={<WarningIcon />}
+              sx={{ 
+                fontWeight: 'bold'
+              }}
+            />
+          )}
+          {hasUnsavedChanges && (
+            <Button
+              variant="outlined"
+              color="error"
+              onClick={handleDiscardChanges}
+            >
+              Discard Changes
+            </Button>
+          )}
           <Button
             variant="outlined"
             color="warning"
@@ -525,6 +714,15 @@ function ShiftManager() {
             startIcon={<SaveIcon />}
             onClick={saveTemplate}
             color="primary"
+            sx={hasUnsavedChanges ? { 
+              fontWeight: 'bold',
+              animation: 'pulse 2s infinite',
+              '@keyframes pulse': {
+                '0%': { opacity: 1 },
+                '50%': { opacity: 0.7 },
+                '100%': { opacity: 1 }
+              }
+            } : {}}
           >
             Save Template
           </Button>
@@ -927,6 +1125,45 @@ function ShiftManager() {
           {snackbar.message}
         </Alert>
       </Snackbar>
+
+      {/* Unsaved Changes Warning Dialog */}
+      <Dialog open={showUnsavedWarning || !!pendingNavigation} onClose={() => {
+        setShowUnsavedWarning(false);
+        if (onNavigationCancel) onNavigationCancel();
+      }} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <WarningIcon color="warning" />
+          Unsaved Changes
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" gutterBottom>
+            {pendingNavigation 
+              ? 'You have unsaved changes in your shift template. What would you like to do before navigating away?'
+              : 'You have unsaved changes in your shift template. What would you like to do?'
+            }
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            • Save Changes: Keep your modifications and save them
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            • Discard Changes: Revert to the last saved configuration
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => {
+            setShowUnsavedWarning(false);
+            if (onNavigationCancel) onNavigationCancel();
+          }} color="primary">
+            Cancel
+          </Button>
+          <Button onClick={handleDiscardChanges} color="error" variant="outlined">
+            Discard Changes
+          </Button>
+          <Button onClick={handleSaveAndContinue} color="primary" variant="contained">
+            Save Changes
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

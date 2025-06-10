@@ -27,14 +27,25 @@ import {
   GetApp as DownloadIcon,
   ExpandMore as ExpandMoreIcon,
   Info as InfoIcon,
-  Settings as SettingsIcon
+  Settings as SettingsIcon,
+  PersonAdd as PersonAddIcon
 } from '@mui/icons-material';
 import * as XLSX from 'xlsx';
 
 /**
  * Component for importing and exporting configuration data (doctor, holiday, availability)
  */
-function ConfigImportExport({ doctors, setDoctors, holidays, setHolidays, availability, setAvailability }) {
+function ConfigImportExport({ 
+  doctors, 
+  setDoctors, 
+  holidays, 
+  setHolidays, 
+  availability, 
+  setAvailability,
+  hasUnsavedChanges,
+  setShowUnsavedWarning,
+  handleDraftDoctorUpdate 
+}) {
   const [open, setOpen] = useState(false);
   const [tabValue, setTabValue] = useState(0);
   const [exportFormat, setExportFormat] = useState('json');
@@ -740,12 +751,40 @@ function ConfigImportExport({ doctors, setDoctors, holidays, setHolidays, availa
     if (!data) return;
     
     if (configType === 'doctors' && Array.isArray(data)) {
-      setDoctors(data);
-      setSnackbar({
-        open: true,
-        message: `Successfully imported ${data.length} doctors`,
-        severity: 'success'
-      });
+      // Check if there are unsaved changes and warn user
+      if (hasUnsavedChanges && setShowUnsavedWarning) {
+        setShowUnsavedWarning(true);
+        return;
+      }
+      
+      // Merge with existing doctors instead of replacing
+      const existingDoctorNames = new Set(doctors.map(doc => doc.name.toLowerCase()));
+      const newDoctors = data.filter(doc => 
+        !existingDoctorNames.has(doc.name.toLowerCase())
+      );
+      
+      if (newDoctors.length > 0) {
+        const mergedDoctors = [...doctors, ...newDoctors];
+        
+        // Use the draft update function if available, otherwise update directly
+        if (handleDraftDoctorUpdate) {
+          handleDraftDoctorUpdate(mergedDoctors);
+        } else {
+          setDoctors(mergedDoctors);
+        }
+        
+        setSnackbar({
+          open: true,
+          message: `Successfully imported ${newDoctors.length} new doctors (${data.length - newDoctors.length} duplicates skipped)`,
+          severity: 'success'
+        });
+      } else {
+        setSnackbar({
+          open: true,
+          message: 'All imported doctors already exist in your configuration',
+          severity: 'info'
+        });
+      }
     } else if (configType === 'holidays' && typeof data === 'object') {
       setHolidays(data);
       setSnackbar({
@@ -776,6 +815,80 @@ function ConfigImportExport({ doctors, setDoctors, holidays, setHolidays, availa
     }
     setSnackbar({ ...snackbar, open: false });
   };
+
+  // Load default doctors from userData or public files
+  const loadDefaultDoctors = async () => {
+    let loadedDoctors = false;
+    let defaultDoctorsData = [];
+    
+    // If in Electron mode, try to load from userData directory
+    if (isElectron && window.electron) {
+      try {
+        const defaultDoctors = await window.electron.loadUserDataFile('doctors.json');
+        if (defaultDoctors && defaultDoctors.length > 0) {
+          console.log("Loaded default doctors from userData directory");
+          defaultDoctorsData = defaultDoctors;
+          loadedDoctors = true;
+        }
+      } catch (err) {
+        console.error("Error loading default doctors from userData directory", err);
+      }
+    }
+    
+    // If not loaded from userData, try to load from public files
+    if (!loadedDoctors) {
+      try {
+        const response = await fetch('/doctors.json');
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data.length > 0) {
+            console.log("Loaded default doctors from public file");
+            defaultDoctorsData = data;
+            loadedDoctors = true;
+          }
+        }
+      } catch (err) {
+        console.error("Error loading public doctors.json", err);
+      }
+    }
+    
+    if (loadedDoctors && defaultDoctorsData.length > 0) {
+      // Merge with existing doctors instead of replacing
+      const existingDoctorNames = new Set(doctors.map(doc => doc.name.toLowerCase()));
+      const newDoctors = defaultDoctorsData.filter(doc => 
+        !existingDoctorNames.has(doc.name.toLowerCase())
+      );
+      
+      if (newDoctors.length > 0) {
+        const mergedDoctors = [...doctors, ...newDoctors];
+        
+        // Use the draft update function if available, otherwise update directly
+        if (handleDraftDoctorUpdate) {
+          handleDraftDoctorUpdate(mergedDoctors);
+        } else {
+          setDoctors(mergedDoctors);
+        }
+        
+        setSnackbar({
+          open: true,
+          message: `Successfully loaded ${newDoctors.length} new default doctors (${defaultDoctorsData.length - newDoctors.length} duplicates skipped)`,
+          severity: 'success'
+        });
+      } else {
+        setSnackbar({
+          open: true,
+          message: 'All default doctors already exist in your configuration',
+          severity: 'info'
+        });
+      }
+    } else {
+      setSnackbar({
+        open: true,
+        message: 'No default doctors found. Please check application installation or add doctors manually.',
+        severity: 'warning'
+      });
+    }
+  };
   
   return (
     <>
@@ -785,10 +898,21 @@ function ConfigImportExport({ doctors, setDoctors, holidays, setHolidays, availa
           variant="outlined"
           startIcon={<SettingsIcon />}
           onClick={handleOpen}
-          color="secondary"
+          color={hasUnsavedChanges ? "warning" : "secondary"}
+          sx={hasUnsavedChanges ? { 
+            borderStyle: 'dashed',
+            '&:hover': {
+              borderStyle: 'solid'
+            }
+          } : {}}
         >
-          Import/Export Configuration
+          Import/Export Configuration {hasUnsavedChanges && '*'}
         </Button>
+        {hasUnsavedChanges && (
+          <Typography variant="caption" display="block" color="warning.main" sx={{ mt: 0.5 }}>
+            * Save changes before importing to avoid conflicts
+          </Typography>
+        )}
       </Box>
       
       {/* Import/Export Dialog */}
@@ -927,7 +1051,17 @@ function ConfigImportExport({ doctors, setDoctors, holidays, setHolidays, availa
                 </AccordionDetails>
               </Accordion>
               
-              <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
+              <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
+                {configType === 'doctors' && (
+                  <Button
+                    variant="outlined"
+                    color="secondary"
+                    startIcon={<PersonAddIcon />}
+                    onClick={loadDefaultDoctors}
+                  >
+                    Load Default Doctors
+                  </Button>
+                )}
                 <Button
                   variant="contained"
                   component="label"

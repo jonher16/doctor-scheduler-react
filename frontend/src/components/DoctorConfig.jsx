@@ -43,12 +43,21 @@ import {
   Save as SaveIcon,
   WbSunny as DayIcon,
   Nightlight as NightIcon,
-  Brightness4 as EveningIcon
+  Brightness4 as EveningIcon,
+  Warning as WarningIcon
 } from '@mui/icons-material';
 import ConfigImportExport from './ConfigImportExport';
 
-function DoctorConfig({ doctors, setDoctors }) {
+function DoctorConfig({ 
+  doctors, 
+  setDoctors, 
+  setNavigationBlock, 
+  onNavigationAfterSave, 
+  onNavigationCancel, 
+  pendingNavigation 
+}) {
   const [localDoctors, setLocalDoctors] = useState(doctors);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [openDialog, setOpenDialog] = useState(false);
   const [editingDoctor, setEditingDoctor] = useState(null);
   const [newDoctor, setNewDoctor] = useState({ 
@@ -64,6 +73,7 @@ function DoctorConfig({ doctors, setDoctors }) {
     maxShiftsPerWeek: 0
   });
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
 
   // Define shift types and their corresponding MUI colors
   const shiftTypes = {
@@ -87,7 +97,41 @@ function DoctorConfig({ doctors, setDoctors }) {
   // Update local state when doctors prop changes
   useEffect(() => {
     setLocalDoctors(doctors);
+    setHasUnsavedChanges(false);
   }, [doctors]);
+
+  // Check for unsaved changes when local doctors change
+  useEffect(() => {
+    const isDifferent = JSON.stringify(localDoctors) !== JSON.stringify(doctors);
+    setHasUnsavedChanges(isDifferent);
+    
+    // Register navigation blocking if setNavigationBlock is provided
+    if (setNavigationBlock) {
+      setNavigationBlock(isDifferent);
+    }
+  }, [localDoctors, doctors, setNavigationBlock]);
+
+  // Add page reload warning when there are unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (event) => {
+      if (hasUnsavedChanges) {
+        event.preventDefault();
+        event.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+        return 'You have unsaved changes. Are you sure you want to leave?';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [hasUnsavedChanges]);
+
+  // Handle draft doctor updates from ConfigImportExport
+  const handleDraftDoctorUpdate = (newDoctorsList) => {
+    setLocalDoctors(newDoctorsList);
+  };
 
   // Handle dialog open for adding a new doctor
   const handleAddDoctor = () => {
@@ -277,11 +321,60 @@ function DoctorConfig({ doctors, setDoctors }) {
   // Save configuration back to parent component
   const saveConfig = () => {
     setDoctors(localDoctors);
+    setHasUnsavedChanges(false);
+    
+    // Clear navigation blocking
+    if (setNavigationBlock) {
+      setNavigationBlock(false);
+    }
+    
+    // Handle pending navigation
+    if (onNavigationAfterSave && pendingNavigation) {
+      onNavigationAfterSave();
+    }
+    
     setSnackbar({
       open: true,
       message: 'Doctor configuration saved successfully!',
       severity: 'success'
     });
+  };
+
+  // Handle navigation warning for unsaved changes
+  const handleNavigationWarning = () => {
+    if (hasUnsavedChanges) {
+      setShowUnsavedWarning(true);
+      return false;
+    }
+    return true;
+  };
+
+  // Handle unsaved warning dialog actions
+  const handleDiscardChanges = () => {
+    setLocalDoctors(doctors);
+    setHasUnsavedChanges(false);
+    setShowUnsavedWarning(false);
+    
+    // Clear navigation blocking
+    if (setNavigationBlock) {
+      setNavigationBlock(false);
+    }
+    
+    // Handle pending navigation
+    if (onNavigationAfterSave && pendingNavigation) {
+      onNavigationAfterSave();
+    }
+    
+    setSnackbar({
+      open: true,
+      message: 'Changes discarded',
+      severity: 'info'
+    });
+  };
+
+  const handleSaveAndContinue = () => {
+    saveConfig();
+    setShowUnsavedWarning(false);
   };
 
   // Handle closing snackbar
@@ -394,6 +487,28 @@ function DoctorConfig({ doctors, setDoctors }) {
       <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Typography variant="h6">Doctor List</Typography>
         <Box>
+          {hasUnsavedChanges && (
+            <Chip
+              label="Draft - Unsaved Changes"
+              color="warning"
+              size="small"
+              icon={<WarningIcon />}
+              sx={{ 
+                fontWeight: 'bold',
+                mr: 2
+              }}
+            />
+          )}
+          {hasUnsavedChanges && (
+            <Button
+              variant="outlined"
+              color="error"
+              onClick={handleDiscardChanges}
+              sx={{ mr: 2 }}
+            >
+              Discard Changes
+            </Button>
+          )}
           <Button
             variant="contained"
             startIcon={<PersonAddIcon />}
@@ -408,6 +523,15 @@ function DoctorConfig({ doctors, setDoctors }) {
             startIcon={<SaveIcon />}
             onClick={saveConfig}
             color="primary"
+            sx={hasUnsavedChanges ? { 
+              fontWeight: 'bold',
+              animation: 'pulse 2s infinite',
+              '@keyframes pulse': {
+                '0%': { opacity: 1 },
+                '50%': { opacity: 0.7 },
+                '100%': { opacity: 1 }
+              }
+            } : {}}
           >
             Save Configuration
           </Button>
@@ -422,6 +546,9 @@ function DoctorConfig({ doctors, setDoctors }) {
         setHolidays={() => {}}
         availability={{}} 
         setAvailability={() => {}}
+        hasUnsavedChanges={hasUnsavedChanges}
+        setShowUnsavedWarning={setShowUnsavedWarning}
+        handleDraftDoctorUpdate={handleDraftDoctorUpdate}
       />
 
       <Paper elevation={1} sx={{ mb: 4 }}>
@@ -695,6 +822,45 @@ function DoctorConfig({ doctors, setDoctors }) {
           {snackbar.message}
         </Alert>
       </Snackbar>
+
+      {/* Unsaved Changes Warning Dialog */}
+      <Dialog open={showUnsavedWarning || !!pendingNavigation} onClose={() => {
+        setShowUnsavedWarning(false);
+        if (onNavigationCancel) onNavigationCancel();
+      }} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <WarningIcon color="warning" />
+          Unsaved Changes
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" gutterBottom>
+            {pendingNavigation 
+              ? 'You have unsaved changes in your doctor configuration. What would you like to do before navigating away?'
+              : 'You have unsaved changes in your doctor configuration. What would you like to do?'
+            }
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            • Save Changes: Keep your modifications and save them
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            • Discard Changes: Revert to the last saved configuration
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => {
+            setShowUnsavedWarning(false);
+            if (onNavigationCancel) onNavigationCancel();
+          }} color="primary">
+            Cancel
+          </Button>
+          <Button onClick={handleDiscardChanges} color="error" variant="outlined">
+            Discard Changes
+          </Button>
+          <Button onClick={handleSaveAndContinue} color="primary" variant="contained">
+            Save Changes
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

@@ -42,7 +42,8 @@ import {
   CalendarToday as CalendarTodayIcon,
   ViewList as ViewListIcon,
   CalendarViewMonth as CalendarViewMonthIcon,
-  Edit as EditIcon
+  Edit as EditIcon,
+  Warning as WarningIcon
 } from '@mui/icons-material';
 import EnhancedCalendar from './EnhancedCalendar';
 import DoctorAvailabilityCalendar from './DoctorAvailabilityCalendar';
@@ -50,11 +51,22 @@ import { useYear } from '../contexts/YearContext';
 import ConfigImportExport from './ConfigImportExport';
 
 
-function DoctorNeeds({ doctors, setAvailability, availability }) {
+function DoctorNeeds({ 
+  doctors, 
+  setAvailability, 
+  availability,
+  setNavigationBlock, 
+  onNavigationAfterSave, 
+  onNavigationCancel, 
+  pendingNavigation 
+}) {
   const { selectedYear } = useYear();
 
   // Store constraints with support for date ranges
   const [constraints, setConstraints] = useState([]);
+  const [savedConstraints, setSavedConstraints] = useState([]);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
   const [mergedConstraints, setMergedConstraints] = useState([]);
   const [openDialog, setOpenDialog] = useState(false);
   const [editConstraintIndex, setEditConstraintIndex] = useState(null);
@@ -106,8 +118,37 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
       });
       
       setConstraints(constraintsArray);
+      setSavedConstraints(constraintsArray);
     }
   }, [availability, selectedYear]);
+
+  // Check for unsaved changes when constraints change
+  useEffect(() => {
+    const isDifferent = JSON.stringify(constraints) !== JSON.stringify(savedConstraints);
+    setHasUnsavedChanges(isDifferent);
+    
+    // Register navigation blocking if setNavigationBlock is provided
+    if (setNavigationBlock) {
+      setNavigationBlock(isDifferent);
+    }
+  }, [constraints, savedConstraints, setNavigationBlock]);
+
+  // Add page reload warning when there are unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (event) => {
+      if (hasUnsavedChanges) {
+        event.preventDefault();
+        event.returnValue = 'You have unsaved changes in your availability configuration. Are you sure you want to leave?';
+        return 'You have unsaved changes in your availability configuration. Are you sure you want to leave?';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [hasUnsavedChanges]);
 
   // Merge consecutive days of the same non-availability type
   useEffect(() => {
@@ -346,9 +387,6 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
     
     // Create a new array of constraints to modify
     let newConstraints = [...constraints];
-    
-    // Create a copy of current availability to update
-    let newAvailability = JSON.parse(JSON.stringify(availability || {}));
 
     if (isRangeMode) {
       // Range mode validation
@@ -393,11 +431,6 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
       // Count new constraints added
       let addedCount = 0;
       
-      // Initialize doctor in newAvailability if needed
-      if (!newAvailability[newConstraint.doctor]) {
-        newAvailability[newConstraint.doctor] = {};
-      }
-      
       // Loop through each date in the range
       while (current <= end) {
         const dateStr = current.toISOString().split('T')[0];
@@ -409,9 +442,6 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
           avail: availStatus
         });
         
-        // Also update availability data for immediate use
-        newAvailability[newConstraint.doctor][dateStr] = availStatus;
-        
         addedCount++;
         
         // Move to next day
@@ -420,9 +450,6 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
       
       // Update constraints
       setConstraints(newConstraints);
-      
-      // Update parent availability state immediately
-      setAvailability(newAvailability);
       
       // Close dialog
       setOpenDialog(false);
@@ -445,11 +472,6 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
         return;
       }
       
-      // Initialize doctor in newAvailability if needed
-      if (!newAvailability[newConstraint.doctor]) {
-        newAvailability[newConstraint.doctor] = {};
-      }
-      
       // Check if this constraint already exists
       const existingIndex = newConstraints.findIndex(
         c => c.doctor === newConstraint.doctor && c.date === newConstraint.date
@@ -462,12 +484,8 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
           avail: availStatus
         };
         
-        // Update availability data for immediate use
-        newAvailability[newConstraint.doctor][newConstraint.date] = availStatus;
-        
         // Update states
         setConstraints(newConstraints);
-        setAvailability(newAvailability);
         
         setOpenDialog(false);
         
@@ -484,12 +502,8 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
           avail: availStatus
         });
         
-        // Update availability data for immediate use
-        newAvailability[newConstraint.doctor][newConstraint.date] = availStatus;
-        
         // Update states
         setConstraints(newConstraints);
-        setAvailability(newAvailability);
         
         setOpenDialog(false);
         
@@ -509,14 +523,6 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
     newConstraints.splice(index, 1);
     setConstraints(newConstraints);
     
-    // Also update the parent availability state
-    const newAvailability = JSON.parse(JSON.stringify(availability || {}));
-    if (newAvailability[constraintToRemove.doctor] && 
-        newAvailability[constraintToRemove.doctor][constraintToRemove.date]) {
-      delete newAvailability[constraintToRemove.doctor][constraintToRemove.date];
-      setAvailability(newAvailability);
-    }
-    
     setSnackbar({
       open: true,
       message: `Removed constraint for Dr. ${constraintToRemove.doctor} on ${constraintToRemove.date}`,
@@ -531,19 +537,6 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
       !(constraint.doctor === c.doctor && constraint.dates.includes(c.date))
     );
     setConstraints(newConstraints);
-    
-    // Also update the parent availability state
-    const newAvailability = JSON.parse(JSON.stringify(availability || {}));
-    
-    // Remove each date in the merged constraint
-    if (newAvailability[constraint.doctor]) {
-      constraint.dates.forEach(date => {
-        if (newAvailability[constraint.doctor][date]) {
-          delete newAvailability[constraint.doctor][date];
-        }
-      });
-      setAvailability(newAvailability);
-    }
     
     setSnackbar({
       open: true,
@@ -585,6 +578,19 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
     }
     
     setAvailability(newAvailability);
+    setSavedConstraints([...constraints]);
+    setHasUnsavedChanges(false);
+    
+    // Clear navigation blocking
+    if (setNavigationBlock) {
+      setNavigationBlock(false);
+    }
+    
+    // Handle pending navigation
+    if (onNavigationAfterSave && pendingNavigation) {
+      onNavigationAfterSave();
+    }
+    
     setSnackbar({
       open: true,
       message: 'Availability constraints saved successfully',
@@ -598,6 +604,28 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
       return;
     }
     setSnackbar({ ...snackbar, open: false });
+  };
+  
+  // Handle unsaved warning dialog actions
+  const handleDiscardChanges = () => {
+    setConstraints(savedConstraints);
+    setHasUnsavedChanges(false);
+    setShowUnsavedWarning(false);
+    
+    // Clear navigation blocking
+    if (setNavigationBlock) {
+      setNavigationBlock(false);
+    }
+    
+    // Handle pending navigation
+    if (onNavigationAfterSave && pendingNavigation) {
+      onNavigationAfterSave();
+    }
+  };
+
+  const handleSaveAndContinue = () => {
+    saveConstraints();
+    setShowUnsavedWarning(false);
   };
   
   // Get color for availability chip
@@ -741,6 +769,28 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
         </Tabs>
         
         <Box>
+          {hasUnsavedChanges && (
+            <Chip
+              label="Draft - Unsaved Changes"
+              color="warning"
+              size="small"
+              icon={<WarningIcon />}
+              sx={{ 
+                fontWeight: 'bold',
+                mr: 2
+              }}
+            />
+          )}
+          {hasUnsavedChanges && (
+            <Button
+              variant="outlined"
+              color="error"
+              onClick={handleDiscardChanges}
+              sx={{ mr: 2 }}
+            >
+              Discard Changes
+            </Button>
+          )}
           <Button
             variant="contained"
             startIcon={<AddIcon />}
@@ -755,6 +805,15 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
             startIcon={<SaveIcon />}
             onClick={saveConstraints}
             color="primary"
+            sx={hasUnsavedChanges ? { 
+              fontWeight: 'bold',
+              animation: 'pulse 2s infinite',
+              '@keyframes pulse': {
+                '0%': { opacity: 1 },
+                '50%': { opacity: 0.7 },
+                '100%': { opacity: 1 }
+              }
+            } : {}}
           >
             Save Changes
           </Button>
@@ -969,6 +1028,45 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
         </Alert>
       </Snackbar>
 
+      {/* Unsaved Changes Warning Dialog */}
+      <Dialog open={showUnsavedWarning || !!pendingNavigation} onClose={() => {
+        setShowUnsavedWarning(false);
+        if (onNavigationCancel) onNavigationCancel();
+      }} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <WarningIcon color="warning" />
+          Unsaved Changes
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" gutterBottom>
+            {pendingNavigation 
+              ? 'You have unsaved changes in your availability configuration. What would you like to do before navigating away?'
+              : 'You have unsaved changes in your availability configuration. What would you like to do?'
+            }
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            • Save Changes: Keep your modifications and save them
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            • Discard Changes: Revert to the last saved configuration
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => {
+            setShowUnsavedWarning(false);
+            if (onNavigationCancel) onNavigationCancel();
+          }} color="primary">
+            Cancel
+          </Button>
+          <Button onClick={handleDiscardChanges} color="error" variant="outlined">
+            Discard Changes
+          </Button>
+          <Button onClick={handleSaveAndContinue} color="primary" variant="contained">
+            Save Changes
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Add ConfigImportExport component */}
       <ConfigImportExport 
         doctors={[]} 
@@ -977,6 +1075,9 @@ function DoctorNeeds({ doctors, setAvailability, availability }) {
         setHolidays={() => {}}
         availability={availability} 
         setAvailability={setAvailability}
+        hasUnsavedChanges={false}
+        setShowUnsavedWarning={() => {}}
+        handleDraftDoctorUpdate={() => {}}
       />
     </Box>
   );
