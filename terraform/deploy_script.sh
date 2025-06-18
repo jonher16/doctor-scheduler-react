@@ -24,19 +24,19 @@ echo "Using AWS region: $AWS_REGION"
 # Build Docker image
 echo "Building Docker image..."
 cd ..
-sudo docker build -t doctor-scheduler .
+docker build -t doctor-scheduler .
 
 # Tag Docker image
 echo "Tagging Docker image..."
-sudo docker tag doctor-scheduler:latest $ECR_REPO_URL:latest
+docker tag doctor-scheduler:latest $ECR_REPO_URL:latest
 
 # Login to ECR
 echo "Logging in to ECR..."
-sudo aws ecr get-login-password --region $AWS_REGION | sudo docker login --username AWS --password-stdin $ECR_REPO_URL
+aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO_URL
 
 # Push Docker image to ECR
 echo "Pushing Docker image to ECR..."
-sudo docker push $ECR_REPO_URL:latest
+docker push $ECR_REPO_URL:latest
 
 # Apply Terraform configuration to create/update EC2 instance
 echo "Applying Terraform configuration..."
