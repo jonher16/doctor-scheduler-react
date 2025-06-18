@@ -77,13 +77,16 @@ function MonthlyCalendarView({ doctors, schedule, holidays, onScheduleUpdate, se
     severity: 'success'
   });
   
+  // Add state for doctor visibility filtering
+  const [visibleDoctors, setVisibleDoctors] = useState(new Set());
+  
   // Get default shift template from localStorage if not provided
   const [localShiftTemplate, setLocalShiftTemplate] = useState({});
   
   // Color mapping for doctors - to consistently color-code each doctor
   const [doctorColors, setDoctorColors] = useState({});
   
-  // Initialize doctor colors
+  // Initialize doctor colors and visibility
   useEffect(() => {
     // Generate consistent colors for all doctors
     const colorMap = {};
@@ -99,6 +102,9 @@ function MonthlyCalendarView({ doctors, schedule, holidays, onScheduleUpdate, se
     });
     
     setDoctorColors(colorMap);
+    
+    // Initialize all doctors as visible
+    setVisibleDoctors(new Set(doctors.map(doctor => doctor.name)));
   }, [doctors]);
   
   useEffect(() => {
@@ -429,6 +435,26 @@ function MonthlyCalendarView({ doctors, schedule, holidays, onScheduleUpdate, se
     return true;
   };
 
+  // Handle doctor visibility toggle in legend
+  const handleDoctorToggle = (doctorName) => {
+    setVisibleDoctors(prev => {
+      // If only this doctor is currently visible, show all doctors
+      if (prev.size === 1 && prev.has(doctorName)) {
+        return new Set(doctors.map(doctor => doctor.name));
+      }
+      // Otherwise, show only this doctor
+      else {
+        return new Set([doctorName]);
+      }
+    });
+  };
+
+  // Toggle all doctors visibility 
+  const handleToggleAllDoctors = () => {
+    // Always show all doctors when this button is clicked
+    setVisibleDoctors(new Set(doctors.map(doctor => doctor.name)));
+  };
+
   // Render the calendar view
   return (
     <Box>
@@ -449,23 +475,64 @@ function MonthlyCalendarView({ doctors, schedule, holidays, onScheduleUpdate, se
       
       {/* Doctor color legend */}
       <Box sx={{ mb: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: 1, backgroundColor: '#f9f9f9' }}>
-        <Typography variant="subtitle2" gutterBottom>Doctor Color Legend</Typography>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-          {doctors.map(doctor => (
-            <Chip
-              key={doctor.name}
-              avatar={
-                <Avatar style={{ backgroundColor: doctorColors[doctor.name] || '#ccc' }}>
-                  {doctor.name.charAt(0)}
-                </Avatar>
-              }
-              label={doctor.name}
-              variant="outlined"
-              size="small"
-              sx={{ mb: 0.5 }}
-            />
-          ))}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+          <Typography variant="subtitle2">Doctor Schedule View (Click to view individual doctor)</Typography>
+          <Button
+            size="small"
+            variant="outlined"
+            onClick={handleToggleAllDoctors}
+            sx={{ 
+              textTransform: 'none',
+              fontSize: '0.75rem',
+              minWidth: 'auto',
+              px: 1
+            }}
+          >
+            Show All
+          </Button>
         </Box>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+          {doctors.map(doctor => {
+            const isVisible = visibleDoctors.has(doctor.name);
+            return (
+              <Chip
+                key={doctor.name}
+                avatar={
+                  <Avatar style={{ 
+                    backgroundColor: isVisible ? (doctorColors[doctor.name] || '#ccc') : '#ccc',
+                    opacity: isVisible ? 1 : 0.3
+                  }}>
+                    {doctor.name.charAt(0)}
+                  </Avatar>
+                }
+                label={doctor.name}
+                variant={isVisible ? "filled" : "outlined"}
+                size="small"
+                clickable
+                onClick={() => handleDoctorToggle(doctor.name)}
+                sx={{ 
+                  mb: 0.5,
+                  opacity: isVisible ? 1 : 0.5,
+                  backgroundColor: isVisible ? 'rgba(25, 118, 210, 0.08)' : 'transparent',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  '&:hover': {
+                    transform: 'scale(1.05)',
+                    boxShadow: 2
+                  }
+                }}
+              />
+            );
+          })}
+        </Box>
+        {visibleDoctors.size < doctors.length && (
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+            {visibleDoctors.size === 1 
+              ? `Viewing ${Array.from(visibleDoctors)[0]}'s schedule only`
+              : `${doctors.length - visibleDoctors.size} doctor(s) hidden from calendar view`
+            }
+          </Typography>
+        )}
       </Box>
       
       <Grid container spacing={0}>
@@ -567,6 +634,9 @@ function MonthlyCalendarView({ doctors, schedule, holidays, onScheduleUpdate, se
                     // Get assigned doctors from schedule
                     const assignedDoctors = day.schedule[shift] || [];
                     
+                    // Filter assigned doctors by visibility
+                    const visibleAssignedDoctors = assignedDoctors.filter(doctor => visibleDoctors.has(doctor));
+                    
                     // Calculate if the shift is active (either has template entry or has doctors assigned)
                     const isActiveShift = shiftAvailable || assignedDoctors.length > 0;
                     
@@ -611,7 +681,6 @@ function MonthlyCalendarView({ doctors, schedule, holidays, onScheduleUpdate, se
                           <Typography 
                             variant="caption" 
                             sx={{ 
-                          
                               display: 'block',
                               fontSize: '0.7rem',
                               flex: 'none',
@@ -621,10 +690,10 @@ function MonthlyCalendarView({ doctors, schedule, holidays, onScheduleUpdate, se
                             {shift} {isActiveShift ? `${assignedDoctors.length}/${requiredDoctors}` : ''}
                           </Typography>
                           
-                          {assignedDoctors.length > 0 ? (
+                          {visibleAssignedDoctors.length > 0 ? (
                             <Box sx={{ display: 'flex', flexWrap: 'nowrap', gap: 0.5, overflow: 'hidden' }}>
-                              {assignedDoctors.map((doctor, i) => (
-                                <Tooltip key={i} title={doctor}>
+                              {visibleAssignedDoctors.map((doctor) => (
+                                <Tooltip key={doctor} title={doctor}>
                                   <Avatar 
                                     sx={{ 
                                       width: 20, 
@@ -642,19 +711,22 @@ function MonthlyCalendarView({ doctors, schedule, holidays, onScheduleUpdate, se
                               ))}
                             </Box>
                           ) : (
-                            <Typography 
-                              variant="caption" 
-                              color="text.secondary" 
-                              sx={{ 
-                                fontStyle: 'italic',
-                                fontSize: '0.65rem',
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis'
-                              }}
-                            >
-                              {isActiveShift ? 'No doctors' : 'Not scheduled'}
-                            </Typography>
+                            // Only show text if there are actually no doctors assigned (not just hidden)
+                            assignedDoctors.length === 0 && (
+                              <Typography 
+                                variant="caption" 
+                                color="text.secondary" 
+                                sx={{ 
+                                  fontStyle: 'italic',
+                                  fontSize: '0.65rem',
+                                  whiteSpace: 'nowrap',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis'
+                                }}
+                              >
+                                {isActiveShift ? 'No doctors' : 'Not scheduled'}
+                              </Typography>
+                            )
                           )}
                         </Box>
                       </Box>
@@ -810,7 +882,7 @@ function MonthlyCalendarView({ doctors, schedule, holidays, onScheduleUpdate, se
                                     <MenuItem value="">
                                       <em>None</em>
                                     </MenuItem>
-                                    {doctors.map(doc => {
+                                    {doctors.filter(doc => visibleDoctors.has(doc.name)).map(doc => {
                                       const isAvailable = isDoctorAvailable(doc.name, editingDay.date, shift);
                                       const doctorInfo = `${doc.name} (${doc.seniority}${doc.pref !== 'None' ? ` - ${doc.pref}` : ''})`;
                                       
